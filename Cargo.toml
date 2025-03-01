@@ -1,0 +1,8 @@
+[package]
+name = "edinburgh"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+# https://lib.rs/crates/nix/features
+nix = { version = "0.29.0", features = ["fs", "poll"] }
