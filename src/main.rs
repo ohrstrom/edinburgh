@@ -86,28 +86,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         // debug!("Frame completed: {}", edi_source.frame.data.len());
 
-                        edi_source.frame.reset();
-                        filled = 0;
+                        let leftover = filled.saturating_sub(edi_source.frame.data.len());
 
-                        // // preserve leftover bytes
-                        // let leftover = filled - edi_source.frame.data.len();
-                        // if leftover > 0 {
-                        //     let frame_start = edi_source.frame.data.len();
-                        //     edi_source.frame.data.copy_within(frame_start.., 0);
-                        // }
-                        // filled = leftover;
-    
-                        
+                        if leftover > 0 {
+                            debug!("preserving {} bytes leftover", leftover);
+                            // TODO: i guess this is not correct ;) - do we even need it?
+                            let framne_start = edi_source.frame.data.len();
+                            edi_source.frame.data.copy_within(framne_start..filled, 0);
+                            filled = leftover;
+                        } else {
+                            edi_source.frame.reset();
+                            filled = 0;
+                        }
+
+
+
                     }
-
-                    // debug!("Frame completed: {}", edi_source.frame);
-
-
-
-                    // reset frame & counter
-                    // edi_source.frame.reset();
-                    // filled = 0;
-
                 }
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
