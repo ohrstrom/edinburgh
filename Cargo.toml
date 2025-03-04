@@ -4,7 +4,9 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
+access-unit = "0.1.0"
 colog = "1.3.0"
 log = "0.4.26"
 # https://lib.rs/crates/nix/features
 nix = { version = "0.29.0", features = ["fs", "poll"] }
+symphonia = { version = "0.5.4", features = ["aac"] }
