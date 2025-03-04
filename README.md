@@ -3,7 +3,7 @@
 Analyzes and plays DAB+ EDI streams.
 
 ```shell
-nc edi-proxy-1.digris.net 8102 | RUST_BACKTRACE=1 cargo run
+RUST_BACKTRACE=1 cargo run -- edi-ch.digris.net:8855
 ```
 
 
@@ -14,3 +14,13 @@ nc edi-proxy-1.digris.net 8102 | RUST_BACKTRACE=1 cargo run
 ```shell
 curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 ```
+
+
+
+## References
+
+https://github.com/hradio/edihttp/blob/master/edihttp.go
+https://github.com/hradio/edisplitter/blob/master/edisplitter.go
+
+
+https://github.com/Opendigitalradio/ODR-DabMux-GUI/blob/master/src/config.rs

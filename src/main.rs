@@ -2,25 +2,22 @@ mod edi;
 mod utils;
 
 use colog;
-use log::{debug, info, trace, warn};
+use log::{debug, info, error};
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
-use nix::sys::select::{select, FdSet};
-use nix::sys::time::{TimeVal, TimeValLike};
 use std::env;
 use std::io::Read;
 use std::net::TcpStream;
-use std::os::fd::BorrowedFd;
 use std::os::unix::io::AsRawFd;
-use std::time::{Duration, Instant};
 
 use edi::EDISource;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::env::set_var("RUST_LOG", "debug");
 
+    // log setup
+    std::env::set_var("RUST_LOG", "debug");
     colog::init();
 
-    // expect the endpoint as the first command-line argument.
+    // cli args
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("Usage: {} <host:port>", args[0]);
@@ -30,93 +27,102 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Connecting:  {endpoint}");
 
-    // connect to the TCP endpoint.
+    // tcp connection
     let mut stream = TcpStream::connect(endpoint)?;
     let stream_fd = stream.as_raw_fd();
+    let stream_fd_old_flags = fcntl(stream_fd, FcntlArg::F_GETFL)?;
 
     // set the stream to non-blocking mode.
-    let old_flags = fcntl(stream_fd, FcntlArg::F_GETFL)?;
     fcntl(
         stream_fd,
-        FcntlArg::F_SETFL(OFlag::from_bits_truncate(old_flags) | OFlag::O_NONBLOCK),
+        FcntlArg::F_SETFL(OFlag::from_bits_truncate(stream_fd_old_flags) | OFlag::O_NONBLOCK),
     )?;
 
-    let timeout = Duration::from_secs(5);
-    let mut last_input_time = Instant::now();
 
-    // EDI
+    // EDI frame
     let mut filled = 0;
     let mut sync_skipped = 0;
     let mut edi_source = EDISource::new();
 
     loop {
-        let mut fds = FdSet::new();
-        // insert the stream's file descriptor.
-        fds.insert(unsafe { BorrowedFd::borrow_raw(stream_fd) });
 
-        // set a short timeout for select.
-        let mut select_timeval = TimeVal::nanoseconds(100_000);
-        let ready_fds = select(None, &mut fds, None, None, Some(&mut select_timeval))?;
-
-        if ready_fds == 0 {
-            if last_input_time.elapsed() >= timeout {
-                println!("No input for 5 seconds, exiting...");
+        match stream.read(&mut edi_source.frame.data[filled..]) {
+            Ok(0) => {
+                // Connection closed
+                info!("Connection closed by peer");
                 break;
             }
-            continue;
-        }
+            Ok(n) => {
+                // Successfully read `n` bytes
+                // debug!("Received {} bytes: {:?}", n, &buffer[..n]);
+                filled += n;
 
-        // read data from the TCP stream.
-        let bytes_read = stream.read(&mut edi_source.ensemble_frame[filled..])?;
-        filled += bytes_read;
+                // debug!("Received {} bytes - filled: {}", n, filled);
 
-        if bytes_read == 0 {
-            if last_input_time.elapsed() >= timeout {
-                println!("No input for 5 seconds, exiting...");
-                break;
+                if filled < edi_source.frame.data.len() {
+                    // continue reading until the buffer is full
+                    continue;
+                }
+
+                // Process the received data
+                if let Some(offset) = edi_source.frame.find_sync_magic() {
+
+                    if offset > 0 {
+                        edi_source.frame.data.copy_within(offset.., 0);
+                        filled -= offset;
+                        sync_skipped += offset;
+
+                        continue;
+
+                    } else {
+                        sync_skipped = 0;
+
+                    }
+
+                    // check frame completeness
+                    if edi_source.frame.check_completed() {
+
+                        edi_source.process_frame();
+
+                        // debug!("Frame completed: {}", edi_source.frame.data.len());
+
+                        edi_source.frame.reset();
+                        filled = 0;
+
+                        // // preserve leftover bytes
+                        // let leftover = filled - edi_source.frame.data.len();
+                        // if leftover > 0 {
+                        //     let frame_start = edi_source.frame.data.len();
+                        //     edi_source.frame.data.copy_within(frame_start.., 0);
+                        // }
+                        // filled = leftover;
+    
+                        
+                    }
+
+                    // debug!("Frame completed: {}", edi_source.frame);
+
+
+
+                    // reset frame & counter
+                    // edi_source.frame.reset();
+                    // filled = 0;
+
+                }
             }
-            continue;
-        }
-
-        last_input_time = Instant::now();
-
-        if filled < edi_source.ensemble_frame.len() {
-            continue;
-        }
-
-        // check for frame sync i.e. if any sync magic matches
-        if let Some((offset, name)) = edi_source.find_sync_magic() {
-            let name = name.to_owned();
-            if offset > 0 {
-                edi_source.ensemble_frame.copy_within(offset.., 0);
-                filled = filled.saturating_sub(offset);
-                sync_skipped += offset;
-                // println!(
-                //     "sync magic '{}' found at offset {}. Discarding {} bytes for sync",
-                //     name, offset, sync_skipped
-                // );
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // Non-blocking mode: No data available, continue looping
+                std::thread::sleep(std::time::Duration::from_millis(100)); // Avoid busy-waiting
                 continue;
-            } else {
-                // buffer is synced.
-                if sync_skipped > 0 {
-                    sync_skipped = 0;
-                }
-
-                if edi_source.check_frame_completed(&name) {
-                    edi_source.process_completed_frame(&name);
-
-                    edi_source
-                        .ensemble_frame
-                        .resize(edi_source.initial_frame_size, 0);
-                    filled = 0;
-                } else {
-                    println!("frame not completed: {}", name);
-                }
             }
-        } else {
-            println!("no sync magic found in frame!");
+            Err(e) => {
+                error!("Error reading from stream: {}", e);
+                break;
+            }
         }
     }
+
+
 
     Ok(())
 }
