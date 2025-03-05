@@ -1,8 +1,10 @@
 mod edi;
+mod fic;
+mod audio;
 mod utils;
 
 use colog;
-use log::{debug, info, error};
+use log::{debug, error, info};
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::env;
 use std::io::Read;
@@ -12,7 +14,6 @@ use std::os::unix::io::AsRawFd;
 use edi::EDISource;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     // log setup
     std::env::set_var("RUST_LOG", "debug");
     colog::init();
@@ -38,14 +39,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         FcntlArg::F_SETFL(OFlag::from_bits_truncate(stream_fd_old_flags) | OFlag::O_NONBLOCK),
     )?;
 
-
     // EDI frame
     let mut filled = 0;
     let mut sync_skipped = 0;
     let mut edi_source = EDISource::new();
 
     loop {
-
         match stream.read(&mut edi_source.frame.data[filled..]) {
             Ok(0) => {
                 // Connection closed
@@ -66,22 +65,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // Process the received data
                 if let Some(offset) = edi_source.frame.find_sync_magic() {
-
                     if offset > 0 {
                         edi_source.frame.data.copy_within(offset.., 0);
                         filled -= offset;
                         sync_skipped += offset;
 
                         continue;
-
                     } else {
                         sync_skipped = 0;
-
                     }
 
                     // check frame completeness
                     if edi_source.frame.check_completed() {
-
                         edi_source.process_frame();
 
                         // debug!("Frame completed: {}", edi_source.frame.data.len());
@@ -98,9 +93,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             edi_source.frame.reset();
                             filled = 0;
                         }
-
-
-
                     }
                 }
             }
@@ -115,8 +107,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
-
 
     Ok(())
 }
