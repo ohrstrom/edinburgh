@@ -1,12 +1,12 @@
+use std::cell::RefCell;
 use std::fmt::{self, format};
 use std::ops::Deref;
-use std::cell::RefCell;
 
 use log::{debug, error, info, warn};
 
-use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
-use crate::fic::FICDecoder;
 use crate::audio::AudioDecoder;
+use crate::fic::FICDecoder;
+use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
 
 #[derive(Debug)]
 struct SyncMagic {
@@ -33,7 +33,7 @@ struct TagBase {
     len: usize,
     header: Vec<u8>,
     value: Vec<u8>,
-    // NOTE: not sure if this is a good idea... 
+    // NOTE: not sure if this is a good idea...
     //       as decoded_value currently this is either FIC or MSTn
     decoded_value: Vec<u8>,
 }
@@ -84,11 +84,15 @@ impl fmt::Display for Tag {
 impl Tag {
     // fn from_bytes(data: &[u8]) -> Self {
     fn from_bytes(data: &[u8]) -> Result<Self, UnsupportedTagError> {
-
         let name = match std::str::from_utf8(&data[0..4]) {
             Ok(name) => name.to_string(),
             // Err(_) => return Err(UnsupportedTagError("invalid tag name UTF-8".to_string()))
-            Err(_) => return Err(UnsupportedTagError(format!("invalid tag name UTF-8: {:?}", &data[0..4])))
+            Err(_) => {
+                return Err(UnsupportedTagError(format!(
+                    "invalid tag name UTF-8: {:?}",
+                    &data[0..4]
+                )))
+            }
         };
 
         let len = ((data[4] as usize) << 24)
@@ -101,7 +105,13 @@ impl Tag {
         let value = data[8..].to_vec();
         let decoded_value = Vec::new();
 
-        let base = TagBase { name, len, header, value, decoded_value };
+        let base = TagBase {
+            name,
+            len,
+            header,
+            value,
+            decoded_value,
+        };
 
         match base.name.as_str() {
             // straight name based
@@ -112,11 +122,9 @@ impl Tag {
             "nasc" => Ok(Tag::NASC(base)),
             "frpd" => Ok(Tag::FRPD(base)),
             // pattern based
-            name if name.starts_with("est") => {
-                Ok(Tag::ESTn(base))
-            }
+            name if name.starts_with("est") => Ok(Tag::ESTn(base)),
             // unsupported
-            _ => Err(UnsupportedTagError("foo <missing>".to_string()))
+            _ => Err(UnsupportedTagError("foo <missing>".to_string())),
         }
     }
 
@@ -143,7 +151,10 @@ impl Tag {
     fn decode_ptr(tag: TagBase) -> Result<Self, TagDecodeError> {
         // debug!("Decoding _PTR");
         if tag.len != 64 {
-            return Err(TagDecodeError(format!("ignored *ptr TAG with wrong length ({} bits)", tag.len)));
+            return Err(TagDecodeError(format!(
+                "ignored *ptr TAG with wrong length ({} bits)",
+                tag.len
+            )));
         }
 
         let protocol_name = match std::str::from_utf8(&tag.value[..4]) {
@@ -158,11 +169,17 @@ impl Tag {
         // let min = u16::from_be_bytes(tag.value.get(6..8).map(|b| [b[0], b[1]]).unwrap_or([0, 0]));
 
         if protocol_name != "DETI" {
-            return Err(TagDecodeError(format!("ignored *ptr TAG with protocol name: {}", protocol_name)));
+            return Err(TagDecodeError(format!(
+                "ignored *ptr TAG with protocol name: {}",
+                protocol_name
+            )));
         }
 
         if maj != 0x0000 || min != 0x0000 {
-            return Err(TagDecodeError(format!("ignored *ptr TAG unsupported version: 0x{:04X} - 0x{:04X}", maj, min)));
+            return Err(TagDecodeError(format!(
+                "ignored *ptr TAG unsupported version: 0x{:04X} - 0x{:04X}",
+                maj, min
+            )));
         }
 
         Ok(Tag::_PTR(tag))
@@ -210,12 +227,16 @@ impl Tag {
             0
         };
 
-        let tag_len_bytes_calced = 2 + 4 + if has_atstf { 8 } else { 0 } + fic_len + if has_rfudf { 3 } else { 0 };
+        let tag_len_bytes_calced =
+            2 + 4 + if has_atstf { 8 } else { 0 } + fic_len + if has_rfudf { 3 } else { 0 };
 
         // debug!("Decoding DETI - tl-calc: {} <> tl: {}", tag_len_bytes_calced * 8, tag.len);
 
         if tag.len != tag_len_bytes_calced * 8 {
-            return Err(TagDecodeError(format!("ignored DETI TAG with wrong length ({} bits)", tag.len)));
+            return Err(TagDecodeError(format!(
+                "ignored DETI TAG with wrong length ({} bits)",
+                tag.len
+            )));
         }
 
         if has_ficf {
@@ -223,7 +244,7 @@ impl Tag {
             let fic = &tag.value[fic_start..fic_start + fic_len];
             // debug!("FIC: {} bytes", fic.len());
 
-            // NOTE: not sure if this is a good idea... 
+            // NOTE: not sure if this is a good idea...
             tag.decoded_value = fic.to_vec();
         }
 
@@ -236,11 +257,17 @@ impl Tag {
         let scn = tag.header[3];
 
         if scn < 1 || scn >= 64 {
-            return Err(TagDecodeError(format!("ignored ESTn TAG not in 1-64: {}", scn)));
+            return Err(TagDecodeError(format!(
+                "ignored ESTn TAG not in 1-64: {}",
+                scn
+            )));
         }
 
         if tag.len < 3 * 8 {
-            return Err(TagDecodeError(format!("ignored ESTn TAG - too short ({} bits)", tag.len)));
+            return Err(TagDecodeError(format!(
+                "ignored ESTn TAG - too short ({} bits)",
+                tag.len
+            )));
         }
 
         // SSTC: Sub-channel Stream Characterization
@@ -250,43 +277,43 @@ impl Tag {
         let rfa = tag.value[2] & 0b00000011;
 
         if sad > 863 {
-            return Err(TagDecodeError(format!("ignored ESTn TAG with invalid SAD: {}", sad)));
+            return Err(TagDecodeError(format!(
+                "ignored ESTn TAG with invalid SAD: {}",
+                sad
+            )));
         }
 
         // debug!("Decoding EST - SC-ID: {:>2} | {} {} {}", scid, sad, tpl, rfa);
 
         // MST: Main Stream Data
         if tag.value.len() < 3 {
-            return Err(TagDecodeError(format!("ignored ESTn TAG - MST too short ({} bytes)", tag.value.len())));
+            return Err(TagDecodeError(format!(
+                "ignored ESTn TAG - MST too short ({} bytes)",
+                tag.value.len()
+            )));
         }
 
         // TODO: not sure if we can do this like this ;)
         let mst = &tag.value[3..];
-        let slice_len = (4 + 4 + (&tag.len + 7) / 8).saturating_sub(3);
-
-        debug!("SLICE_LEN: {}", slice_len);
+        // let slice_len = (4 + 4 + (&tag.len + 7) / 8).saturating_sub(3);
+        // debug!("SLICE_LEN: {}", slice_len);
         // debug!("Decoding EST - SC-ID: {:>2} | MST: {} bytes", scid, mst.len());
 
-        // NOTE: not sure if this is a good idea... 
+        // NOTE: not sure if this is a good idea...
         tag.decoded_value = mst.to_vec();
-
 
         Ok(Tag::ESTn(tag))
     }
-
 }
 
 #[derive(Debug)]
 pub struct FrameDecodeError(pub String);
-
 
 impl fmt::Display for FrameDecodeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "FrameDecodeError: {}", self.0)
     }
 }
-
-
 
 #[derive(Debug)]
 pub struct UnsupportedTagError(pub String);
@@ -299,7 +326,6 @@ impl fmt::Display for UnsupportedTagError {
 
 #[derive(Debug)]
 pub struct TagDecodeError(pub String);
-
 
 impl fmt::Display for TagDecodeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -486,7 +512,6 @@ impl AFFrame {
             // let tag = Tag::from_bytes(tag_item);
             // i += tag.len_bytes();
             // tags.push(tag);
-
         }
 
         Ok(tags)
@@ -513,12 +538,10 @@ impl EDISource {
         }
     }
     pub fn process_frame(&mut self) {
-
         let mut audio_decoder = self.audio_decoder.borrow_mut();
 
         match self.frame.decode() {
             Ok(tags) => {
-
                 let mut decoded_tags: Vec<Tag> = Vec::new();
 
                 // decode tags
@@ -530,7 +553,7 @@ impl EDISource {
                             if decoded_tag.decoded_value.len() > 0 {
                                 decoded_tags.push(decoded_tag);
                             }
-                        },
+                        }
                         Err(e) => warn!("X {}", e),
                     }
                 }
@@ -550,22 +573,24 @@ impl EDISource {
                             }
                         }
                         Tag::ESTn(tag) => {
+                            let scid = tag.value[0] >> 2;
                             let slice_data = &tag.value[3..];
                             let slice_len = (tag.len / 8).saturating_sub(3);
 
-                            debug!("AF: slen: {} | {}", slice_len, slice_data.len());
+                            // debug!("AF: slen: {} | {} <> {}", slice_len, slice_data.len(), tag.decoded_value.len());
 
-                            // match audio_decoder.feed(&tag.decoded_value) {
-                            //     Ok(audio) => {
-                            //         debug!("Audio: {:?}", audio);
-                            //     }
-                            //     Err(e) => {
-                            //         warn!("{}", e);
-                            //     }
-                            // }
+                            if scid == 6 {
+                                match audio_decoder.feed(&slice_data, slice_len) {
+                                    Ok(audio) => {
+                                        // debug!("Audio: {:?}", audio);
+                                    }
+                                    Err(e) => {
+                                        warn!("{}", e);
+                                    }
+                                }
+                            }
                         }
                         _ => {}
-                        
                     }
                 }
             }

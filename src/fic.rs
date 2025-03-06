@@ -15,10 +15,12 @@ pub struct FICDecoder {
 }
 
 impl FICDecoder {
-    pub fn from_bytes(data: &[u8])-> Result<Self, FICDecoderError> {
-
+    pub fn from_bytes(data: &[u8]) -> Result<Self, FICDecoderError> {
         if (data.len() % 32) != 0 {
-            return Err(FICDecoderError(format!("invalid FIC data length {:?}", data.len())));
+            return Err(FICDecoderError(format!(
+                "invalid FIC data length {:?}",
+                data.len()
+            )));
         }
 
         Ok(Self { eid: None })

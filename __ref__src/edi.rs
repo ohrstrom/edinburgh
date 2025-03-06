@@ -710,8 +710,9 @@ impl EDIExtractor {
                 if tag_value.len() >= 3 {
                     let slice_data = &tag_value[3..];
                     let slice_len = (tag_len / 8).saturating_sub(3);
-            
-                    // self.audio_decoder.process(subchid, &slice_data, slice_len);
+
+
+                    // debug!("AF: slen: {} | {}", slice_len, slice_data.len());
 
                     if let decoder = &mut self.audio_decoder {
                         decoder.process(subchid, &slice_data, slice_len);

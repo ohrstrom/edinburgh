@@ -92,10 +92,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 filled = filled.saturating_sub(offset);
                 sync_skipped += offset;
 
-                debug!(
-                    "sync magic '{}' found at offset {}. Discarding {} bytes for sync",
-                    name, offset, sync_skipped
-                );
+                // debug!(
+                //     "sync magic '{}' found at offset {}. Discarding {} bytes for sync",
+                //     name, offset, sync_skipped
+                // );
 
                 continue;
             } else {
@@ -106,9 +106,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if edi_source.check_frame_completed(&name) {
 
-                    debug!("{} frame completed", name);
+                    // debug!("{} frame completed", name);
 
-                    // edi_source.process_completed_frame(&name);
+                    edi_source.process_completed_frame(&name);
 
                     edi_source
                         .ensemble_frame
