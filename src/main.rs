@@ -9,10 +9,64 @@ use log::{debug, error, info};
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::env;
 use std::io::Read;
-use std::net::TcpStream;
 use std::os::unix::io::AsRawFd;
+use bytemuck::cast_slice;
+
+use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex, mpsc::{self, Sender, Receiver}};
+use std::thread;
+use tungstenite::accept;
+use tungstenite::protocol::Message;
+use bytes::Bytes;
 
 use edi::EDISource;
+
+fn start_websocket_server(rx: Receiver<Vec<f32>>) {
+
+    let server = TcpListener::bind("127.0.0.1:9001").expect("Failed to bind WebSocket server");
+    
+    let clients = Arc::new(Mutex::new(Vec::new()));
+    let clients_accept = Arc::clone(&clients);
+
+    thread::spawn(move || {
+        for stream in server.incoming() {
+            match stream {
+                Ok(stream) => {
+                    match accept(stream) {
+                        Ok(ws_stream) => {
+                            info!("New WebSocket client connected");
+                            clients_accept.lock().unwrap().push(ws_stream);
+                        }
+                        Err(e) => {
+                            error!("Error during WebSocket handshake: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Error accepting connection: {}", e);
+                }
+            }
+        }
+    });
+
+    while let Ok(pcm_data) = rx.recv() {
+
+        let pcm_bytes: &[u8] = cast_slice(&pcm_data); // Convert Vec<f32> → &[u8]
+        let pcm_bytes = Bytes::from(pcm_bytes.to_vec());
+
+        let mut clients_lock = clients.lock().unwrap();
+
+        clients_lock.retain_mut(|client| {
+            match client.send(Message::Binary(pcm_bytes.clone())) {
+                Ok(_) => true,
+                Err(e) => {
+                    error!("Error sending message to client: {}", e);
+                    false
+                }
+            }
+        });
+    }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // log setup
@@ -39,6 +93,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         stream_fd,
         FcntlArg::F_SETFL(OFlag::from_bits_truncate(stream_fd_old_flags) | OFlag::O_NONBLOCK),
     )?;
+
+    // websocket
+    let (tx, rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = mpsc::channel();
+
+    thread::spawn(move || {
+        start_websocket_server(rx);
+    });
 
     // EDI frame
     let mut filled = 0;
@@ -83,11 +144,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match edi_source.process_frame() {
                             Ok(r) => {
                                 // debug!("Frame completed: tags: {} - pcm: {}", r.tags.len(), r.pcm_data.len());
-                                if r.pcm_data.len() > 0 {
+                                if !r.pcm_data.is_empty() {
                                     debug!("pcm frames: {}", r.pcm_data.len());
-                                    // audio::play(&r.pcm_data);
+
 
                                     // TODO: send pcm data via websocket
+                                    if let Err(e) = tx.send(r.pcm_data) {
+                                        error!("Failed to send PCM data over channel: {}", e);
+                                    }
 
                                 }
                             }
