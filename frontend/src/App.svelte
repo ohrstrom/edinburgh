@@ -3,6 +3,7 @@
   let audioContext;
   let decoder;
   let frameBuffer = [];
+  let nextPlayTime = 0;
 
   const connect = async () => {
 
@@ -26,7 +27,6 @@
       if (!decoder) {
           decoder = new AudioDecoder({
               output: (audioData) => {
-                  // console.debug("audioData:", audioData);
                   playDecodedAudio(audioData);
               },
               error: (e) => console.error("Decoder error:", e),
@@ -42,33 +42,46 @@
           });
       }
 
-      window.d = decoder;
   };
 
   const processAACFrame = (aacFrame) => {
       if (!decoder) initializeAudioDecoder();
 
-      const chunk = new EncodedAudioChunk({
-          type: "key",
-          timestamp: (audioContext.currentTime * 1e6), // Ensure correct timestamps
-          duration: 2048 * (1000000 / 48000),
-          data: aacFrame.buffer,
-      });
+      frameBuffer.push(aacFrame);
 
-      decoder.decode(chunk);
+      // Process only when 3 frames are received
+      if (frameBuffer.length === 3) {
+        for (let i = 0; i < frameBuffer.length; i++) {
+            const chunk = new EncodedAudioChunk({
+                type: i === 0 ? "key" : "delta",
+                timestamp: (audioContext.currentTime * 1e6) + i * 8000,
+                duration: 1024 * (1000000 / 48000),
+                data: frameBuffer[i].buffer,
+            });
+
+            decoder.decode(chunk);
+        }
+
+        frameBuffer = [];
+      }
+
+      // const chunk = new EncodedAudioChunk({
+      //     type: "key",
+      //     timestamp: (audioContext.currentTime * 1e6), // Ensure correct timestamps
+      //     duration: 2048 * (1000000 / 48000),
+      //     data: aacFrame.buffer,
+      // });
+
+      // decoder.decode(chunk);
   };
 
   const playDecodedAudio = async (audioData) => {
     if (!audioContext) return;
 
-    console.debug("AD:", audioData);
-
     const numChannels = 2;
     const sampleRate = 24000;
-    // const numFrames = audioData.numberOfFrames;
     const numFrames = audioData.numberOfFrames;
 
-    // // Create an AudioBuffer to hold the decoded PCM samples
     const audioBuffer = audioContext.createBuffer(numChannels, numFrames, sampleRate);
 
     for (let channel = 0; channel < numChannels; channel++) {
@@ -77,22 +90,24 @@
         audioBuffer.copyToChannel(channelData, channel);
     }
 
-    // Create a buffer source to play the decoded audio
     const source = audioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(audioContext.destination);
-    source.start();
 
-    console.debug(`Playing ${numFrames} frames at ${sampleRate}Hz`);
+    if (nextPlayTime < audioContext.currentTime) {
+        nextPlayTime = audioContext.currentTime + 0.5;
+    }
+
+    source.start(nextPlayTime);
+    nextPlayTime += audioBuffer.duration;
 };
 
 </script>
   
 <main>
     <div>
-        <h1>AAC Stream</h1>
+        <h1>HE-AAC</h1>
         <button on:click={connect}>Connect</button>
     </div>
-    <audio id="audioPlayer" controls></audio>
 </main>
   
