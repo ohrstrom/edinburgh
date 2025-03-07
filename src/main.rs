@@ -4,44 +4,44 @@ mod edi;
 mod fic;
 mod utils;
 
+use bytemuck::cast_slice;
 use colog;
 use log::{debug, error, info};
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use std::env;
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
-use bytemuck::cast_slice;
 
+use bytes::Bytes;
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex, mpsc::{self, Sender, Receiver}};
+use std::sync::{
+    mpsc::{self, Receiver, Sender},
+    Arc, Mutex,
+};
 use std::thread;
 use tungstenite::accept;
 use tungstenite::protocol::Message;
-use bytes::Bytes;
 
 use edi::EDISource;
 
 fn start_websocket_server(rx: Receiver<Vec<f32>>) {
-
     let server = TcpListener::bind("127.0.0.1:9001").expect("Failed to bind WebSocket server");
-    
+
     let clients = Arc::new(Mutex::new(Vec::new()));
     let clients_accept = Arc::clone(&clients);
 
     thread::spawn(move || {
         for stream in server.incoming() {
             match stream {
-                Ok(stream) => {
-                    match accept(stream) {
-                        Ok(ws_stream) => {
-                            info!("New WebSocket client connected");
-                            clients_accept.lock().unwrap().push(ws_stream);
-                        }
-                        Err(e) => {
-                            error!("Error during WebSocket handshake: {}", e);
-                        }
+                Ok(stream) => match accept(stream) {
+                    Ok(ws_stream) => {
+                        info!("New WebSocket client connected");
+                        clients_accept.lock().unwrap().push(ws_stream);
                     }
-                }
+                    Err(e) => {
+                        error!("Error during WebSocket handshake: {}", e);
+                    }
+                },
                 Err(e) => {
                     error!("Error accepting connection: {}", e);
                 }
@@ -50,21 +50,20 @@ fn start_websocket_server(rx: Receiver<Vec<f32>>) {
     });
 
     while let Ok(pcm_data) = rx.recv() {
-
         let pcm_bytes: &[u8] = cast_slice(&pcm_data); // Convert Vec<f32> → &[u8]
         let pcm_bytes = Bytes::from(pcm_bytes.to_vec());
 
         let mut clients_lock = clients.lock().unwrap();
 
-        clients_lock.retain_mut(|client| {
-            match client.send(Message::Binary(pcm_bytes.clone())) {
+        clients_lock.retain_mut(
+            |client| match client.send(Message::Binary(pcm_bytes.clone())) {
                 Ok(_) => true,
                 Err(e) => {
                     error!("Error sending message to client: {}", e);
                     false
                 }
-            }
-        });
+            },
+        );
     }
 }
 
@@ -147,12 +146,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 if !r.pcm_data.is_empty() {
                                     debug!("pcm frames: {}", r.pcm_data.len());
 
-
                                     // TODO: send pcm data via websocket
                                     if let Err(e) = tx.send(r.pcm_data) {
                                         error!("Failed to send PCM data over channel: {}", e);
                                     }
-
                                 }
                             }
                             Err(e) => {

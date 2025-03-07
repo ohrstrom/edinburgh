@@ -158,8 +158,6 @@ impl AudioDecoder {
         }
     }
     pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<Vec<f32>, AudioDecoderError> {
-
-
         self.decoded_pcm.clear();
 
         if self.f_len != 0 {
