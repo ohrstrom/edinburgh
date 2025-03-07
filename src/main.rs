@@ -1,7 +1,7 @@
 mod audio;
+mod dec;
 mod edi;
 mod fic;
-mod dec;
 mod utils;
 
 use colog;

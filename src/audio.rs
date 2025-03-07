@@ -1,14 +1,13 @@
-use crate::utils::{calc_crc_fire_code, calc_crc16_ccitt};
+use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
 use log::{debug, error, info, warn};
 use std::fmt::{self, format};
 use std::io::Cursor;
 
-use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
+use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 
 use derivative::Derivative;
 // use redlux::Decoder;
 use crate::dec::{Decoder, Transport};
-
 
 #[derive(Debug)]
 pub struct AudioDecoderError(pub String);
@@ -128,7 +127,6 @@ pub struct AudioDecoder {
 
 impl AudioDecoder {
     pub fn new(scid: u8) -> Self {
-
         let mut decoder = Decoder::new(Transport::Raw);
 
         match decoder.set_min_output_channels(2) {
@@ -148,10 +146,8 @@ impl AudioDecoder {
             }
         }
 
-
         // SEE: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
         let config = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin
-
 
         match decoder.config_raw(&config) {
             Ok(_) => {
@@ -162,12 +158,10 @@ impl AudioDecoder {
             }
         }
 
-
         let (stream, handle) = OutputStream::try_default().expect("Error creating output stream");
-        let sink = Sink::try_new(&handle).expect("Error creating sink");        
+        let sink = Sink::try_new(&handle).expect("Error creating sink");
 
         // decoder.config_raw(&config).unwrap();
-
 
         Self {
             scid,
@@ -273,7 +267,6 @@ impl AudioDecoder {
 
         // decode the frames? really?
         for i in 0..self.au_count {
-            
             // debug!("decode AU {}", i);
 
             // NOTE: check if this is correct
@@ -293,12 +286,9 @@ impl AudioDecoder {
             // NOTE: send to aac+ decoder
             //       au_data / (au_len - 2)
 
-
-
             // self.decode_au(&au_data);
 
             // self.decode_au(au_data.to_vec());
-
 
             // try with:
             let payload = &au_data[0..au_len - 2];
@@ -335,7 +325,7 @@ impl AudioDecoder {
         // set / update values for current subframe
         self.au_count = sf_format.au_count;
 
-        // NOTE: following parts are taken "blindly" from dablin... 
+        // NOTE: following parts are taken "blindly" from dablin...
         //       have yet to understand this better
 
         self.au_start[0] = if sf_format.samplerate == 48 {
@@ -357,16 +347,20 @@ impl AudioDecoder {
         self.au_start[1] = ((self.sf_buff[3] as usize) << 4) | ((self.sf_buff[4] >> 4) as usize);
 
         if self.au_count >= 3 {
-            self.au_start[2] = (((self.sf_buff[4] & 0x0F) as usize) << 8) | (self.sf_buff[5] as usize);
+            self.au_start[2] =
+                (((self.sf_buff[4] & 0x0F) as usize) << 8) | (self.sf_buff[5] as usize);
         }
 
         if self.au_count >= 4 {
-            self.au_start[3] = ((self.sf_buff[6] as usize) << 4) | ((self.sf_buff[7] >> 4) as usize);
+            self.au_start[3] =
+                ((self.sf_buff[6] as usize) << 4) | ((self.sf_buff[7] >> 4) as usize);
         }
 
         if self.au_count == 6 {
-            self.au_start[4] = (((self.sf_buff[7] & 0x0F) as usize) << 8) | (self.sf_buff[8] as usize);
-            self.au_start[5] = ((self.sf_buff[9] as usize) << 4) | ((self.sf_buff[10] >> 4) as usize);
+            self.au_start[4] =
+                (((self.sf_buff[7] & 0x0F) as usize) << 8) | (self.sf_buff[8] as usize);
+            self.au_start[5] =
+                ((self.sf_buff[9] as usize) << 4) | ((self.sf_buff[10] >> 4) as usize);
         }
 
         for i in 0..self.au_count {
@@ -375,19 +369,15 @@ impl AudioDecoder {
             }
         }
 
-
         // debug!("AF: au-start: {:?}", self.au_start);
-
 
         return true;
     }
     fn decode_au(&mut self, au_data: Vec<u8>) {
-
         let mut pcm = vec![0i16; 4096];
 
         match self.decoder.fill(&au_data) {
             Ok(filled) => {
-
                 // debug!("ENC: filled: {} : {}", au_data.len(), filled);
 
                 match self.decoder.decode_frame(&mut pcm) {
@@ -399,7 +389,6 @@ impl AudioDecoder {
                     }
                 }
 
-                
                 let decoded_frame_size = self.decoder.decoded_frame_size();
                 let stream_info = self.decoder.stream_info();
 
@@ -408,7 +397,6 @@ impl AudioDecoder {
                 println!("DEC: {:#?}", stream_info);
 
                 pcm.resize(decoded_frame_size, 0);
-
 
                 // debug!("PCM: {:?}", pcm);
             }
@@ -419,7 +407,11 @@ impl AudioDecoder {
 
         let channels = 2;
         let sample_rate = if let Some(ref af) = self.audio_format {
-            if af.samplerate == 48 { 48000 } else { 32000 }
+            if af.samplerate == 48 {
+                48000
+            } else {
+                32000
+            }
         } else {
             48000
         };
@@ -427,6 +419,5 @@ impl AudioDecoder {
         let source = SamplesBuffer::new(channels as u16, sample_rate, pcm);
 
         self.sink.append(source);
-
     }
 }
