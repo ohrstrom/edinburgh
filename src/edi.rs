@@ -9,6 +9,37 @@ use crate::fic::FICDecoder;
 use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
 
 #[derive(Debug)]
+pub struct FrameDecodeError(pub String);
+
+impl fmt::Display for FrameDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FrameDecodeError: {}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct UnsupportedTagError(pub String);
+
+impl fmt::Display for UnsupportedTagError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "UnsupportedTagError: {}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub struct TagDecodeError(pub String);
+
+impl fmt::Display for TagDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "TagDecodeError: {}", self.0)
+    }
+}
+
+impl std::error::Error for FrameDecodeError {}
+impl std::error::Error for UnsupportedTagError {}
+impl std::error::Error for TagDecodeError {}
+
+#[derive(Debug)]
 struct SyncMagic {
     pattern: Vec<u8>,
     name: String,
@@ -28,7 +59,7 @@ impl SyncMagic {
 }
 
 #[derive(Debug)]
-struct TagBase {
+pub struct TagBase {
     name: String,
     len: usize,
     header: Vec<u8>,
@@ -39,7 +70,7 @@ struct TagBase {
 }
 
 #[derive(Debug)]
-enum Tag {
+pub enum Tag {
     _PTR(TagBase),
     _DMY(TagBase),
     DETI(TagBase),
@@ -307,37 +338,6 @@ impl Tag {
 }
 
 #[derive(Debug)]
-pub struct FrameDecodeError(pub String);
-
-impl fmt::Display for FrameDecodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FrameDecodeError: {}", self.0)
-    }
-}
-
-#[derive(Debug)]
-pub struct UnsupportedTagError(pub String);
-
-impl fmt::Display for UnsupportedTagError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "UnsupportedTagError: {}", self.0)
-    }
-}
-
-#[derive(Debug)]
-pub struct TagDecodeError(pub String);
-
-impl fmt::Display for TagDecodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "TagDecodeError: {}", self.0)
-    }
-}
-
-impl std::error::Error for FrameDecodeError {}
-impl std::error::Error for UnsupportedTagError {}
-impl std::error::Error for TagDecodeError {}
-
-#[derive(Debug)]
 pub struct AFFrame {
     // NOTE: it looks like we only have AF frames..
     pub data: Vec<u8>,
@@ -524,6 +524,17 @@ impl fmt::Display for AFFrame {
     }
 }
 
+pub struct EDIFrameResult {
+    pub tags: Vec<Tag>,
+    pub pcm_data: Vec<f32>,
+}
+
+impl EDIFrameResult {
+    fn new(tags: Vec<Tag>, pcm_data: Vec<f32>) -> Self {
+        EDIFrameResult { tags, pcm_data }
+    }
+}
+
 #[derive(Debug)]
 pub struct EDISource {
     pub frame: AFFrame,
@@ -537,8 +548,11 @@ impl EDISource {
             audio_decoder: RefCell::new(AudioDecoder::new(1)),
         }
     }
-    pub fn process_frame(&mut self) {
+    pub fn process_frame(&mut self) -> Result<EDIFrameResult, FrameDecodeError> {
         let mut audio_decoder = self.audio_decoder.borrow_mut();
+
+        // NOTE: just testing, hold soee aduio data...
+        let mut pcm_data: Vec<f32> = Vec::new();
 
         match self.frame.decode() {
             Ok(tags) => {
@@ -558,7 +572,7 @@ impl EDISource {
                     }
                 }
                 // handle decoded tags
-                for tag in decoded_tags {
+                for tag in decoded_tags.iter() {
                     // debug!("{} - {}", tag, tag.decoded_value.len());
 
                     match tag {
@@ -581,11 +595,12 @@ impl EDISource {
 
                             if scid == 6 {
                                 match audio_decoder.feed(&slice_data, slice_len) {
-                                    Ok(audio) => {
-                                        // debug!("Audio: {:?}", audio);
+                                    Ok(pcm) => {
+                                        debug!("Audio: {:?}", pcm.len());
+                                        pcm_data.extend(pcm);
                                     }
                                     Err(e) => {
-                                        warn!("{}", e);
+                                        // warn!("{}", e);
                                     }
                                 }
                             }
@@ -593,8 +608,10 @@ impl EDISource {
                         _ => {}
                     }
                 }
+                // let result = EDIFrameResult::new(decoded_tags, Vec::new());
+                Ok(EDIFrameResult::new(decoded_tags, pcm_data))
             }
-            Err(e) => warn!("{}", e),
+            Err(e) => Err(FrameDecodeError(format!("{}", e))),
         }
     }
 }

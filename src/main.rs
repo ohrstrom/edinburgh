@@ -78,7 +78,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // check frame completeness
                     if edi_source.frame.check_completed() {
-                        edi_source.process_frame();
+                        // edi_source.process_frame();
+
+                        match edi_source.process_frame() {
+                            Ok(r) => {
+                                // debug!("Frame completed: tags: {} - pcm: {}", r.tags.len(), r.pcm_data.len());
+                                if r.pcm_data.len() > 0 {
+                                    debug!("pcm frames: {}", r.pcm_data.len());
+                                    // audio::play(&r.pcm_data);
+
+                                    // TODO: send pcm data via websocket
+
+                                }
+                            }
+                            Err(e) => {
+                                error!("Error processing frame: {}", e);
+                            }
+                        }
 
                         // debug!("Frame completed: {}", edi_source.frame.data.len());
 

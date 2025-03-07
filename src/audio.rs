@@ -118,6 +118,8 @@ pub struct AudioDecoder {
     _stream: OutputStream,
     #[derivative(Debug = "ignore")]
     sink: Sink,
+    //
+    decoded_pcm: Vec<f32>,
 }
 
 impl AudioDecoder {
@@ -151,9 +153,15 @@ impl AudioDecoder {
             //
             _stream: stream,
             sink: sink,
+            //
+            decoded_pcm: Vec::new(),
         }
     }
-    pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<(), AudioDecoderError> {
+    pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<Vec<f32>, AudioDecoderError> {
+
+
+        self.decoded_pcm.clear();
+
         if self.f_len != 0 {
             if self.f_len != f_len {
                 return Err(AudioDecoderError(format!(
@@ -200,7 +208,8 @@ impl AudioDecoder {
 
         if self.f_count < 5 {
             // NOTE: return and wait for further frames / buffering
-            return Ok(());
+            return Err(AudioDecoderError("waiting for more frames".to_string()));
+            // return Ok(());
         }
 
         // copy buffer
@@ -213,7 +222,9 @@ impl AudioDecoder {
                 info!("AD: SF sync START {} frames", self.f_sync);
             }
             self.f_sync += 1;
-            return Ok(());
+
+            return Err(AudioDecoderError("waiting for sync".to_string()));
+            // return Ok(());
         }
 
         if self.f_sync > 0 {
@@ -258,7 +269,8 @@ impl AudioDecoder {
         // end...
         self.f_count = 0;
 
-        Ok(())
+        // NOTE: just for testing..
+        Ok(self.decoded_pcm.to_vec())
     }
 
     fn check_sync(&mut self) -> bool {
@@ -343,6 +355,9 @@ impl AudioDecoder {
                     r.bytes_consumed,
                     r.samples.len()
                 );
+
+                self.decoded_pcm.append(r.samples.to_vec().as_mut());
+
                 self.sink.append(SamplesBuffer::new(
                     r.channels as u16,
                     r.sample_rate as u32,
