@@ -374,12 +374,11 @@ impl AudioDecoder {
                 // );
 
                 self.decoded_pcm.append(r.samples.to_vec().as_mut());
-
-                self.sink.append(SamplesBuffer::new(
-                    r.channels as u16,
-                    r.sample_rate as u32,
-                    r.samples,
-                ));
+                // self.sink.append(SamplesBuffer::new(
+                //     r.channels as u16,
+                //     r.sample_rate as u32,
+                //     r.samples,
+                // ));
             }
             Err(e) => {
                 error!("DEC: {}", e);
@@ -387,50 +386,5 @@ impl AudioDecoder {
             }
         }
 
-        /*
-
-        let mut pcm = vec![0i16; 4096];
-        match self.decoder.fill(&au_data) {
-            Ok(filled) => {
-                // debug!("ENC: filled: {} : {}", au_data.len(), filled);
-
-                match self.decoder.decode_frame(&mut pcm) {
-                    Ok(_) => {
-                        // debug!("DEC: decoded: {:?}", pcm.len());
-                    }
-                    Err(e) => {
-                        error!("DEC: {}", e);
-                    }
-                }
-
-                let decoded_frame_size = self.decoder.decoded_frame_size();
-                let stream_info = self.decoder.stream_info();
-
-                println!("DEC: {:#?}", stream_info);
-                pcm.resize(decoded_frame_size, 0);
-
-            }
-            Err(e) => {
-                error!("DEC: fill error: {}", e);
-            }
-        }
-         */
-
-        /*
-        let channels = 2;
-        let sample_rate = if let Some(ref af) = self.audio_format {
-            if af.samplerate == 48 {
-                48000
-            } else {
-                32000
-            }
-        } else {
-            48000
-        };
-
-        let source = SamplesBuffer::new(channels as u16, sample_rate, pcm);
-        self.sink.append(source);
-
-        */
     }
 }

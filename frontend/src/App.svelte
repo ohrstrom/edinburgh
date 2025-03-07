@@ -1,68 +1,98 @@
 <script>
-const CHANNELS = 2;
-const SAMPLE_RATE = 48000;
+  let ws;
+  let audioContext;
+  let decoder;
+  let frameBuffer = [];
 
-let audioContext;
-let audioNode;
+  const connect = async () => {
 
-let analyser;
-let frequencyData;
+      if (!ws) {
+          ws = new WebSocket("ws://localhost:9001");
 
-let ws;
+          ws.binaryType = "arraybuffer";
+  
+          ws.onmessage = (event) => {
+            processAACFrame(new Uint8Array(event.data));
+          };
+      }
+      console.debug("ws:", ws);
+  };
 
-async function setupAudio() {
-    audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const initializeAudioDecoder = () => {
+      if (!audioContext) {
+          audioContext = new AudioContext();
+      }
 
-    await audioContext.audioWorklet.addModule("pcm-processor.js");
+      if (!decoder) {
+          decoder = new AudioDecoder({
+              output: (audioData) => {
+                  // console.debug("audioData:", audioData);
+                  playDecodedAudio(audioData);
+              },
+              error: (e) => console.error("Decoder error:", e),
+          });
 
-    audioNode = new AudioWorkletNode(audioContext, "pcm-processor", {
-        outputChannelCount: [CHANNELS],
-    });
+          const asc = new Uint8Array([0x13, 0x14, 0x56, 0xE5, 0x98]);
 
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+          decoder.configure({
+              codec: "mp4a.40.5",
+              sampleRate: 48000,
+              numberOfChannels: 2,
+              description: asc.buffer,
+          });
+      }
 
-    audioNode.connect(analyser);
-    audioNode.connect(audioContext.destination);
-}
+      window.d = decoder;
+  };
 
-const connect = async () => {
+  const processAACFrame = (aacFrame) => {
+      if (!decoder) initializeAudioDecoder();
 
-  if (!audioContext || audioContext.state === "suspended") {
-      await setupAudio();
-      audioContext.resume();
-  }
+      const chunk = new EncodedAudioChunk({
+          type: "key",
+          timestamp: (audioContext.currentTime * 1e6), // Ensure correct timestamps
+          duration: 2048 * (1000000 / 48000),
+          data: aacFrame.buffer,
+      });
 
-  console.debug("Audio context:", audioContext.state);
+      decoder.decode(chunk);
+  };
 
-  if (!ws) {
-      ws = new WebSocket("ws://localhost:9001");
-      ws.binaryType = "arraybuffer";
-      ws.onmessage = (event) => {
-          const pcmData = new Float32Array(event.data);
-          console.log("Received PCM data:", pcmData.length);
+  const playDecodedAudio = async (audioData) => {
+    if (!audioContext) return;
 
-          if (audioNode) {
-            audioNode.port.postMessage(pcmData);
-          }
-      };
-  }
+    console.debug("AD:", audioData);
 
-  console.debug("ws:", ws);
-}
+    const numChannels = 2;
+    const sampleRate = 24000;
+    // const numFrames = audioData.numberOfFrames;
+    const numFrames = audioData.numberOfFrames;
+
+    // // Create an AudioBuffer to hold the decoded PCM samples
+    const audioBuffer = audioContext.createBuffer(numChannels, numFrames, sampleRate);
+
+    for (let channel = 0; channel < numChannels; channel++) {
+        const channelData = new Float32Array(numFrames);
+        audioData.copyTo(channelData, { planeIndex: channel });
+        audioBuffer.copyToChannel(channelData, channel);
+    }
+
+    // Create a buffer source to play the decoded audio
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+
+    console.debug(`Playing ${numFrames} frames at ${sampleRate}Hz`);
+};
+
 </script>
-
+  
 <main>
-  <div>
-    <h1>PCM</h1>
-    <button on:click={connect}>Connect</button>
-  </div>
-  <!--
-  <pre>{JSON.stringify(ws)}</pre>
-  -->
+    <div>
+        <h1>AAC Stream</h1>
+        <button on:click={connect}>Connect</button>
+    </div>
+    <audio id="audioPlayer" controls></audio>
 </main>
-
-<style>
-
-</style>
+  

@@ -377,6 +377,11 @@
   resolved "https://registry.yarnpkg.com/@types/estree/-/estree-1.0.6.tgz#628effeeae2064a1b4e79f78e81d87b7e5fc7b50"
   integrity sha512-AYnb1nQyY49te+VRAVgmzfcgjYS91mY5P0TKUDCLEM+gNnA+3T6rWITXRLYCpahpqSQbN5cE+gHpnPyXjHWxcw==
 
+"@webav/mp4box.js@^0.5.6":
+  version "0.5.6"
+  resolved "https://registry.yarnpkg.com/@webav/mp4box.js/-/mp4box.js-0.5.6.tgz#b78d7d5daeca92ced00d7397b4e0e7e4eb12af1b"
+  integrity sha512-DpZQlr624oyLwnmJjNIWggk4d2dfKsAwQdNMVf0akjx0BtXL45Fmd49tm0ekn9d9dB3zBIxxsgco5IcJQGpt4Q==
+
 acorn@^8.12.1:
   version "8.14.1"
   resolved "https://registry.yarnpkg.com/acorn/-/acorn-8.14.1.tgz#721d5dc10f7d5b5609a891773d47731796935dfb"

@@ -24,7 +24,7 @@ use tungstenite::protocol::Message;
 
 use edi::EDISource;
 
-fn start_websocket_server(rx: Receiver<Vec<f32>>) {
+fn start_websocket_server(au_rx: Receiver<Vec<u8>>, pcm_rx: Receiver<Vec<f32>>) {
     let server = TcpListener::bind("127.0.0.1:9001").expect("Failed to bind WebSocket server");
 
     let clients = Arc::new(Mutex::new(Vec::new()));
@@ -49,11 +49,33 @@ fn start_websocket_server(rx: Receiver<Vec<f32>>) {
         }
     });
 
-    while let Ok(pcm_data) = rx.recv() {
-        let pcm_bytes: &[u8] = cast_slice(&pcm_data); // Convert Vec<f32> → &[u8]
+    // NOTE: at the moment only one RECV works at a time
+
+    while let Ok(au_data) = au_rx.recv() {
+
+        let mut clients_lock = clients.lock().unwrap();
+        let au_bytes = Bytes::from(au_data.to_vec());
+
+        // debug!("AU: {}", au_data.len());
+
+        clients_lock.retain_mut(
+            |client| match client.send(Message::Binary(au_bytes.clone())) {
+                Ok(_) => true,
+                Err(e) => {
+                    error!("Error sending message to client: {}", e);
+                    false
+                }
+            },
+        );
+    }
+
+    while let Ok(pcm_data) = pcm_rx.recv() {
+        let pcm_bytes: &[u8] = cast_slice(&pcm_data);
         let pcm_bytes = Bytes::from(pcm_bytes.to_vec());
 
         let mut clients_lock = clients.lock().unwrap();
+
+        // debug!("PCM: {}", pcm_data.len());
 
         clients_lock.retain_mut(
             |client| match client.send(Message::Binary(pcm_bytes.clone())) {
@@ -94,10 +116,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // websocket
-    let (tx, rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = mpsc::channel();
+    let (au_tx, au_rx): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+    let (pcm_tx, pcm_rx): (Sender<Vec<f32>>, Receiver<Vec<f32>>) = mpsc::channel();
 
     thread::spawn(move || {
-        start_websocket_server(rx);
+        start_websocket_server(au_rx, pcm_rx);
     });
 
     // EDI frame
@@ -145,14 +168,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 // debug!("Frame completed: tags: {} - pcm: {}", r.tags.len(), r.pcm_data.len());
 
                                 if !r.au_frames.is_empty() {
-                                    debug!("au frames:  {}", r.au_frames.len());
+                                    // debug!("au frames:  {}", r.au_frames.len());
+                                    for au_frame in r.au_frames {
+                                        if let Err(e) = au_tx.send(au_frame) {
+                                            error!("Failed to send AU frame over channel: {}", e);
+                                        }
+                                    }
                                 }
 
                                 if !r.pcm.is_empty() {
-                                    debug!("pcm frames: {}", r.pcm.len());
+                                    // debug!("pcm frames: {}", r.pcm.len());
 
                                     // TODO: send pcm data via websocket
-                                    if let Err(e) = tx.send(r.pcm) {
+                                    if let Err(e) = pcm_tx.send(r.pcm) {
                                         error!("Failed to send PCM data over channel: {}", e);
                                     }
                                 }
