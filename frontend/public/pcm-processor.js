@@ -5,47 +5,60 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.bufferL = new Float32Array(0);
         this.bufferR = new Float32Array(0);
 
+        this.maxQueueSize = 32;
+        this.maxBufferSize = 48000 * 2;
+
         this.port.onmessage = (event) => {
-            const buffer = new Float32Array(event.data);
-            const deinterleaved = this.deinterleave(buffer);
-            this.audioQueue.push(deinterleaved); // Store deinterleaved PCM
+            if (event.data && event.data.type === "audio") {
+                let left = event.data.samples[0];
+                let right = event.data.samples[1];
+
+                if (this.audioQueue.length >= this.maxQueueSize) {
+                    console.debug(`PCMProcessor: dropping buffer: ${this.maxQueueSize - this.audioQueue.length}`);
+                    this.audioQueue.shift();
+                }
+
+                this.audioQueue.push({ left, right });
+            }
         };
-    }
-
-    deinterleave(buffer) {
-        const left = new Float32Array(buffer.length / 2);
-        const right = new Float32Array(buffer.length / 2);
-
-        for (let i = 0, j = 0; i < buffer.length; i += 2, j++) {
-            left[j] = buffer[i];
-            right[j] = buffer[i + 1];
-        }
-
-        return { left, right };
     }
 
     process(inputs, outputs) {
         const outputL = outputs[0][0];
         const outputR = outputs[0][1];
 
+        // Ensure we have enough buffered audio before starting playback
+        if (this.audioQueue.length < 16) {
+            // console.debug(`PCMProcessor: filling buffer: ${16 - this.audioQueue.length} missing`);
+            outputL.fill(0);
+            outputR.fill(0);
+            return true;
+        }
+
+        // Fill bufferL and bufferR if they are too small
         if (this.bufferL.length < outputL.length) {
             if (this.audioQueue.length > 0) {
                 const nextBuffer = this.audioQueue.shift();
                 this.bufferL = new Float32Array([...this.bufferL, ...nextBuffer.left]);
                 this.bufferR = new Float32Array([...this.bufferR, ...nextBuffer.right]);
+
+                // Prevent bufferL/bufferR from growing too large
+                if (this.bufferL.length > this.maxBufferSize) {
+                    this.bufferL = this.bufferL.slice(-this.maxBufferSize);
+                    this.bufferR = this.bufferR.slice(-this.maxBufferSize);
+                }
             } else {
-                // No data available, output silence
                 outputL.fill(0);
                 outputR.fill(0);
                 return true;
             }
         }
 
-        // Copy the correct amount of samples
+        // Output available samples
         outputL.set(this.bufferL.subarray(0, outputL.length));
         outputR.set(this.bufferR.subarray(0, outputR.length));
 
-        // Remove the samples we just played
+        // Remove played samples from the buffer
         this.bufferL = this.bufferL.slice(outputL.length);
         this.bufferR = this.bufferR.slice(outputR.length);
 

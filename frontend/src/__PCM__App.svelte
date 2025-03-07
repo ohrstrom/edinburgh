@@ -13,7 +13,7 @@ let ws;
 async function setupAudio() {
     audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
 
-    await audioContext.audioWorklet.addModule("pcm-processor.js");
+    await audioContext.audioWorklet.addModule("raw-pcm-processor.js");
 
     audioNode = new AudioWorkletNode(audioContext, "pcm-processor", {
         outputChannelCount: [CHANNELS],

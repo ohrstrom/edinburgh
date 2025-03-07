@@ -1,113 +1,120 @@
 <script>
   let ws;
   let audioContext;
+  let workletNode;
   let decoder;
-  let frameBuffer = [];
-  let nextPlayTime = 0;
+
+  let isDecoding = $state(false);
 
   const connect = async () => {
+    await initializeAudioDecoder();
 
-      if (!ws) {
-          ws = new WebSocket("ws://localhost:9001");
+    if (!ws) {
+      ws = new WebSocket("ws://localhost:9001");
 
-          ws.binaryType = "arraybuffer";
-  
-          ws.onmessage = (event) => {
-            processAACFrame(new Uint8Array(event.data));
-          };
-      }
-      console.debug("ws:", ws);
+      ws.binaryType = "arraybuffer";
+
+      ws.onmessage = async (event) => {
+        await processAACFrame(new Uint8Array(event.data));
+      };
+
+      ws.onclose = () => {
+        console.info("WebSocket closed");
+        ws = null;
+      };
+
+      ws.onerror = (e) => {
+        console.error("WebSocket error:", e);
+      };
+
+    }
+    console.debug("ws:", ws);
   };
 
-  const initializeAudioDecoder = () => {
-      if (!audioContext) {
-          audioContext = new AudioContext();
-      }
+  const disconnect = async () => {
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+  };
 
-      if (!decoder) {
-          decoder = new AudioDecoder({
-              output: (audioData) => {
-                  playDecodedAudio(audioData);
-              },
-              error: (e) => console.error("Decoder error:", e),
-          });
+  const initializeAudioDecoder = async () => {
+    if (decoder) {
+      console.info("decoder already initialized");
+      return;
+    }
 
-          const asc = new Uint8Array([0x13, 0x14, 0x56, 0xE5, 0x98]);
+    audioContext = new AudioContext({
+      latencyHint: "balanced",
+      sampleRate: 24000,
+    });
+    await audioContext.audioWorklet.addModule("pcm-processor.js");
 
-          decoder.configure({
-              codec: "mp4a.40.5",
-              sampleRate: 48000,
-              numberOfChannels: 2,
-              description: asc.buffer,
-          });
-      }
+    workletNode = new AudioWorkletNode(audioContext, "pcm-processor", {
+      outputChannelCount: [2],
+    });
+    workletNode.connect(audioContext.destination);
+
+    decoder = new AudioDecoder({
+      output: (audioData) => {
+        playDecodedAudio(audioData);
+      },
+      error: (e) => console.error("Decoder error:", e),
+    });
+
+    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]);
+
+    decoder.configure({
+      codec: "mp4a.40.5",
+      sampleRate: 48000,
+      numberOfChannels: 2,
+      description: asc.buffer,
+    });
+
+    decoder.ondequeue = (e) => {
+      // console.debug("decoder.ondequeue", e);
+    };
 
   };
 
-  const processAACFrame = (aacFrame) => {
-      if (!decoder) initializeAudioDecoder();
+  const processAACFrame = async (aacFrame) => {
+    const chunk = new EncodedAudioChunk({
+      type: "key",
+      timestamp: audioContext.currentTime * 1e6, // timestamp is needed but has no effect
+      data: aacFrame.buffer,
+    });
 
-      frameBuffer.push(aacFrame);
+    decoder.decode(chunk);
 
-      // Process only when 3 frames are received
-      if (frameBuffer.length === 3) {
-        for (let i = 0; i < frameBuffer.length; i++) {
-            const chunk = new EncodedAudioChunk({
-                type: i === 0 ? "key" : "delta",
-                timestamp: (audioContext.currentTime * 1e6) + i * 8000,
-                duration: 1024 * (1000000 / 48000),
-                data: frameBuffer[i].buffer,
-            });
-
-            decoder.decode(chunk);
-        }
-
-        frameBuffer = [];
-      }
-
-      // const chunk = new EncodedAudioChunk({
-      //     type: "key",
-      //     timestamp: (audioContext.currentTime * 1e6), // Ensure correct timestamps
-      //     duration: 2048 * (1000000 / 48000),
-      //     data: aacFrame.buffer,
-      // });
-
-      // decoder.decode(chunk);
   };
 
   const playDecodedAudio = async (audioData) => {
-    if (!audioContext) return;
-
     const numChannels = 2;
-    const sampleRate = 24000;
     const numFrames = audioData.numberOfFrames;
 
-    const audioBuffer = audioContext.createBuffer(numChannels, numFrames, sampleRate);
+    let pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)];
 
     for (let channel = 0; channel < numChannels; channel++) {
-        const channelData = new Float32Array(numFrames);
-        audioData.copyTo(channelData, { planeIndex: channel });
-        audioBuffer.copyToChannel(channelData, channel);
+      audioData.copyTo(pcmData[channel], { planeIndex: channel });
     }
 
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
+    workletNode.port.postMessage({
+      type: "audio",
+      samples: pcmData,
+    });
 
-    if (nextPlayTime < audioContext.currentTime) {
-        nextPlayTime = audioContext.currentTime + 0.5;
-    }
+    isDecoding = true;
 
-    source.start(nextPlayTime);
-    nextPlayTime += audioBuffer.duration;
-};
-
+  };
 </script>
-  
+
 <main>
+  <div>
+    <h1>HE-AAC</h1>
+    <button onclick={connect}>Connect</button>
+    <button onclick={disconnect}>Disconnect</button>
     <div>
-        <h1>HE-AAC</h1>
-        <button on:click={connect}>Connect</button>
+      <p>Decoding: {isDecoding ? "Yes" : "No"}</p>
     </div>
+  </div>
 </main>
-  
