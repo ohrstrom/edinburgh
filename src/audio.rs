@@ -1,13 +1,13 @@
 use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
 use log::{debug, error, info, warn};
-use std::fmt::{self, format};
-use std::io::Cursor;
+use std::fmt::{self};
 
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 
 use derivative::Derivative;
-// use redlux::Decoder;
-use crate::dec::{Decoder, Transport};
+use faad2::Decoder;
+
+// use crate::dec::{Decoder, Transport};
 
 #[derive(Debug)]
 pub struct AudioDecoderError(pub String);
@@ -29,11 +29,9 @@ impl fmt::Display for AudioFormatError {
 pub struct AudioFormat {
     is_sbr: bool,
     is_ps: bool,
-    //
     codec: String,
     samplerate: u8,
     bitrate: usize,
-    //
     au_count: usize,
 }
 
@@ -51,8 +49,6 @@ impl AudioFormat {
         }
 
         let h = sf[2];
-
-        debug!("from bytes: {:?}", h);
 
         let dac_rate = (h & 0x40) != 0;
         let is_sbr = (h & 0x20) != 0;
@@ -98,9 +94,8 @@ impl AudioFormat {
 }
 
 #[derive(Derivative)]
-#[derivative(Debug)] // Enables Debug derivation
+#[derivative(Debug)]
 pub struct AudioDecoder {
-    // TODO: just dummy data for now
     scid: u8,
     //
     f_len: usize,
@@ -116,7 +111,7 @@ pub struct AudioDecoder {
     //
     audio_format: Option<AudioFormat>,
     //
-    // #[derivative(Debug = "ignore")]
+    #[derivative(Debug = "ignore")]
     decoder: Decoder,
     // output
     #[derivative(Debug = "ignore")]
@@ -127,41 +122,14 @@ pub struct AudioDecoder {
 
 impl AudioDecoder {
     pub fn new(scid: u8) -> Self {
-        let mut decoder = Decoder::new(Transport::Raw);
+        // ASC: audio specific config
+        // see: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
+        let asc = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin
 
-        match decoder.set_min_output_channels(2) {
-            Ok(_) => {
-                debug!("DEC: set min output channels");
-            }
-            Err(e) => {
-                error!("DEC: set min output channels error: {}", e);
-            }
-        }
-        match decoder.set_max_output_channels(2) {
-            Ok(_) => {
-                debug!("DEC: set max output channels");
-            }
-            Err(e) => {
-                error!("DEC: set max output channels error: {}", e);
-            }
-        }
-
-        // SEE: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
-        let config = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin
-
-        match decoder.config_raw(&config) {
-            Ok(_) => {
-                debug!("DEC: config raw");
-            }
-            Err(e) => {
-                error!("DEC: config raw error: {}", e);
-            }
-        }
+        let decoder = Decoder::new(&asc).unwrap();
 
         let (stream, handle) = OutputStream::try_default().expect("Error creating output stream");
         let sink = Sink::try_new(&handle).expect("Error creating sink");
-
-        // decoder.config_raw(&config).unwrap();
 
         Self {
             scid,
@@ -283,18 +251,8 @@ impl AudioDecoder {
                 continue;
             }
 
-            // NOTE: send to aac+ decoder
-            //       au_data / (au_len - 2)
-
-            // self.decode_au(&au_data);
-
-            // self.decode_au(au_data.to_vec());
-
-            // try with:
-            let payload = &au_data[0..au_len - 2];
-            self.decode_au(payload.to_vec());
-
-            // debug!("decode AU {} - len {}", i, au_len);
+            // NOTE: remove last two bytes (CRC)
+            self.decode_au(au_data[..au_len - 2].to_vec());
         }
 
         // end...
@@ -376,6 +334,28 @@ impl AudioDecoder {
     fn decode_au(&mut self, au_data: Vec<u8>) {
         let mut pcm = vec![0i16; 4096];
 
+        match self.decoder.decode(&au_data) {
+            Ok(r) => {
+                debug!(
+                    "DEC: ch: {} - sr: {} - bytes: {} - samples: {}",
+                    r.channels,
+                    r.sample_rate,
+                    r.bytes_consumed,
+                    r.samples.len()
+                );
+                self.sink.append(SamplesBuffer::new(
+                    r.channels as u16,
+                    r.sample_rate as u32,
+                    r.samples,
+                ));
+            }
+            Err(e) => {
+                error!("DEC: {}", e);
+                return;
+            }
+        }
+
+        /*
         match self.decoder.fill(&au_data) {
             Ok(filled) => {
                 // debug!("ENC: filled: {} : {}", au_data.len(), filled);
@@ -392,19 +372,17 @@ impl AudioDecoder {
                 let decoded_frame_size = self.decoder.decoded_frame_size();
                 let stream_info = self.decoder.stream_info();
 
-                // debug!("DEC: info: {:#?}", stream_info);
-
                 println!("DEC: {:#?}", stream_info);
-
                 pcm.resize(decoded_frame_size, 0);
 
-                // debug!("PCM: {:?}", pcm);
             }
             Err(e) => {
                 error!("DEC: fill error: {}", e);
             }
         }
+         */
 
+        /*
         let channels = 2;
         let sample_rate = if let Some(ref af) = self.audio_format {
             if af.samplerate == 48 {
@@ -417,7 +395,8 @@ impl AudioDecoder {
         };
 
         let source = SamplesBuffer::new(channels as u16, sample_rate, pcm);
-
         self.sink.append(source);
+
+        */
     }
 }
