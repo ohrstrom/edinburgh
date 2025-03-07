@@ -3,7 +3,7 @@ use log::{debug, error, info, warn};
 use std::fmt::{self, format};
 use std::io::Cursor;
 
-use rodio::{OutputStream, Sink};
+use rodio::{OutputStream, Sink, buffer::SamplesBuffer};
 
 use derivative::Derivative;
 // use redlux::Decoder;
@@ -118,8 +118,12 @@ pub struct AudioDecoder {
     audio_format: Option<AudioFormat>,
     //
     // #[derivative(Debug = "ignore")]
-    // decoder: Decoder<Cursor<Vec<u8>>>,
     decoder: Decoder,
+    // output
+    #[derivative(Debug = "ignore")]
+    _stream: OutputStream,
+    #[derivative(Debug = "ignore")]
+    sink: Sink,
 }
 
 impl AudioDecoder {
@@ -144,14 +148,9 @@ impl AudioDecoder {
             }
         }
 
-        // let config = vec![0x10, 0x90]; //LC 48KHz 2channels
-        
-        // SEE: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
-        // let config = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin
-        let config = vec![0x13, 0x14, 0x56, 0xE5, 0x98];
-        // let config = vec![0x2B, 0x60, 0x11, 0xC0]; // HE-AAC, 48kHz, Stereo
-        // let config = vec![0x10, 0x90]; // HE-AAC, 48kHz, Stereo, No SBR
 
+        // SEE: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
+        let config = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin
 
 
         match decoder.config_raw(&config) {
@@ -163,14 +162,9 @@ impl AudioDecoder {
             }
         }
 
-        debug!("PRE SINK");
 
-        let output_stream = OutputStream::try_default();
-        let (_stream, handle) = output_stream.expect("Error creating output stream");
-        let sink = Sink::try_new(&handle).expect("Error creating sink");
-
-        debug!("POST SINK");
-        
+        let (stream, handle) = OutputStream::try_default().expect("Error creating output stream");
+        let sink = Sink::try_new(&handle).expect("Error creating sink");        
 
         // decoder.config_raw(&config).unwrap();
 
@@ -192,6 +186,9 @@ impl AudioDecoder {
             audio_format: None,
             //
             decoder: decoder,
+            //
+            _stream: stream,
+            sink: sink,
         }
     }
     pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<(), AudioDecoderError> {
@@ -395,7 +392,7 @@ impl AudioDecoder {
 
                 match self.decoder.decode_frame(&mut pcm) {
                     Ok(_) => {
-                        debug!("DEC: decoded: {:?}", pcm.len());
+                        // debug!("DEC: decoded: {:?}", pcm.len());
                     }
                     Err(e) => {
                         error!("DEC: {}", e);
@@ -403,10 +400,14 @@ impl AudioDecoder {
                 }
 
                 
-                let num_decoded = self.decoder.decoded_frame_size();
+                let decoded_frame_size = self.decoder.decoded_frame_size();
                 let stream_info = self.decoder.stream_info();
 
                 // debug!("DEC: info: {:#?}", stream_info);
+
+                println!("DEC: {:#?}", stream_info);
+
+                pcm.resize(decoded_frame_size, 0);
 
 
                 // debug!("PCM: {:?}", pcm);
@@ -415,6 +416,17 @@ impl AudioDecoder {
                 error!("DEC: fill error: {}", e);
             }
         }
+
+        let channels = 2;
+        let sample_rate = if let Some(ref af) = self.audio_format {
+            if af.samplerate == 48 { 48000 } else { 32000 }
+        } else {
+            48000
+        };
+
+        let source = SamplesBuffer::new(channels as u16, sample_rate, pcm);
+
+        self.sink.append(source);
 
     }
 }
