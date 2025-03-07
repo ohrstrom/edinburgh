@@ -93,6 +93,18 @@ impl AudioFormat {
     }
 }
 
+#[derive(Debug)]
+pub struct DecoderResult {
+    pub au_frames: Vec<Vec<u8>>,
+    pub pcm: Vec<f32>,
+}
+
+impl DecoderResult {
+    pub fn new(au_frames: Vec<Vec<u8>>, pcm: Vec<f32>) -> Self {
+        Self { au_frames, pcm }
+    }
+}
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct AudioDecoder {
@@ -119,6 +131,7 @@ pub struct AudioDecoder {
     #[derivative(Debug = "ignore")]
     sink: Sink,
     //
+    au_frames: Vec<Vec<u8>>,
     decoded_pcm: Vec<f32>,
 }
 
@@ -154,10 +167,12 @@ impl AudioDecoder {
             _stream: stream,
             sink: sink,
             //
+            au_frames: Vec::new(),
             decoded_pcm: Vec::new(),
         }
     }
-    pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<Vec<f32>, AudioDecoderError> {
+    pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<DecoderResult, AudioDecoderError> {
+        self.au_frames.clear();
         self.decoded_pcm.clear();
 
         if self.f_len != 0 {
@@ -260,6 +275,9 @@ impl AudioDecoder {
                 continue;
             }
 
+            // copy AU frames to buffer
+            self.au_frames.push(au_data[..au_len - 2].to_vec());
+
             // NOTE: remove last two bytes (CRC)
             self.decode_au(au_data[..au_len - 2].to_vec());
         }
@@ -268,7 +286,10 @@ impl AudioDecoder {
         self.f_count = 0;
 
         // NOTE: just for testing..
-        Ok(self.decoded_pcm.to_vec())
+        Ok(DecoderResult::new(
+            self.au_frames.clone(),
+            self.decoded_pcm.clone(),
+        ))
     }
 
     fn check_sync(&mut self) -> bool {
@@ -342,17 +363,15 @@ impl AudioDecoder {
         return true;
     }
     fn decode_au(&mut self, au_data: Vec<u8>) {
-        let mut pcm = vec![0i16; 4096];
-
         match self.decoder.decode(&au_data) {
             Ok(r) => {
-                debug!(
-                    "DEC: ch: {} - sr: {} - bytes: {} - samples: {}",
-                    r.channels,
-                    r.sample_rate,
-                    r.bytes_consumed,
-                    r.samples.len()
-                );
+                // debug!(
+                //     "DEC: ch: {} - sr: {} - bytes: {} - samples: {}",
+                //     r.channels,
+                //     r.sample_rate,
+                //     r.bytes_consumed,
+                //     r.samples.len()
+                // );
 
                 self.decoded_pcm.append(r.samples.to_vec().as_mut());
 
@@ -369,6 +388,8 @@ impl AudioDecoder {
         }
 
         /*
+
+        let mut pcm = vec![0i16; 4096];
         match self.decoder.fill(&au_data) {
             Ok(filled) => {
                 // debug!("ENC: filled: {} : {}", au_data.len(), filled);

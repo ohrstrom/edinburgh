@@ -526,12 +526,17 @@ impl fmt::Display for AFFrame {
 
 pub struct EDIFrameResult {
     pub tags: Vec<Tag>,
-    pub pcm_data: Vec<f32>,
+    pub au_frames: Vec<Vec<u8>>,
+    pub pcm: Vec<f32>,
 }
 
 impl EDIFrameResult {
-    fn new(tags: Vec<Tag>, pcm_data: Vec<f32>) -> Self {
-        EDIFrameResult { tags, pcm_data }
+    fn new(tags: Vec<Tag>, au_frames: Vec<Vec<u8>>, pcm: Vec<f32>) -> Self {
+        EDIFrameResult {
+            tags,
+            au_frames,
+            pcm,
+        }
     }
 }
 
@@ -552,6 +557,7 @@ impl EDISource {
         let mut audio_decoder = self.audio_decoder.borrow_mut();
 
         // NOTE: just testing, hold soee aduio data...
+        let mut au_frames: Vec<Vec<u8>> = Vec::new();
         let mut pcm_data: Vec<f32> = Vec::new();
 
         match self.frame.decode() {
@@ -595,9 +601,10 @@ impl EDISource {
 
                             if scid == 6 {
                                 match audio_decoder.feed(&slice_data, slice_len) {
-                                    Ok(pcm) => {
-                                        debug!("Audio: {:?}", pcm.len());
-                                        pcm_data.extend(pcm);
+                                    Ok(r) => {
+                                        // debug!("DR - au frames: {:?}", r.au_frames.len());
+                                        au_frames.extend(r.au_frames);
+                                        pcm_data.extend(r.pcm);
                                     }
                                     Err(e) => {
                                         // warn!("{}", e);
@@ -609,7 +616,7 @@ impl EDISource {
                     }
                 }
                 // let result = EDIFrameResult::new(decoded_tags, Vec::new());
-                Ok(EDIFrameResult::new(decoded_tags, pcm_data))
+                Ok(EDIFrameResult::new(decoded_tags, au_frames, pcm_data))
             }
             Err(e) => Err(FrameDecodeError(format!("{}", e))),
         }

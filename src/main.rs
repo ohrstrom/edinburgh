@@ -143,11 +143,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match edi_source.process_frame() {
                             Ok(r) => {
                                 // debug!("Frame completed: tags: {} - pcm: {}", r.tags.len(), r.pcm_data.len());
-                                if !r.pcm_data.is_empty() {
-                                    debug!("pcm frames: {}", r.pcm_data.len());
+
+                                if !r.au_frames.is_empty() {
+                                    debug!("au frames:  {}", r.au_frames.len());
+                                }
+
+                                if !r.pcm.is_empty() {
+                                    debug!("pcm frames: {}", r.pcm.len());
 
                                     // TODO: send pcm data via websocket
-                                    if let Err(e) = tx.send(r.pcm_data) {
+                                    if let Err(e) = tx.send(r.pcm) {
                                         error!("Failed to send PCM data over channel: {}", e);
                                     }
                                 }
