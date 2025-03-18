@@ -385,6 +385,5 @@ impl AudioDecoder {
                 return;
             }
         }
-
     }
 }

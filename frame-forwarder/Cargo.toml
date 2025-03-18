@@ -1,0 +1,15 @@
+[package]
+name = "edinburgh-frame-forwarder"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+bytes = "1.10.1"
+colog = "1.3.0"
+log = "0.4.26"
+tungstenite = "0.26.2"
+nix = { version = "0.29.0", features = ["fs", "poll"] }
+
+[[bin]]
+name = "edinburgh-frame-forwarder"
+path = "src/main.rs"

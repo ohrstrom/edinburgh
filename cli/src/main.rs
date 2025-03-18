@@ -52,7 +52,6 @@ fn start_websocket_server(au_rx: Receiver<Vec<u8>>, pcm_rx: Receiver<Vec<f32>>) 
     // NOTE: at the moment only one RECV works at a time
 
     while let Ok(au_data) = au_rx.recv() {
-
         let mut clients_lock = clients.lock().unwrap();
         let au_bytes = Bytes::from(au_data.to_vec());
 

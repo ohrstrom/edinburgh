@@ -110,7 +110,10 @@
 
 <main>
   <div>
-    <h1>HE-AAC</h1>
+    <h1>HE-AAC :)</h1>
+    <p>
+      Receiving raw he-aac.
+    </p>
     <button onclick={connect}>Connect</button>
     <button onclick={disconnect}>Disconnect</button>
     <div>
