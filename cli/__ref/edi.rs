@@ -597,7 +597,7 @@ impl EDISource {
                             let slice_data = &tag.value[3..];
                             let slice_len = (tag.len / 8).saturating_sub(3);
 
-                            // debug!("AF: slen: {} | {} <> {}", slice_len, slice_data.len(), tag.decoded_value.len());
+                            debug!("AF: slen: {} | {} <> {}", slice_len, slice_data.len(), tag.decoded_value.len());
 
                             if scid == 6 {
                                 match audio_decoder.feed(&slice_data, slice_len) {

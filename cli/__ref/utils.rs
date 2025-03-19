@@ -1,8 +1,3 @@
-pub fn set_panic_hook() {
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
-}
-
 // CRC-16 CCITT
 pub fn calc_crc16_ccitt(data: &[u8]) -> u16 {
     let initial_invert = true;

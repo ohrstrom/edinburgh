@@ -14,6 +14,10 @@ ADDR ?= 213.232.205.101:8855
 run-cli:
 	cargo run -p $(CLI_BIN) -- $(ADDR)
 
+.PHONY: run-cli
+run-cli-sync:
+	cargo run -p $(CLI_BIN) --bin $(CLI_BIN)-sync -- $(ADDR)
+
 .PHONY: run-frame-forwarder
 run-frame-forwarder:
 	cargo run -p $(FRAME_FORWARDER_BIN) -- $(ADDR)
