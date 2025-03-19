@@ -78,12 +78,12 @@ impl AudioFormat {
 // }
 
 #[derive(Debug)]
-pub struct AACResult {
+pub struct AACPResult {
     pub frames: Vec<Vec<u8>>,
     // pub pad: Vec<XPADResult>,
 }
 
-impl AACResult {
+impl AACPResult {
     pub fn new(frames: Vec<Vec<u8>>) -> Self {
         Self { frames }
     }
@@ -100,7 +100,7 @@ pub enum FeedError {
 
 #[derive(Debug)]
 pub enum FeedResult {
-    Complete(AACResult),
+    Complete(AACPResult),
     Buffering,
 }
 
@@ -366,7 +366,7 @@ impl PADDecoder {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct AACExctractor {
+pub struct AACPExctractor {
     scid: u8,
     f_len: usize,
     f_count: usize,
@@ -382,7 +382,7 @@ pub struct AACExctractor {
     pad_decoder: PADDecoder,
 }
 
-impl AACExctractor {
+impl AACPExctractor {
     pub fn new(scid: u8) -> Self {
         Self {
             scid,
@@ -499,7 +499,7 @@ impl AACExctractor {
 
         self.f_count = 0;
 
-        let result: AACResult = AACResult::new(self.au_frames.clone());
+        let result: AACPResult = AACPResult::new(self.au_frames.clone());
 
         self.au_frames.clear();
 

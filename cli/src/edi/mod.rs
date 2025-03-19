@@ -4,13 +4,10 @@ mod fic;
 mod frame;
 mod msc;
 
-use msc::{AACExctractor, FeedResult};
-// use futures::channel::mpsc::UnboundedSender;
 use derivative::Derivative;
 use log;
+use msc::{AACPExctractor, FeedResult};
 use serde::Serialize;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 use bus::EDIEvent;
 use ensemble::Ensemble;
@@ -44,14 +41,14 @@ impl Drop for AACFrame {
 #[derive(Debug)]
 pub struct EDISubchannel {
     scid: u8,
-    audio_extractor: AACExctractor,
+    audio_extractor: AACPExctractor,
 }
 
 impl EDISubchannel {
     pub fn new(scid: u8) -> Self {
         EDISubchannel {
             scid,
-            audio_extractor: AACExctractor::new(scid),
+            audio_extractor: AACPExctractor::new(scid),
         }
     }
 }
