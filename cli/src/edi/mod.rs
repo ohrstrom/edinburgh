@@ -21,18 +21,18 @@ use futures::channel::mpsc::UnboundedSender;
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Serialize)]
-pub struct AACFrame {
+pub struct AACPFrame {
     pub scid: u8,
     pub data: Vec<u8>,
 }
 
-impl AACFrame {
+impl AACPFrame {
     pub fn from_bytes(scid: u8, data: Vec<u8>) -> Self {
-        AACFrame { scid, data }
+        AACPFrame { scid, data }
     }
 }
 
-impl Drop for AACFrame {
+impl Drop for AACPFrame {
     fn drop(&mut self) {
         self.data.clear();
     }
@@ -63,7 +63,7 @@ pub struct EDISource {
     // on_edi_frame: Option<Box<dyn FnMut(&Frame) + Send>>,
     // on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
     #[derivative(Debug = "ignore")]
-    on_aac_segment: Option<Box<dyn FnMut(&AACFrame) + Send>>,
+    on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
     // #[derivative(Debug = "ignore")]
     // on_aac_segment: Option<fn(&[u8])>,
 }
@@ -71,7 +71,7 @@ pub struct EDISource {
 impl EDISource {
     pub fn new(
         event_tx: UnboundedSender<EDIEvent>,
-        on_aac_segment: Option<Box<dyn FnMut(&AACFrame) + Send>>,
+        on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
         // on_aac_segment: Option<fn(&[u8])>,
     ) -> Self {
         EDISource {
@@ -124,11 +124,11 @@ impl EDISource {
                                 }
                             };
 
-                            match sc.audio_extractor.feed(&slice_data, slice_len) {
+                            match sc.audio_extractor.feed(&slice_data, slice_len, &self.event_tx).await {
                                 Ok(FeedResult::Complete(r)) => {
                                     // audio frames
                                     for frame in r.frames {
-                                        let aac_frame = AACFrame::from_bytes(scid, frame);
+                                        let aac_frame = AACPFrame::from_bytes(scid, frame);
                                         // log::debug!("AAC frame: {:?}", aac_frame);
                                         if let Some(ref mut callback) = self.on_aac_segment {
                                             // let _ = callback.call1(&aac_frame).ok();

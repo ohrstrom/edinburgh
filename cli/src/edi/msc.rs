@@ -4,6 +4,13 @@ use log;
 use std::cmp::min;
 use std::vec;
 use thiserror::Error;
+use super::bus::EDIEvent;
+
+#[cfg(target_arch = "wasm32")]
+use futures::channel::mpsc::UnboundedSender;
+
+#[cfg(not(target_arch = "wasm32"))]
+use tokio::sync::mpsc::UnboundedSender;
 
 const FPAD_LEN: usize = 2;
 const PAD_BUFFER_SIZE: usize = 256;
@@ -77,15 +84,22 @@ impl AudioFormat {
 //     }
 // }
 
-#[derive(Debug)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub struct AACPResult {
+    pub scid: u8,
+    // #[derivative(Debug = "ignore")]
+    #[derivative(Debug(format_with = "AACPResult::debug_frames"))]
     pub frames: Vec<Vec<u8>>,
     // pub pad: Vec<XPADResult>,
 }
 
 impl AACPResult {
-    pub fn new(frames: Vec<Vec<u8>>) -> Self {
-        Self { frames }
+    pub fn new(scid: u8, frames: Vec<Vec<u8>>) -> Self {
+        Self { scid, frames }
+    }
+    fn debug_frames(frames: &Vec<Vec<u8>>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", frames.len())
     }
 }
 
@@ -400,7 +414,7 @@ impl AACPExctractor {
             pad_decoder: PADDecoder::new(scid),
         }
     }
-    pub fn feed(&mut self, data: &[u8], f_len: usize) -> Result<FeedResult, FeedError> {
+    pub async fn feed(&mut self, data: &[u8], f_len: usize, event_tx: &UnboundedSender<EDIEvent>) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
 
         if self.f_len != 0 {
@@ -463,8 +477,8 @@ impl AACPExctractor {
         if self.audio_format.is_none() && self.sf_buff.len() >= 11 {
             match AudioFormat::from_bytes(&self.sf_buff, self.sf_len) {
                 Ok(af) => {
+                    log::info!("SCID: {} {:?}", self.scid, af);
                     self.audio_format = Some(af);
-                    log::info!("Audio format: {} {:?}", self.scid, self.audio_format);
                 }
                 Err(err) => {
                     log::warn!("Format error: {} {:?}", self.scid, err);
@@ -499,7 +513,10 @@ impl AACPExctractor {
 
         self.f_count = 0;
 
-        let result: AACPResult = AACPResult::new(self.au_frames.clone());
+        let result: AACPResult = AACPResult::new(self.scid, self.au_frames.clone());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = event_tx.send(EDIEvent::AACPFramesExtracted(result.clone()));
 
         self.au_frames.clear();
 

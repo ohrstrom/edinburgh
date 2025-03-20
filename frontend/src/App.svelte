@@ -15,7 +15,7 @@
       ws.binaryType = "arraybuffer";
 
       ws.onmessage = async (event) => {
-        await processAACFrame(new Uint8Array(event.data));
+        await processAACPFrame(new Uint8Array(event.data));
       };
 
       ws.onclose = () => {
@@ -77,11 +77,11 @@
 
   };
 
-  const processAACFrame = async (aacFrame) => {
+  const processAACPFrame = async (AACPFrame) => {
     const chunk = new EncodedAudioChunk({
       type: "key",
       timestamp: audioContext.currentTime * 1e6, // timestamp is needed but has no effect
-      data: aacFrame.buffer,
+      data: AACPFrame.buffer,
     });
 
     decoder.decode(chunk);

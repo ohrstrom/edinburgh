@@ -11,13 +11,14 @@ use derivative::Derivative;
 use edi_frame_extractor::EDIFrameExtractor;
 use faad2::Decoder;
 use futures::channel::mpsc::unbounded;
+use clap::Parser;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use edi::bus::EDIEvent;
-use edi::{AACFrame, EDISource};
+use edi::{AACPFrame, EDISource};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -69,12 +70,18 @@ unsafe impl Send for AudioDecoder {}
 struct EDIHandler {
     receiver: UnboundedReceiver<EDIEvent>,
     audio_decoder: AudioDecoder,
+    scid: Option<u8>,
 }
 
 impl EDIHandler {
-    pub fn new(receiver: UnboundedReceiver<EDIEvent>) -> Self {
+
+    pub fn new(
+        scid: Option<u8>,
+        receiver: UnboundedReceiver<EDIEvent>,
+    ) -> Self {
         let audio_decoder = AudioDecoder::new();
         Self {
+            scid,
             receiver,
             audio_decoder,
         }
@@ -86,25 +93,47 @@ impl EDIHandler {
                 EDIEvent::EnsembleUpdated(ensemble) => {
                     // log::debug!("Ensemble updated: {:?}", ensemble);
                     log::debug!("Ensemble updated: 0x{:4x}", ensemble.eid.unwrap_or(0));
+                },
+                EDIEvent::AACPFramesExtracted(r) => {
+                    if r.scid == self.scid.unwrap_or(0) {
+                        // log::debug!("AACPFramesExtracted: {:?}", r);
+                        for frame in r.frames {
+                            self.audio_decoder.feed(&frame);
+                        }
+                        // self.audio_decoder.feed(&frame.data);
+                    }
                 }
             }
         }
     }
 }
 
+/// EDInburgh
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// EDI host:port to connect to.
+    #[arg(short, long)]
+    addr: String,
+
+    /// Subchannel ID to extract audio from. [optional]
+    #[arg(short, long)]
+    scid: Option<u8>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
     // log setup
     std::env::set_var("RUST_LOG", "debug");
-    colog::init();
+    // colog::init();
+    env_logger::init();
+
+    let args = Args::parse();
+    log::debug!("{:#?}", args);
 
     // cli args
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} <host:port>", args[0]);
-        std::process::exit(1);
-    }
-    let endpoint = &args[1];
+    let endpoint = args.addr;
 
     log::debug!("endpoint: {}", endpoint);
 
@@ -120,14 +149,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let audio_decoder = Arc::new(Mutex::new(AudioDecoder::new()));
 
-    let aac_callback: Box<dyn FnMut(&AACFrame) + Send> = Box::new({
+    let aac_callback: Box<dyn FnMut(&AACPFrame) + Send> = Box::new({
         let audio_decoder = Arc::clone(&audio_decoder); // Clone Arc for closure capture
-        move |frame: &AACFrame| {
+        move |frame: &AACPFrame| {
             if let Ok(mut decoder) = audio_decoder.lock() {
                 // decoder.feed(&frame.data);
-                if frame.scid == 6 {
-                    decoder.feed(&frame.data);
-                }
+                // if frame.scid == 6 {
+                //     decoder.feed(&frame.data);
+                // }
             }
         }
     });
@@ -136,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // let mut source = EDISource::new(event_tx, Some(callback));
 
-    let event_handler = EDIHandler::new(event_rx);
+    let event_handler = EDIHandler::new(args.scid, event_rx);
 
     tokio::spawn(async move {
         event_handler.run().await;

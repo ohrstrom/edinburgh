@@ -12,7 +12,7 @@ ADDR ?= 213.232.205.101:8855
 
 .PHONY: run-cli
 run-cli:
-	cargo run -p $(CLI_BIN) -- $(ADDR)
+	cargo run -p $(CLI_BIN) -- --addr $(ADDR)
 
 .PHONY: run-cli
 run-cli-sync:

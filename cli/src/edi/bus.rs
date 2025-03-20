@@ -1,4 +1,5 @@
 use super::ensemble::Ensemble;
+use super::msc::AACPResult;
 
 /*
     NOTE: not in use at the moment.
@@ -8,4 +9,5 @@ use super::ensemble::Ensemble;
 #[derive(Debug)]
 pub enum EDIEvent {
     EnsembleUpdated(Ensemble),
+    AACPFramesExtracted(AACPResult),
 }

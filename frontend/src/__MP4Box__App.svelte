@@ -18,18 +18,18 @@
             ws.binaryType = "arraybuffer";
     
             ws.onmessage = (event) => {
-                const rawAACFrame = new Uint8Array(event.data);
-                handleAACFrame(rawAACFrame);
+                const rawAACPFrame = new Uint8Array(event.data);
+                handleAACPFrame(rawAACPFrame);
             };
         }
         console.debug("ws:", ws);
     };
   
-    const handleAACFrame = (aacFrame) => {
+    const handleAACPFrame = (AACPFrame) => {
         if (!mp4boxfile) initializeMP4Box();
   
         // let sample = {
-        //     data: aacFrame,
+        //     data: AACPFrame,
         //     duration: 1024,  // AAC frame duration in samples (common value for 44.1kHz)
         //     dts: performance.now() * 90, // Rough DTS in 90kHz clock
         //     cts: 0,
@@ -38,7 +38,7 @@
   
         // mp4boxfile.addSample(trackId, sample);
   
-        let buffer = aacFrame.buffer;
+        let buffer = AACPFrame.buffer;
         buffer.fileStart = 0;
   
         mp4boxfile.appendBuffer(buffer);
