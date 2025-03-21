@@ -2,6 +2,7 @@
 name = "edinburgh-frame-forwarder"
 version = "0.0.1"
 edition = "2021"
+description = "Websocket proxy-server that extracts EDI AF-frames from TCP stream."
 
 [dependencies]
 bytes = "1.10.1"
@@ -9,6 +10,14 @@ colog = "1.3.0"
 log = "0.4.26"
 tungstenite = "0.26.2"
 nix = { version = "0.29.0", features = ["fs", "poll"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+thiserror = "2.0.12"
+env_logger = "0.11.7"
+clap = { version = "4.5.32", features = ["derive"] }
+tokio-tungstenite = "0.26.2"
+dashmap = "6.1.0"
+anyhow = "1.0.97"
+futures-util = "0.3.31"
 
 [[bin]]
 name = "edinburgh-frame-forwarder"

@@ -575,6 +575,7 @@ impl AACPExctractor {
         for i in 0..self.au_count {
             if self.au_start[i] >= self.au_start[i + 1] {
                 log::warn!("AD: AU start values are invalid!");
+                return false;
             }
         }
 
