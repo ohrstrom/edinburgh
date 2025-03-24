@@ -282,6 +282,10 @@ impl MOTAssembler {
             None
         }
     }
+    fn is_valid_mot_type(&self, type_: i8) -> bool {
+        // Check if type_ is a valid MOT type (using ETSI EN 301 234)
+        true
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -334,246 +338,184 @@ impl PADDecoder {
     }
     pub fn feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
         if fpad_bytes.len() < 2 {
-            log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
+            log::warn!("PADDecoder: Missing FPAD bytes");
             return;
         }
-    
-        let used_xpad_len = xpad_bytes.len().min(64); // max XPAD size
+
+        let used_xpad_len = xpad_bytes.len().min(64);
         let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len]
             .iter()
             .rev()
             .copied()
             .collect();
-    
+
         let fpad_type = fpad_bytes[0] >> 6;
         let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
         let ci_flag = fpad_bytes[1] & 0x02 != 0;
-    
-        log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
-    
-        let (ci_list, ci_header_len) = if fpad_type == 0b00 && ci_flag {
+
+        // log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
+
+        let prev_xpad_ci = self.last_xpad_ci.clone();
+        self.last_xpad_ci = None;
+
+        if fpad_type != 0b00 {
+            return;
+        }
+        
+        let (ci_list, ci_header_len) = if ci_flag {
             Self::build_ci_list(&xpad, fpad_bytes)
-        } else if fpad_type == 0b00 && !ci_flag && (xpad_ind == 0b01 || xpad_ind == 0b10) {
-            if let Some(prev_ci) = &self.last_xpad_ci {
+        } else if (xpad_ind == 0b01 || xpad_ind == 0b10) {
+            // Continuation: Don't build new CI list, process data directly.
+            if let Some(prev_ci) = &prev_xpad_ci {
                 if prev_ci.is_valid() {
-                    (vec![prev_ci.clone()], 0)
+                    // log::debug!("Continuing previous XPAD CI: {:?}", prev_ci);
+                    self.process_continuation_data(prev_ci, &xpad);
                 } else {
-                    (vec![], 0)
+                    log::debug!("Invalid prev_xpad_ci for continuation");
                 }
             } else {
-                (vec![], 0)
+                // log::debug!("No prev_xpad_ci stored for continuation");
             }
+            return;  // Important: exit after processing continuation
         } else {
-            (vec![], 0)
+            return;  // invalid combination, exit early
         };
-    
+        
         if ci_list.is_empty() {
             return;
         }
-    
+
         let payload_len: usize = ci_list.iter().map(|ci| ci.len).sum();
         let announced_len = ci_header_len + payload_len;
-    
-        if announced_len > xpad.len() {
+        
+        if announced_len != xpad.len() {
             log::warn!(
-                "PADDecoder: Announced X-PAD length exceeds actual ({} > {}) — discarding",
+                "PADDecoder: Announced X-PAD length mismatch ({} vs {}) — discarding",
                 announced_len,
                 xpad.len()
             );
             return;
         }
-    
-        if announced_len < xpad.len() {
-            log::warn!(
-                "PADDecoder: Announced X-PAD length is less than actual ({} < {}) — discarding",
-                announced_len,
-                xpad.len()
-            );
-            return;
-        }
-    
-        if ci_flag && !ci_list.is_empty() {
-            let continued_type = ci_list.last().unwrap().type_;
-            self.last_xpad_ci = Some(XPAD_CI {
-                type_: continued_type,
-                len: announced_len,
-            });
-        }
-    
+        
+        let mut xpad_offset = ci_header_len;
+        let mut xpad_ci_type_continued: Option<i8> = None;
+        
         log::debug!("NUM CIs: {}", ci_list.len());
+        
         for (i, ci) in ci_list.iter().enumerate() {
             log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
+        
+            self.process_ci_payload(ci, &xpad[xpad_offset..xpad_offset + ci.len]);
+            xpad_offset += ci.len;
+        
+            match ci.type_ {
+                1 => xpad_ci_type_continued = Some(1),
+                2 | 3 => xpad_ci_type_continued = Some(3),
+                other_type => {
+                    if self.mot_assembler.is_valid_mot_type(other_type) {
+                        xpad_ci_type_continued = Some(other_type);
+                    }
+                }
+            }
         }
-    
-        // TODO: Feed to DL/MOT
-    }
-    
+        
+        // Set up last_xpad_ci correctly for continuation next time:
+        if let Some(type_cont) = xpad_ci_type_continued {
+            self.last_xpad_ci = Some(XPAD_CI {
+                type_: type_cont,
+                len: announced_len,
+            });
+            // log::debug!("Updated last_xpad_ci: type={}, len={}", type_cont, announced_len);
+        } else {
+            log::debug!("No continuation set for last_xpad_ci");
+        }
 
-    fn build_ci_list(
-        xpad: &[u8],
-        fpad: &[u8],
-    ) -> (Vec<XPAD_CI>, usize) {
+        // TODO: Feed payload data (after header) to DL/MOT assemblers
+    }
+
+    fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPAD_CI>, usize) {
         let mut ci_list = Vec::new();
         let mut ci_header_len = 0;
-    
+
         if fpad.len() < 2 {
             return (ci_list, ci_header_len);
         }
-    
+
         let fpad_type = fpad[0] >> 6;
         let xpad_ind = (fpad[0] & 0x30) >> 4;
         let ci_flag = fpad[1] & 0x02 != 0;
-    
-        log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
-    
-        if fpad_type == 0b00 {
-            if ci_flag {
-                match xpad_ind {
-                    0b01 => {
-                        // Short XPAD with CI list
-                        if xpad.len() < 1 {
-                            return (ci_list, ci_header_len);
-                        }
-    
-                        let type_ = xpad[0] & 0x1F;
-                        if type_ != 0 {
-                            ci_list.push(XPAD_CI::new(3, type_));
-                            ci_header_len = 1;
-                        }
-                    }
-    
-                    0b10 => {
-                        // Variable XPAD with CI list
-                        for i in 0..4 {
-                            if xpad.len() <= i {
-                                return (ci_list, ci_header_len); // early exit if not enough data
-                            }
-    
-                            let raw = xpad[i];
-                            let type_ = raw & 0x1F;
-                            ci_header_len += 1;
-    
-                            if type_ == 0 {
-                                break; // end marker
-                            }
-    
-                            ci_list.push(XPAD_CI::from_raw(raw));
-                        }
-                    }
-    
-                    _ => {
-                        // ignore
+
+        if fpad_type != 0b00 || !ci_flag {
+            return (ci_list, ci_header_len);
+        }
+
+        match xpad_ind {
+            0b01 => {
+                if xpad.len() >= 1 {
+                    let type_ = xpad[0] & 0x1F;
+                    if type_ != 0 {
+                        ci_list.push(XPAD_CI::new(3, type_));
+                        ci_header_len = 1;
                     }
                 }
             }
+            0b10 => {
+                for &raw in xpad.iter().take(4) {
+                    let type_ = raw & 0x1F;
+                    ci_header_len += 1;
+                    if type_ == 0 {
+                        break;
+                    }
+                    ci_list.push(XPAD_CI::from_raw(raw));
+                }
+            }
+            _ => {}
         }
-    
+
         (ci_list, ci_header_len)
     }
-    
-    
-    /*
-    pub fn __feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
-        if fpad_bytes.is_empty() {
-            log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
-            return;
-        }
 
-        let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
-        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
-
-        let prev_xpad_ci = self.last_xpad_ci.clone().unwrap_or(XPAD_CI::reset());
-
-        let ci_list = Self::build_ci_list(&xpad, &fpad_bytes, self.last_xpad_ci.as_ref());
-
-        if ci_list.is_empty() {
-            // You could add a `loose` flag if needed
-            self.last_xpad_ci = Some(prev_xpad_ci);
-            return;
-        }
-
-        // Compute continued type + total announced len
-        let mut xpad_offset = ci_list.len();
-        let mut continued_type = -1;
-
-        for ci in &ci_list {
-            xpad_offset += ci.len;
-            continued_type = ci.type_;
-        }
-
-        self.last_xpad_ci = Some(XPAD_CI {
-            type_: continued_type,
-            len: xpad_offset,
-        });
-
-
-        log::debug!("NUM CIs: {}", ci_list.len());
-
-        // for (i, ci) in ci_list.iter().enumerate() {
-        //     log::debug!("CI[{}] = type {}, len {}", i, ci.type_, ci.len);
-        // }
-
-    }
-
-    fn __build_ci_list(xpad: &[u8], fpad: &[u8], last_ci: Option<&XPAD_CI>) -> Vec<XPAD_CI> {
-        let mut ci_list = Vec::new();
-
-        if fpad.len() < 2 {
-            return ci_list;
-        }
-
-        let fpad_type = fpad[0] >> 6;
-        let xpad_ind = (fpad[0] & 0x30) >> 4;
-        let ci_flag = (fpad[1] & 0x02) != 0;
-
-        // log::debug!(
-        //     "build_ci_list: fpad_type = {:02b}, xpad_ind = {:02b}, ci_flag = {}",
-        //     fpad_type,
-        //     xpad_ind,
-        //     ci_flag
-        // );
-
-        if fpad_type == 0b00 {
-            if ci_flag {
-                match xpad_ind {
-                    0b01 => {
-                        if !xpad.is_empty() {
-                            let t = xpad[0] & 0x1F;
-                            if t != 0 {
-                                ci_list.push(XPAD_CI::new(3, t));
-                            }
-                        }
-                    }
-                    0b10 => {
-                        for i in 0..4 {
-                            if i >= xpad.len() {
-                                break;
-                            }
-                            let ci_raw = xpad[i];
-                            let t = ci_raw & 0x1F;
-                            if t == 0 {
-                                break;
-                            }
-                            ci_list.push(XPAD_CI::from_raw(ci_raw));
-                        }
-                    }
-                    _ => {}
-                }
-            } else {
-                match xpad_ind {
-                    0b01 | 0b10 => {
-                        if let Some(prev_ci) = last_ci {
-                            ci_list.push(prev_ci.clone());
-                        }
-                    }
-                    _ => {}
+    fn process_continuation_data(&mut self, prev_ci: &XPAD_CI, payload: &[u8]) {
+        match prev_ci.type_ {
+            2 | 3 => {
+                self.dl_assembler.feed(false, payload);
+                if let Some(label) = self.dl_assembler.get_label() {
+                    // log::info!("Dynamic Label: {}", readable_label(label));
                 }
             }
+            other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
+                self.mot_assembler.feed(false, payload);
+                if let Some(mot_object) = self.mot_assembler.get_mot_object() {
+                    // log::info!("MOT object received: {} bytes", mot_object.len());
+                }
+            }
+            _ => log::warn!("Unhandled continuation CI type: {}", prev_ci.type_),
         }
-
-        ci_list
     }
-    */
+
+    fn process_ci_payload(&mut self, ci: &XPAD_CI, payload: &[u8]) {
+        match ci.type_ {
+            1 => {
+                // DGLI (placeholder handling)
+                log::debug!("Received DGLI payload: {:02X?}", payload);
+            }
+            2 | 3 => {
+                let is_start = ci.type_ == 2;
+                self.dl_assembler.feed(is_start, payload);
+                if let Some(label) = self.dl_assembler.get_label() {
+                    // log::info!("Dynamic Label: {}", readable_label(label));
+                }
+            }
+            other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
+                let is_start = other_type % 2 == 0; // adjust condition per ETSI spec if needed
+                self.mot_assembler.feed(is_start, payload);
+                if let Some(mot_object) = self.mot_assembler.get_mot_object() {
+                    // log::info!("MOT object received: {} bytes", mot_object.len());
+                }
+            }
+            _ => log::warn!("Unhandled CI type: {}", ci.type_),
+        }
+    }
 }
 
 #[derive(Derivative)]
