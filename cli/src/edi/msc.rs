@@ -306,16 +306,26 @@ impl PADDecoder {
             mot_assembler: MOTAssembler::new(),
         }
     }
-    pub fn feed(&mut self, xpad_bytes: &[u8], xpad_len: usize, fpad_bytes: &[u8]) {
-        // if xpad_bytes.is_empty() || fpad_bytes.is_empty() {
-        //     // log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
-        //     return;
-        // }
+    pub fn feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
+        if fpad_bytes.is_empty() {
+            log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
+            return;
+        }
 
         let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
         let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
 
-        // log::debug!("PADDecoder: used_xpad_len: {}", used_xpad_len);
+        let preview = |label: &str, bytes: &[u8]| {
+            let head = &bytes[..bytes.len().min(4)];
+            let tail = if bytes.len() > 4 {
+                &bytes[bytes.len().saturating_sub(2)..]
+            } else {
+                &[]
+            };
+            log::debug!("XPAD ({label}): head = {:02X?}, tail = {:02X?}", head, tail);
+        };
+        
+        preview("rev", &xpad);
 
     }
 
@@ -464,7 +474,7 @@ impl AACPExctractor {
             if self.scid == 6 {
                 let pad_data = Self::extract_pad(&au_data[..au_len - 2]);
                 if let Some(pad_data) = pad_data {
-                    self.pad_decoder.feed(&pad_data.0, pad_data.1, &pad_data.2);
+                    self.pad_decoder.feed(&pad_data.0, &pad_data.1);
                 }
             }
         }
@@ -540,13 +550,13 @@ impl AACPExctractor {
         return true;
     }
 
-    fn extract_pad(au_data: &[u8]) -> Option<(Vec<u8>, usize, Vec<u8>)> {
+    fn extract_pad(au_data: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
         if au_data.len() < 3 {
             return None;
         }
 
         if (au_data[0] >> 5) != 4 {
-            // NOTE: why do we skip this?
+            // Only process if AU Stream ID indicates DAB+ (0b100)
             return None;
         }
 
@@ -556,7 +566,7 @@ impl AACPExctractor {
         let mut pad_len = au_data[1] as usize;
 
         if pad_len == 255 {
-            // NOTE: (why) do we need this?
+            // NOTE: Actual length is 255 + next byte
             if au_data.len() < 4 {
                 return None;
             }
@@ -573,14 +583,16 @@ impl AACPExctractor {
 
         let xpad_len = pad_len - FPAD_LEN;
 
-        log::debug!(
-            "PAD: pad = {:3}, xpad = {:3} / {:3}, fpad = {:3}",
-            pad_len,
-            xpad_data.len(),
-            xpad_len,
-            fpad_data.len()
-        );
+        // log::debug!(
+        //     "PAD: pad = {:3}, xpad = {:3} / {:3}, fpad = {:3}",
+        //     pad_len,
+        //     xpad_data.len(),
+        //     fpad_data.len()
+        // );
 
-        return Some((xpad_data.to_vec(), xpad_len, fpad_data.to_vec()));
+        // log::debug!("XPAD: {:02X?}", &xpad_data[..min(8, xpad_data.len())]);
+        // log::debug!("FPAD: {:02X?}", &fpad_data[..min(8, fpad_data.len())]);
+
+        return Some((xpad_data.to_vec(), fpad_data.to_vec()));
     }
 }
