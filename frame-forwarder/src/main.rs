@@ -10,14 +10,16 @@ use std::io;
 use std::sync::Arc;
 use tokio::io::Interest;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, Mutex, RwLock};
-use tokio::task;
+use tokio::sync::{broadcast, Mutex, oneshot};
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 use tokio_tungstenite::tungstenite::Error as WsError;
-use tokio_tungstenite::{accept_async, accept_hdr_async};
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use tokio_tungstenite::tungstenite::protocol::CloseFrame;
+use tokio_tungstenite::accept_hdr_async;
 
-type SharedReceivers =
-    Arc<DashMap<String, (broadcast::Sender<Vec<u8>>, tokio::task::JoinHandle<()>)>>;
+
+type SharedReceivers = Arc<DashMap<String, (broadcast::Sender<Vec<u8>>, tokio::task::JoinHandle<()>, Arc<Mutex<Option<oneshot::Receiver<Result<(), String>>>>>)>>;
+
 
 /// EDI Frame Forwarder
 #[derive(Parser, Debug)]
@@ -96,24 +98,64 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
 
     log::info!("New ws client for: {}", key);
 
-    let mut ws_stream = ws_stream;
-    let mut rx = {
+    let (mut ws_stream, mut rx, conn_signal) = {
         let entry = ws_clients.entry(key.clone()).or_insert_with(|| {
-            let (tx, _rx) = broadcast::channel(100);
+            let (tx, _) = broadcast::channel(100);
+            let (conn_status_tx, conn_status_rx) = oneshot::channel();
+
             let task_handle =
-                tokio::spawn(start_edi_extractor(host.clone(), port.clone(), tx.clone()));
-            (tx, task_handle)
+                tokio::spawn(start_edi_extractor(host.clone(), port.clone(), tx.clone(), conn_status_tx));
+            (tx, task_handle, Arc::new(Mutex::new(Some(conn_status_rx))))
         });
 
-        entry.0.subscribe()
+        (
+            ws_stream,
+            entry.0.subscribe(),
+            entry.2.clone(),
+        )
     };
 
+    // Check TCP connection status before entering main loop
+    if let Some(conn_signal) = conn_signal.lock().await.take() {
+        /*
+        if let Err(conn_err) = conn_signal.await.unwrap_or_else(|_| Err("Internal channel error".into())) {
+            log::error!("TCP connection failed for {}: {}", key, conn_err);
+            let close_frame = CloseFrame {
+                code: CloseCode::Error,
+                reason: conn_err.into(),
+            };
+            let _ = ws_stream.close(Some(close_frame)).await;
+            return;
+        }
+        */
+        if let Err(conn_err) = conn_signal.await.unwrap_or_else(|_| Err("Internal channel error".into())) {
+            log::error!("TCP connection failed for {}: {}", key, conn_err);
+            let close_frame = CloseFrame {
+                code: CloseCode::Error,
+                reason: conn_err.into(),
+            };
+            if let Err(e) = ws_stream.close(Some(close_frame)).await {
+                log::warn!("Failed to send WS close frame: {}", e);
+                return;
+            }
+        
+            // Explicitly flush/await the close handshake by reading from ws_stream until it closes.
+            while let Some(msg) = ws_stream.next().await {
+                match msg {
+                    Ok(_) => continue, // ignore any further messages
+                    Err(_) => break,   // connection error or closed
+                }
+            }
+        
+            return;
+        }
+    }
+
+    // If successful, proceed normally
     while let Ok(data) = rx.recv().await {
         if let Err(e) = ws_stream.send(data.into()).await {
             match &e {
-                WsError::Io(io_err) if io_err.kind() == io::ErrorKind::BrokenPipe => {
-                    // expected disconnect, no need to log
-                }
+                WsError::Io(io_err) if io_err.kind() == io::ErrorKind::BrokenPipe => {}
                 _ => {
                     log::warn!("ws send error: {}", e);
                 }
@@ -123,19 +165,24 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
     }
 
     log::info!("Disconnected ws client for: {}", key);
-
     drop(rx);
 }
 
-async fn start_edi_extractor(host: String, port: String, tx: broadcast::Sender<Vec<u8>>) {
-
+async fn start_edi_extractor(
+    host: String,
+    port: String,
+    tx: broadcast::Sender<Vec<u8>>,
+    conn_status_tx: oneshot::Sender<Result<(), String>>,
+) {
     let endpoint = format!("{}:{}", host, port);
     log::info!("Starting TCP receiver for: {}", endpoint);
 
     match TcpStream::connect(&endpoint).await {
         Ok(stream) => {
-            let extractor = Arc::new(Mutex::new(EDIFrameExtractor::new()));
+            // Notify successful connection
+            let _ = conn_status_tx.send(Ok(()));
 
+            let extractor = Arc::new(Mutex::new(EDIFrameExtractor::new()));
             let mut filled = 0;
 
             loop {
@@ -148,7 +195,7 @@ async fn start_edi_extractor(host: String, port: String, tx: broadcast::Sender<V
                 };
 
                 if ready.is_readable() {
-                    let mut extractor = extractor.lock().await; // Ensure only one task modifies it at a time
+                    let mut extractor = extractor.lock().await;
 
                     match stream.try_read(&mut extractor.frame.data[filled..]) {
                         Ok(0) => {
@@ -171,15 +218,12 @@ async fn start_edi_extractor(host: String, port: String, tx: broadcast::Sender<V
 
                                 if extractor.frame.check_completed() {
                                     let _ = tx.send(extractor.frame.data.clone());
-
                                     extractor.frame.reset();
                                     filled = 0;
                                 }
                             }
                         }
-                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                            continue;
-                        }
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                         Err(e) => {
                             log::error!("Error on {}: {}", endpoint, e);
                             break;
@@ -189,7 +233,9 @@ async fn start_edi_extractor(host: String, port: String, tx: broadcast::Sender<V
             }
         }
         Err(e) => {
-            log::error!("Failed to connect to {}: {}", endpoint, e);
+            log::error!("Failed to connect (B) to {}: {}", endpoint, e);
+            // Notify TCP connection failure explicitly
+            let _ = conn_status_tx.send(Err(format!("TCP connection failed: {}", e)));
         }
     }
 }
@@ -210,7 +256,7 @@ async fn edi_extractor_cleanup_task(ws_clients: SharedReceivers) {
             .collect();
 
         for key in keys_to_remove {
-            if let Some((_, (_sender, handle))) = ws_clients.remove(&key) {
+            if let Some((_, (_sender, handle, _err_handle))) = ws_clients.remove(&key) {
                 log::info!("Stopping unused TCP receiver for: {}", key);
                 handle.abort();
             }

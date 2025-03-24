@@ -172,6 +172,12 @@ impl EDISource {
         self.scid = scid;
     }
 
+    pub fn reset(&mut self) {
+        log::info!("EDI:reset");
+        self.ensemble.reset();
+        self.subchannels.clear();
+    }
+
     // callbacks
     /*
     pub fn set_on_edi_frame(&mut self, callback: Function) {

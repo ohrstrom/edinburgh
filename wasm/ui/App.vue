@@ -14,8 +14,10 @@ let audioContext: AudioContext
 let workletNode: AudioWorkletNode
 let decoder: AudioDecoder
 
-const numFramesReceived = ref(0)
+const ediHost = ref('edi-ch.digris.net')
+const ediPort = ref(8855)
 
+const numFramesReceived = ref(0)
 const selectedServiceSid = ref(0)
 const selectedScid = ref(0)
 
@@ -55,7 +57,12 @@ const connect = async () => {
   await initializeAudioDecoder()
 
   if (!ws) {
-    ws = new WebSocket("ws://localhost:9000")
+
+    const uri = `ws://localhost:9000/ws/${ediHost.value}/${ediPort.value}/`
+    // const uri = `ws://78.47.36.61:80/ws/${ediHost.value}/${ediPort.value}/`
+
+    ws = new WebSocket(uri)
+    // ws = new WebSocket("ws://localhost:9000/ws/edi-ch.digris.net/8855/")
 
     ws.binaryType = "arraybuffer"
 
@@ -142,10 +149,17 @@ edi.on_aac_segment(async (aacSegment) => {
 // })
 
 const disconnect = async () => {
-  if (edi) {
-    edi.disconnect()
-    edi = null;
+
+  selectedServiceSid.value = 0
+  selectedScid.value = 0
+
+  if (ws) {
+    ws.close()
+    ws = null
   }
+
+  edi.reset()
+
   if (decoder) {
     decoder.reset()
   }
@@ -249,6 +263,10 @@ const selectService = async (sid: number) => {
 <template>
   <main>
     <div>
+      <div>
+        <label for="ediPort">EDI Port:</label>
+        <input id="ediPort" type="number" v-model="ediPort" />
+      </div>
       <div>
         <button @click="connect">Connect</button>
         <button @click="disconnect">Disconnect</button>

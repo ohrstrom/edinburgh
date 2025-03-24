@@ -102,6 +102,12 @@ impl EDI {
     }
 
     #[wasm_bindgen]
+    pub async fn reset(&mut self) -> Result<(), JsValue> {
+        self.inner.borrow_mut().reset();
+        Ok(())
+    }
+
+    #[wasm_bindgen]
     pub fn on_edi_event(&self, callback: js_sys::Function) {
         *self.cb.borrow_mut() = Some(callback);
     }

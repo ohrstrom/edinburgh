@@ -180,4 +180,11 @@ impl Ensemble {
 
         updated
     }
+    pub fn reset(&mut self) {
+        self.eid = None;
+        self.al_flag = None;
+        self.label = None;
+        self.short_label = None;
+        self.services.clear();
+    }
 }

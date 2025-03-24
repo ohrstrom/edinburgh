@@ -1,10 +1,10 @@
+use super::bus::EDIEvent;
 use crate::utils;
 use derivative::Derivative;
 use log;
 use std::cmp::min;
 use std::vec;
 use thiserror::Error;
-use super::bus::EDIEvent;
 
 #[cfg(target_arch = "wasm32")]
 use futures::channel::mpsc::UnboundedSender;
@@ -15,6 +15,47 @@ use tokio::sync::mpsc::UnboundedSender;
 const FPAD_LEN: usize = 2;
 const PAD_BUFFER_SIZE: usize = 256;
 const LENS: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+
+fn format_pad_bits(byte: u8) -> String {
+    let t = (byte >> 7) & 0x1;
+    let s = (byte >> 5) & 0x3; // bits 6 and 5
+    let c = (byte >> 4) & 0x1;
+
+    let segment_type = match s {
+        0b00 => "intermediate",
+        0b01 => "last",
+        0b10 => "first",
+        0b11 => "one-and-only",
+        _ => "invalid", // unreachable
+    };
+
+    let message_type = if c == 1 { "command" } else { "message" };
+
+    format!(
+        "T={} S={:02b} ({}) C={} ({})",
+        t, s, segment_type, c, message_type
+    )
+}
+
+fn printable_ascii_or_dot(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x20..=0x7E => b as char, // printable ASCII
+            _ => '.', // replace everything else with `.`
+        })
+        .collect()
+}
+
+fn ascii_printable(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x20..=0x7E => b as char, // printable ASCII
+            _ => '.',                 // everything else as dot
+        })
+        .collect()
+}
 
 #[derive(Debug, Error)]
 pub enum FormatError {
@@ -103,6 +144,18 @@ impl AACPResult {
     }
 }
 
+fn readable_label(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x20..=0x7E => b as char,           // standard printable ASCII
+            0xA0..=0xFF => b as char,           // Latin-1 supplement
+            0x09 | 0x0A | 0x0D => ' ',          // tabs and line breaks → space
+            _ => '.',                           // control chars and junk
+        })
+        .collect()
+}
+
 #[derive(Debug, Error)]
 pub enum FeedError {
     #[error("Frame length mismatch: {l1} != {l2}")]
@@ -118,12 +171,12 @@ pub enum FeedResult {
     Buffering,
 }
 
-#[derive(Debug)]
-enum XPADIndicator {
-    None,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum XPADIndicator {
     Short,
     Variable,
-    Reserved(u8),
+    Extended,
+    Reserved,
 }
 
 #[derive(Debug)]
@@ -134,35 +187,26 @@ enum FPADType {
     Reserved(u8),
 }
 
-#[derive(Debug)]
-struct FPAD {
-    fpad_type: u8, // usually 0b00
-    xpad_indicator: XPADIndicator,
-    ci_flag: bool,
+#[derive(Debug, Clone, Copy)]
+pub struct FPAD {
+    pub ci_flag: bool,
+    pub xpad_indicator: XPADIndicator,
 }
 
-impl FPAD {
-    fn parse(fpad_bytes: &[u8]) -> Option<Self> {
-        if fpad_bytes.len() != 2 {
-            log::debug!("PAD: FPAD length mismatch");
-            return None;
-        }
-
-        let fpad_type = fpad_bytes[0] >> 6;
-        let xpad_indicator = match (fpad_bytes[0] & 0x30) >> 4 {
-            0b00 => XPADIndicator::None,
-            0b01 => XPADIndicator::Short,
-            0b10 => XPADIndicator::Variable,
-            other => XPADIndicator::Reserved(other),
+impl From<u8> for FPAD {
+    fn from(byte: u8) -> Self {
+        let ci_flag = byte & 0b1000_0000 != 0;
+        let indicator_bits = (byte >> 5) & 0b11;
+        let xpad_indicator = match indicator_bits {
+            0b00 => XPADIndicator::Short,
+            0b01 => XPADIndicator::Variable,
+            0b10 => XPADIndicator::Extended,
+            _ => XPADIndicator::Reserved,
         };
-
-        let ci_flag = (fpad_bytes[1] & 0x02) != 0;
-
-        Some(FPAD {
-            fpad_type,
-            xpad_indicator,
+        FPAD {
             ci_flag,
-        })
+            xpad_indicator,
+        }
     }
 }
 
@@ -190,9 +234,9 @@ impl DLAssembler {
         self.complete = true; // placeholder condition
     }
 
-    fn get_label(&self) -> Option<String> {
+    fn get_label(&mut self) -> Option<&[u8]> {
         if self.complete {
-            Some(String::from_utf8_lossy(&self.segments).into_owned())
+            Some(&self.segments)
         } else {
             None
         }
@@ -246,7 +290,7 @@ struct XPAD_CI {
 #[derive(Debug)]
 pub struct PADDecoder {
     scid: u8,
-    last_xpad_ci: Option<XPAD_CI>,
+    last_xpad_ci: Option<Vec<XPAD_CI>>,
     //
     dl_assembler: DLAssembler,
     mot_assembler: MOTAssembler,
@@ -263,90 +307,182 @@ impl PADDecoder {
         }
     }
     pub fn feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
-        let fpad = match FPAD::parse(fpad_bytes) {
-            Some(fpad) => fpad,
-            None => {
-                log::warn!("PAD: FPAD parse error");
-                return;
-            }
-        };
-
-        let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
-        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
-
-        // log::debug!("Decoded FPAD: {:?}", fpad);
-
-        let ci_list = Self::build_ci_list(&fpad, &xpad, self.last_xpad_ci.as_ref());
-
-        if ci_list.is_empty() {
-            // log::debug!("No CI found. FPAD: {:?}", fpad);
+        if xpad_bytes.is_empty() || fpad_bytes.is_empty() {
+            // log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
             return;
         }
 
+        let fpad = FPAD::from(fpad_bytes[0]);
+        let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
+        let mut xpad_reversed: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
+
+        // log::debug!(
+        //     "FPAD: ci_flag={}, indicator={:?}",
+        //     fpad.ci_flag,
+        //     fpad.xpad_indicator
+        // );
+        // log::debug!("FPAD raw: {:02X?}", fpad_bytes);
+        // log::debug!("XPAD: {:02X?}", xpad_bytes);
+
+        let must_reparse = fpad.ci_flag
+            || self.last_xpad_ci.is_none()
+            || self.last_xpad_ci.as_ref().map_or(true, |list| {
+                let total_len: usize = list.iter().map(|ci| ci.ci_len).sum();
+                total_len > xpad_reversed.len()
+                    || (xpad_reversed.get(0).map(|b| b & 0x1F) != list.get(0).map(|ci| ci.ci_type))
+            });
+
+        let ci_list = match fpad.xpad_indicator {
+            XPADIndicator::Short | XPADIndicator::Variable => {
+                let list = Self::build_ci_list(
+                    &xpad_reversed,
+                    fpad_bytes,
+                    self.last_xpad_ci.as_ref(),
+                    must_reparse,
+                );
+
+                // ⛑ only cache it if it's not empty and we're reparsing
+                if must_reparse && !list.is_empty() {
+                    self.last_xpad_ci = Some(list.clone());
+                    // log::debug!("Updated last_xpad_ci: {:?}", self.last_xpad_ci);
+                }
+
+                list
+            }
+            _ => vec![],
+        };
+
         // log::debug!("CI List: {:?}", ci_list);
 
-        let mut offset = ci_list.len();
-        for ci in ci_list.iter() {
-            let data_end = offset + ci.ci_len;
-            if data_end > xpad.len() {
-                log::warn!("CI segment overruns available data");
+        let mut offset_so_far = 0;
+        for (i, ci) in ci_list.iter().enumerate() {
+            let start = offset_so_far;
+            let end = start + ci.ci_len;
+
+            log::debug!("CI: type: {:2} len: {:2}", ci.ci_type, ci.ci_len);
+
+            if end > xpad_bytes.len() {
+                log::debug!(
+                    "Skipping CI[{}] type={} — would overrun buffer ({} > {})",
+                    i,
+                    ci.ci_type,
+                    end,
+                    xpad_bytes.len()
+                );
                 break;
             }
-            let data_segment = &xpad[offset..data_end];
+
+            let segment = &xpad_bytes[start..end];
 
             match ci.ci_type {
-                1 => {
-                    // TODO: implement
-                }
                 2 | 3 => {
-                    let is_start = ci.ci_type == 2;
-                    self.dl_assembler.feed(is_start, data_segment);
-                    if let Some(label) = self.dl_assembler.get_label() {
-                        log::info!("Dynamic Label: {}", label);
+                    let start_flag = segment[0] & 0x80 != 0;
+                    let label_data = &segment[1..];
+
+                    // log::debug!(
+                    //     "DL CI[{}]: start={}, data={:?}",
+                    //     i,
+                    //     start_flag,
+                    //     String::from_utf8_lossy(label_data)
+                    // );
+
+                    self.dl_assembler.feed(start_flag, label_data);
+
+                    // if let Some(label) = self.dl_assembler.get_label() {
+                    //     log::info!("DL Label complete: {}", label);
+                    // }
+
+                    // if let Some(label) = self.dl_assembler.get_label() {
+                    //     let printable = printable_ascii_or_dot(&self.dl_assembler.segments);
+                    //     let hex: Vec<String> = self.dl_assembler.segments.iter().map(|b| format!("{:02X}", b)).collect();
+                    //     log::info!("DL Label complete: \"{}\" [hex: [{}]]", printable, hex.join(", "));
+                    // }
+
+                    // if let Some(label) = self.dl_assembler.get_label() {
+                    //     log::info!(
+                    //         "DL Label complete: \"{}\" [hex: {:02X?}]",
+                    //         label,
+                    //         self.dl_assembler.segments
+                    //     );
+                    // }
+                    if self.dl_assembler.complete {
+                        // let ascii = ascii_printable(&self.dl_assembler.segments);
+                        // log::info!("DL Label: \"{}\"", ascii);
+                        self.dl_assembler.complete = false;
                     }
                 }
                 12 | 13 => {
-                    let is_start = ci.ci_type == 12;
-                    self.mot_assembler.feed(is_start, data_segment);
-                    if let Some(mot_data) = self.mot_assembler.get_mot_object() {
-                        log::info!("Received MOT object of size {}", mot_data.len());
-                        // handle MOT object (e.g., display slide)
-                    }
+                    // log::debug!("MOT CI[{}]: {:02X?}", i, segment);
                 }
                 _ => {
-                    log::debug!("Unhandled CI type {}", ci.ci_type);
+                    // log::debug!(
+                    //     "Unknown CI[{}] type={} segment={:02X?}",
+                    //     i,
+                    //     ci.ci_type,
+                    //     segment
+                    // );
                 }
             }
 
-            offset += ci.ci_len;
+            offset_so_far += ci.ci_len;
         }
-
-        self.last_xpad_ci = ci_list.last().cloned();
     }
-    fn build_ci_list(fpad: &FPAD, xpad: &[u8], last_ci: Option<&XPAD_CI>) -> Vec<XPAD_CI> {
+
+    fn build_ci_list(
+        xpad: &[u8],
+        fpad_bytes: &[u8],
+        last_ci: Option<&Vec<XPAD_CI>>,
+        use_new_structure: bool,
+    ) -> Vec<XPAD_CI> {
         let mut ci_list = Vec::new();
 
-        if fpad.ci_flag {
-            match fpad.xpad_indicator {
-                XPADIndicator::Short => {
-                    if !xpad.is_empty() {
-                        let ci_type = xpad[0] & 0x1F;
+        if fpad_bytes.is_empty() {
+            log::warn!("build_ci_list: FPAD header missing");
+            return ci_list;
+        }
+
+        let fpad = FPAD::from(fpad_bytes[0]);
+        // log::debug!(
+        //     "build_ci_list: ci_flag={} xpad_indicator={:?}",
+        //     fpad.ci_flag,
+        //     fpad.xpad_indicator
+        // );
+
+        match fpad.xpad_indicator {
+            XPADIndicator::Short => {
+                if use_new_structure {
+                    if let Some(&ci_byte) = xpad.first() {
+                        let ci_type = ci_byte & 0x1F;
                         if ci_type != 0x00 {
+                            // log::debug!("Short XPAD: CI type={:#X}, fixed length=3", ci_type);
                             ci_list.push(XPAD_CI { ci_type, ci_len: 3 });
+                        } else {
+                            // log::debug!("Short XPAD: First CI byte is 0x00, ignoring");
                         }
+                    } else {
+                        log::debug!("Short XPAD: XPAD is empty");
                     }
+                } else if let Some(prev) = last_ci {
+                    // log::debug!("Short XPAD: Reusing previous CI list");
+                    ci_list = prev.clone();
                 }
-                XPADIndicator::Variable => {
+            }
+
+            XPADIndicator::Variable => {
+                if use_new_structure {
                     let mut offset = 0;
                     while offset < xpad.len() && ci_list.len() < 4 {
                         let ci_byte = xpad[offset];
                         let ci_type = ci_byte & 0x1F;
 
                         if ci_type == 0x00 {
+                            // log::debug!(
+                            //     "Variable XPAD: terminator encountered at offset {}",
+                            //     offset
+                            // );
                             break;
                         }
 
-                        // Correctly determine ci_len based on the ETSI spec (section 7.4.2)
                         let ci_len = match ci_byte >> 5 {
                             0b000 => 4,
                             0b001 => 6,
@@ -356,24 +492,66 @@ impl PADDecoder {
                             0b101 => 24,
                             0b110 => 32,
                             0b111 => 48,
-                            _ => 4, // default fallback
+                            _ => {
+                                log::warn!("Unexpected CI length encoding, defaulting to 4");
+                                4
+                            }
                         };
 
+                        // log::debug!(
+                        //     "Variable XPAD: offset={} ci_byte=0x{:02X} => type={} len={}",
+                        //     offset, ci_byte, ci_type, ci_len
+                        // );
+                        // log::debug!(
+                        //     "Variable XPAD: offset={} ci_byte=0x{:02X} (xpad[offset..]= {:?}) => type={} len={}",
+                        //     offset,
+                        //     ci_byte,
+                        //     &xpad[offset..min(offset + 8, xpad.len())],
+                        //     ci_type,
+                        //     ci_len
+                        // );
+
+                        // Check that the full segment fits in the buffer
+                        if offset + ci_len > xpad.len() {
+                            // log::warn!(
+                            //     "Variable XPAD: CI segment overruns XPAD buffer (offset={}, len={}, xpad_len={})",
+                            //     offset,
+                            //     ci_len,
+                            //     xpad.len()
+                            // );
+                            break;
+                        }
+
+                        // 🪵 NEW DEBUGGING LINE:
+                        let segment = &xpad[offset..offset + ci_len];
+                        // log::debug!(
+                        //     "CI[{}] type={} len={} segment={:02X?}",
+                        //     ci_list.len(),
+                        //     ci_type,
+                        //     ci_len,
+                        //     segment
+                        // );
+
                         ci_list.push(XPAD_CI { ci_type, ci_len });
-                        offset += 1;
+
+                        offset += ci_len;
                     }
+                } else if let Some(prev) = last_ci {
+                    // log::debug!("Variable XPAD: Reusing previous CI list");
+                    ci_list = prev.clone();
                 }
-                _ => {}
             }
-        } else if matches!(
-            fpad.xpad_indicator,
-            XPADIndicator::Short | XPADIndicator::Variable
-        ) {
-            if let Some(prev_ci) = last_ci {
-                ci_list.push(prev_ci.clone());
+
+            XPADIndicator::Extended => {
+                log::warn!("XPAD extended format not implemented");
+            }
+
+            XPADIndicator::Reserved => {
+                log::warn!("XPAD indicator is reserved — ignoring XPAD");
             }
         }
 
+        // log::debug!("build_ci_list: Final CI List = {:?}", ci_list);
         ci_list
     }
 }
@@ -414,7 +592,12 @@ impl AACPExctractor {
             pad_decoder: PADDecoder::new(scid),
         }
     }
-    pub async fn feed(&mut self, data: &[u8], f_len: usize, event_tx: &UnboundedSender<EDIEvent>) -> Result<FeedResult, FeedError> {
+    pub async fn feed(
+        &mut self,
+        data: &[u8],
+        f_len: usize,
+        event_tx: &UnboundedSender<EDIEvent>,
+    ) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
 
         if self.f_len != 0 {
@@ -506,8 +689,9 @@ impl AACPExctractor {
             let pad_data = Self::extract_pad(&au_data[..au_len - 2]);
 
             if let Some(pad_data) = pad_data {
-                // NOTE: disabled at the moment
-                // self.pad_decoder.feed(&pad_data.0, &pad_data.1);
+                if self.scid == 2 {
+                    self.pad_decoder.feed(&pad_data.0, &pad_data.1);
+                }
             }
         }
 
