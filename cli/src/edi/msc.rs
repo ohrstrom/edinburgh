@@ -333,7 +333,7 @@ impl PADDecoder {
         }
     }
     pub fn feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
-        if fpad_bytes.is_empty() {
+        if fpad_bytes.len() < 2 {
             log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
             return;
         }
@@ -345,22 +345,34 @@ impl PADDecoder {
             .copied()
             .collect();
     
-        let prev_xpad_ci = self.last_xpad_ci.clone().unwrap_or(XPAD_CI::reset());
+        let fpad_type = fpad_bytes[0] >> 6;
+        let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
+        let ci_flag = fpad_bytes[1] & 0x02 != 0;
     
-        let (ci_list, ci_header_len) = Self::build_ci_list(&xpad, fpad_bytes, self.last_xpad_ci.as_ref());
+        log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
+    
+        let (ci_list, ci_header_len) = if fpad_type == 0b00 && ci_flag {
+            Self::build_ci_list(&xpad, fpad_bytes)
+        } else if fpad_type == 0b00 && !ci_flag && (xpad_ind == 0b01 || xpad_ind == 0b10) {
+            if let Some(prev_ci) = &self.last_xpad_ci {
+                if prev_ci.is_valid() {
+                    (vec![prev_ci.clone()], 0)
+                } else {
+                    (vec![], 0)
+                }
+            } else {
+                (vec![], 0)
+            }
+        } else {
+            (vec![], 0)
+        };
     
         if ci_list.is_empty() {
-            self.last_xpad_ci = Some(prev_xpad_ci);
             return;
         }
     
-        // Compute total announced length: header bytes + data payload
         let payload_len: usize = ci_list.iter().map(|ci| ci.len).sum();
         let announced_len = ci_header_len + payload_len;
-    
-        // log::debug!("NUM CIs: (payload) {}", payload_len);
-        // log::debug!("PADDecoder: announced_len = {}", announced_len);
-        // log::debug!("PADDecoder: actual_len = {}", xpad.len());
     
         if announced_len > xpad.len() {
             log::warn!(
@@ -380,26 +392,26 @@ impl PADDecoder {
             return;
         }
     
-        // Track type of last CI (for reuse in next frame if needed)
-        let continued_type = ci_list.last().map_or(-1, |ci| ci.type_);
-        self.last_xpad_ci = Some(XPAD_CI {
-            type_: continued_type,
-            len: announced_len,
-        });
-
+        if ci_flag && !ci_list.is_empty() {
+            let continued_type = ci_list.last().unwrap().type_;
+            self.last_xpad_ci = Some(XPAD_CI {
+                type_: continued_type,
+                len: announced_len,
+            });
+        }
+    
         log::debug!("NUM CIs: {}", ci_list.len());
-
         for (i, ci) in ci_list.iter().enumerate() {
             log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
         }
     
         // TODO: Feed to DL/MOT
     }
+    
 
     fn build_ci_list(
         xpad: &[u8],
         fpad: &[u8],
-        last_ci: Option<&XPAD_CI>,
     ) -> (Vec<XPAD_CI>, usize) {
         let mut ci_list = Vec::new();
         let mut ci_header_len = 0;
@@ -410,56 +422,48 @@ impl PADDecoder {
     
         let fpad_type = fpad[0] >> 6;
         let xpad_ind = (fpad[0] & 0x30) >> 4;
-        let ci_flag = (fpad[1] & 0x02) != 0;
+        let ci_flag = fpad[1] & 0x02 != 0;
+    
+        log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
     
         if fpad_type == 0b00 {
             if ci_flag {
                 match xpad_ind {
                     0b01 => {
-                        if !xpad.is_empty() {
-                            let t = xpad[0] & 0x1F;
-                            if t != 0 {
-                                ci_list.push(XPAD_CI::new(3, t));
-                                ci_header_len = 1;
-                                // ci_header_len = 0;
-                            }
+                        // Short XPAD with CI list
+                        if xpad.len() < 1 {
+                            return (ci_list, ci_header_len);
+                        }
+    
+                        let type_ = xpad[0] & 0x1F;
+                        if type_ != 0 {
+                            ci_list.push(XPAD_CI::new(3, type_));
+                            ci_header_len = 1;
                         }
                     }
+    
                     0b10 => {
-                        for ci_raw in xpad.iter().take(4) {
-                            let t = ci_raw & 0x1F;
-                            if t == 0 {
-                                ci_header_len += 1;
-                                break;
+                        // Variable XPAD with CI list
+                        for i in 0..4 {
+                            if xpad.len() <= i {
+                                return (ci_list, ci_header_len); // early exit if not enough data
                             }
-                            ci_list.push(XPAD_CI::from_raw(*ci_raw));
+    
+                            let raw = xpad[i];
+                            let type_ = raw & 0x1F;
                             ci_header_len += 1;
-                        }
-                        // for i in 0..4 {
-                        //     if i >= xpad.len() {
-                        //         break;
-                        //     }
-                        //     let ci_raw = xpad[i];
-                        //     let t = ci_raw & 0x1F;
-                        //     if t == 0 {
-                        //         ci_header_len += 1; // still count the 0x00 terminator
-                        //         break;
-                        //     }
-                        //     ci_list.push(XPAD_CI::from_raw(ci_raw));
-                        //     ci_header_len += 1;
-                        // }
-                    }
-                    _ => {}
-                }
-            } else {
-                match xpad_ind {
-                    0b01 | 0b10 => {
-                        if let Some(prev_ci) = last_ci {
-                            ci_list.push(prev_ci.clone());
-                            ci_header_len = 0; // no header
+    
+                            if type_ == 0 {
+                                break; // end marker
+                            }
+    
+                            ci_list.push(XPAD_CI::from_raw(raw));
                         }
                     }
-                    _ => {}
+    
+                    _ => {
+                        // ignore
+                    }
                 }
             }
         }
