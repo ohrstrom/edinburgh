@@ -16,6 +16,9 @@ const FPAD_LEN: usize = 2;
 const PAD_BUFFER_SIZE: usize = 256;
 const LENS: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
 
+// const XPAD_CI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+const XPAD_CI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+
 fn format_pad_bits(byte: u8) -> String {
     let t = (byte >> 7) & 0x1;
     let s = (byte >> 5) & 0x3; // bits 6 and 5
@@ -281,16 +284,39 @@ impl MOTAssembler {
     }
 }
 
-#[derive(Debug, Clone)]
-struct XPAD_CI {
-    ci_type: u8,
-    ci_len: usize,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct XPAD_CI {
+    pub type_: i8,
+    pub len: usize,
+}
+
+impl XPAD_CI {
+    pub fn new(len: usize, type_: u8) -> Self {
+        Self {
+            len,
+            type_: type_ as i8,
+        }
+    }
+    pub fn from_raw(raw: u8) -> Self {
+        let len_index = (raw >> 5) as usize;
+        let len = XPAD_CI_LEN_LOOKUP.get(len_index).copied().unwrap_or(0);
+        let type_ = raw & 0x1F;
+        // log::debug!("XPAD RAW: len = {}, type = {}", len, type_);
+        Self::new(len, type_)
+    }
+    pub fn reset() -> Self {
+        Self { type_: -1, len: 0 }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.type_ != -1
+    }
 }
 
 #[derive(Debug)]
 pub struct PADDecoder {
     scid: u8,
-    last_xpad_ci: Option<Vec<XPAD_CI>>,
+    last_xpad_ci: Option<XPAD_CI>,
     //
     dl_assembler: DLAssembler,
     mot_assembler: MOTAssembler,
@@ -311,44 +337,239 @@ impl PADDecoder {
             log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
             return;
         }
+    
+        let used_xpad_len = xpad_bytes.len().min(64); // max XPAD size
+        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len]
+            .iter()
+            .rev()
+            .copied()
+            .collect();
+    
+        let prev_xpad_ci = self.last_xpad_ci.clone().unwrap_or(XPAD_CI::reset());
+    
+        let (ci_list, ci_header_len) = Self::build_ci_list(&xpad, fpad_bytes, self.last_xpad_ci.as_ref());
+    
+        if ci_list.is_empty() {
+            self.last_xpad_ci = Some(prev_xpad_ci);
+            return;
+        }
+    
+        // Compute total announced length: header bytes + data payload
+        let payload_len: usize = ci_list.iter().map(|ci| ci.len).sum();
+        let announced_len = ci_header_len + payload_len;
+    
+        // log::debug!("NUM CIs: (payload) {}", payload_len);
+        // log::debug!("PADDecoder: announced_len = {}", announced_len);
+        // log::debug!("PADDecoder: actual_len = {}", xpad.len());
+    
+        if announced_len > xpad.len() {
+            log::warn!(
+                "PADDecoder: Announced X-PAD length exceeds actual ({} > {}) — discarding",
+                announced_len,
+                xpad.len()
+            );
+            return;
+        }
+    
+        if announced_len < xpad.len() {
+            log::warn!(
+                "PADDecoder: Announced X-PAD length is less than actual ({} < {}) — discarding",
+                announced_len,
+                xpad.len()
+            );
+            return;
+        }
+    
+        // Track type of last CI (for reuse in next frame if needed)
+        let continued_type = ci_list.last().map_or(-1, |ci| ci.type_);
+        self.last_xpad_ci = Some(XPAD_CI {
+            type_: continued_type,
+            len: announced_len,
+        });
 
-        let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
-        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
+        log::debug!("NUM CIs: {}", ci_list.len());
 
-        // let preview = |label: &str, bytes: &[u8]| {
-        //     let head = &bytes[..bytes.len().min(4)];
-        //     let tail = if bytes.len() > 4 {
-        //         &bytes[bytes.len().saturating_sub(2)..]
-        //     } else {
-        //         &[]
-        //     };
-        //     log::debug!("XPAD ({label}): head = {:02X?}, tail = {:02X?}", head, tail);
-        // };
-
-        // preview("rev", &xpad);
-
-        let fpad_type = fpad_bytes[0] >> 6;
-        let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
-        let ci_flag = (fpad_bytes[1] & 0x02) != 0;
-
-        log::debug!(
-            "FPAD: type = {:02b}, xpad_ind = {}, ci_flag = {}",
-            fpad_type,
-            xpad_ind,
-            ci_flag
-        );
+        for (i, ci) in ci_list.iter().enumerate() {
+            log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
+        }
+    
+        // TODO: Feed to DL/MOT
     }
 
     fn build_ci_list(
         xpad: &[u8],
-        fpad_bytes: &[u8],
-        last_ci: Option<&Vec<XPAD_CI>>,
-    ) -> Vec<XPAD_CI> {
+        fpad: &[u8],
+        last_ci: Option<&XPAD_CI>,
+    ) -> (Vec<XPAD_CI>, usize) {
+        let mut ci_list = Vec::new();
+        let mut ci_header_len = 0;
+    
+        if fpad.len() < 2 {
+            return (ci_list, ci_header_len);
+        }
+    
+        let fpad_type = fpad[0] >> 6;
+        let xpad_ind = (fpad[0] & 0x30) >> 4;
+        let ci_flag = (fpad[1] & 0x02) != 0;
+    
+        if fpad_type == 0b00 {
+            if ci_flag {
+                match xpad_ind {
+                    0b01 => {
+                        if !xpad.is_empty() {
+                            let t = xpad[0] & 0x1F;
+                            if t != 0 {
+                                ci_list.push(XPAD_CI::new(3, t));
+                                ci_header_len = 1;
+                                // ci_header_len = 0;
+                            }
+                        }
+                    }
+                    0b10 => {
+                        for ci_raw in xpad.iter().take(4) {
+                            let t = ci_raw & 0x1F;
+                            if t == 0 {
+                                ci_header_len += 1;
+                                break;
+                            }
+                            ci_list.push(XPAD_CI::from_raw(*ci_raw));
+                            ci_header_len += 1;
+                        }
+                        // for i in 0..4 {
+                        //     if i >= xpad.len() {
+                        //         break;
+                        //     }
+                        //     let ci_raw = xpad[i];
+                        //     let t = ci_raw & 0x1F;
+                        //     if t == 0 {
+                        //         ci_header_len += 1; // still count the 0x00 terminator
+                        //         break;
+                        //     }
+                        //     ci_list.push(XPAD_CI::from_raw(ci_raw));
+                        //     ci_header_len += 1;
+                        // }
+                    }
+                    _ => {}
+                }
+            } else {
+                match xpad_ind {
+                    0b01 | 0b10 => {
+                        if let Some(prev_ci) = last_ci {
+                            ci_list.push(prev_ci.clone());
+                            ci_header_len = 0; // no header
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    
+        (ci_list, ci_header_len)
+    }
+    
+    
+    /*
+    pub fn __feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
+        if fpad_bytes.is_empty() {
+            log::warn!("PADDecoder: Missing XPAD or FPAD bytes");
+            return;
+        }
+
+        let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
+        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
+
+        let prev_xpad_ci = self.last_xpad_ci.clone().unwrap_or(XPAD_CI::reset());
+
+        let ci_list = Self::build_ci_list(&xpad, &fpad_bytes, self.last_xpad_ci.as_ref());
+
+        if ci_list.is_empty() {
+            // You could add a `loose` flag if needed
+            self.last_xpad_ci = Some(prev_xpad_ci);
+            return;
+        }
+
+        // Compute continued type + total announced len
+        let mut xpad_offset = ci_list.len();
+        let mut continued_type = -1;
+
+        for ci in &ci_list {
+            xpad_offset += ci.len;
+            continued_type = ci.type_;
+        }
+
+        self.last_xpad_ci = Some(XPAD_CI {
+            type_: continued_type,
+            len: xpad_offset,
+        });
+
+
+        log::debug!("NUM CIs: {}", ci_list.len());
+
+        // for (i, ci) in ci_list.iter().enumerate() {
+        //     log::debug!("CI[{}] = type {}, len {}", i, ci.type_, ci.len);
+        // }
+
+    }
+
+    fn __build_ci_list(xpad: &[u8], fpad: &[u8], last_ci: Option<&XPAD_CI>) -> Vec<XPAD_CI> {
         let mut ci_list = Vec::new();
 
-        // log::debug!("build_ci_list: Final CI List = {:?}", ci_list);
+        if fpad.len() < 2 {
+            return ci_list;
+        }
+
+        let fpad_type = fpad[0] >> 6;
+        let xpad_ind = (fpad[0] & 0x30) >> 4;
+        let ci_flag = (fpad[1] & 0x02) != 0;
+
+        // log::debug!(
+        //     "build_ci_list: fpad_type = {:02b}, xpad_ind = {:02b}, ci_flag = {}",
+        //     fpad_type,
+        //     xpad_ind,
+        //     ci_flag
+        // );
+
+        if fpad_type == 0b00 {
+            if ci_flag {
+                match xpad_ind {
+                    0b01 => {
+                        if !xpad.is_empty() {
+                            let t = xpad[0] & 0x1F;
+                            if t != 0 {
+                                ci_list.push(XPAD_CI::new(3, t));
+                            }
+                        }
+                    }
+                    0b10 => {
+                        for i in 0..4 {
+                            if i >= xpad.len() {
+                                break;
+                            }
+                            let ci_raw = xpad[i];
+                            let t = ci_raw & 0x1F;
+                            if t == 0 {
+                                break;
+                            }
+                            ci_list.push(XPAD_CI::from_raw(ci_raw));
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                match xpad_ind {
+                    0b01 | 0b10 => {
+                        if let Some(prev_ci) = last_ci {
+                            ci_list.push(prev_ci.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         ci_list
     }
+    */
 }
 
 #[derive(Derivative)]
