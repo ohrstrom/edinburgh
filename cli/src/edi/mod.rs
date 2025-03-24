@@ -124,7 +124,11 @@ impl EDISource {
                                 }
                             };
 
-                            match sc.audio_extractor.feed(&slice_data, slice_len, &self.event_tx).await {
+                            match sc
+                                .audio_extractor
+                                .feed(&slice_data, slice_len, &self.event_tx)
+                                .await
+                            {
                                 Ok(FeedResult::Complete(r)) => {
                                     // audio frames
                                     for frame in r.frames {

@@ -7,11 +7,11 @@ use log;
 use std::io;
 use std::sync::{Arc, Mutex};
 
+use clap::Parser;
 use derivative::Derivative;
 use edi_frame_extractor::EDIFrameExtractor;
 use faad2::Decoder;
 use futures::channel::mpsc::unbounded;
-use clap::Parser;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use tokio::io::Interest;
 use tokio::net::TcpStream;
@@ -74,11 +74,7 @@ struct EDIHandler {
 }
 
 impl EDIHandler {
-
-    pub fn new(
-        scid: Option<u8>,
-        receiver: UnboundedReceiver<EDIEvent>,
-    ) -> Self {
+    pub fn new(scid: Option<u8>, receiver: UnboundedReceiver<EDIEvent>) -> Self {
         let audio_decoder = AudioDecoder::new();
         Self {
             scid,
@@ -93,7 +89,7 @@ impl EDIHandler {
                 EDIEvent::EnsembleUpdated(ensemble) => {
                     // log::debug!("Ensemble updated: {:?}", ensemble);
                     log::debug!("Ensemble updated: 0x{:4x}", ensemble.eid.unwrap_or(0));
-                },
+                }
                 EDIEvent::AACPFramesExtracted(r) => {
                     if r.scid == self.scid.unwrap_or(0) {
                         // log::debug!("AACPFramesExtracted: {:?}", r);
@@ -123,7 +119,6 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     // log setup
     std::env::set_var("RUST_LOG", "debug");
     // colog::init();

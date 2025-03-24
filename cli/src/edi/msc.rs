@@ -42,7 +42,7 @@ fn printable_ascii_or_dot(bytes: &[u8]) -> String {
         .iter()
         .map(|&b| match b {
             0x20..=0x7E => b as char, // printable ASCII
-            _ => '.', // replace everything else with `.`
+            _ => '.',                 // replace everything else with `.`
         })
         .collect()
 }
@@ -148,10 +148,10 @@ fn readable_label(bytes: &[u8]) -> String {
     bytes
         .iter()
         .map(|&b| match b {
-            0x20..=0x7E => b as char,           // standard printable ASCII
-            0xA0..=0xFF => b as char,           // Latin-1 supplement
-            0x09 | 0x0A | 0x0D => ' ',          // tabs and line breaks → space
-            _ => '.',                           // control chars and junk
+            0x20..=0x7E => b as char,  // standard printable ASCII
+            0xA0..=0xFF => b as char,  // Latin-1 supplement
+            0x09 | 0x0A | 0x0D => ' ', // tabs and line breaks → space
+            _ => '.',                  // control chars and junk
         })
         .collect()
 }
@@ -315,18 +315,28 @@ impl PADDecoder {
         let used_xpad_len = xpad_bytes.len().min(64); // adjust 64 based on actual size
         let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
 
-        let preview = |label: &str, bytes: &[u8]| {
-            let head = &bytes[..bytes.len().min(4)];
-            let tail = if bytes.len() > 4 {
-                &bytes[bytes.len().saturating_sub(2)..]
-            } else {
-                &[]
-            };
-            log::debug!("XPAD ({label}): head = {:02X?}, tail = {:02X?}", head, tail);
-        };
-        
-        preview("rev", &xpad);
+        // let preview = |label: &str, bytes: &[u8]| {
+        //     let head = &bytes[..bytes.len().min(4)];
+        //     let tail = if bytes.len() > 4 {
+        //         &bytes[bytes.len().saturating_sub(2)..]
+        //     } else {
+        //         &[]
+        //     };
+        //     log::debug!("XPAD ({label}): head = {:02X?}, tail = {:02X?}", head, tail);
+        // };
 
+        // preview("rev", &xpad);
+
+        let fpad_type = fpad_bytes[0] >> 6;
+        let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
+        let ci_flag = (fpad_bytes[1] & 0x02) != 0;
+
+        log::debug!(
+            "FPAD: type = {:02b}, xpad_ind = {}, ci_flag = {}",
+            fpad_type,
+            xpad_ind,
+            ci_flag
+        );
     }
 
     fn build_ci_list(
