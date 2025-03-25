@@ -3,6 +3,7 @@ use crate::utils;
 use derivative::Derivative;
 use log;
 use std::cmp::min;
+use std::collections::BTreeMap;
 use std::vec;
 use thiserror::Error;
 
@@ -18,6 +19,33 @@ const LENS: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
 
 // const XPAD_CI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
 const XPAD_CI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+
+fn parse_mot_header_size(segment: &[u8]) -> Option<usize> {
+    let mut i = 1;
+
+    while i + 1 < segment.len() {
+        let tag = segment[i];
+        let len = segment[i + 1] as usize;
+        i += 2;
+
+        if i + len > segment.len() {
+            break;
+        }
+
+        log::trace!("MOT header tag: 0x{:02X}, len = {}", tag, len);
+
+        if tag == 0x0D && len == 3 {
+            let size = ((segment[i] as usize) << 16)
+                     | ((segment[i + 1] as usize) << 8)
+                     |  (segment[i + 2] as usize);
+            return Some(size);
+        }
+
+        i += len;
+    }
+
+    None
+}
 
 fn format_pad_bits(byte: u8) -> String {
     let t = (byte >> 7) & 0x1;
@@ -56,6 +84,18 @@ fn ascii_printable(bytes: &[u8]) -> String {
         .map(|&b| match b {
             0x20..=0x7E => b as char, // printable ASCII
             _ => '.',                 // everything else as dot
+        })
+        .collect()
+}
+
+fn readable_label(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|&b| match b {
+            0x20..=0x7E => b as char,  // standard printable ASCII
+            0xA0..=0xFF => b as char,  // Latin-1 supplement
+            0x09 | 0x0A | 0x0D => ' ', // tabs and line breaks → space
+            _ => '.',                  // control chars and junk
         })
         .collect()
 }
@@ -147,18 +187,6 @@ impl AACPResult {
     }
 }
 
-fn readable_label(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|&b| match b {
-            0x20..=0x7E => b as char,  // standard printable ASCII
-            0xA0..=0xFF => b as char,  // Latin-1 supplement
-            0x09 | 0x0A | 0x0D => ' ', // tabs and line breaks → space
-            _ => '.',                  // control chars and junk
-        })
-        .collect()
-}
-
 #[derive(Debug, Error)]
 pub enum FeedError {
     #[error("Frame length mismatch: {l1} != {l2}")]
@@ -214,77 +242,170 @@ impl From<u8> for FPAD {
 }
 
 #[derive(Debug)]
-struct DLAssembler {
-    segments: Vec<u8>,
-    complete: bool,
+struct DLSegment {
+    toggle: bool,
+    first: bool,
+    last: bool,
+    dl_plus_link: bool,
+    seg_num: u8,
+    chars: Vec<u8>,
 }
 
-impl DLAssembler {
-    fn new() -> Self {
+impl DLSegment {
+    fn from_bytes(prefix: &[u8; 2], data: &[u8]) -> Self {
         Self {
-            segments: Vec::new(),
-            complete: false,
-        }
-    }
-
-    fn feed(&mut self, start: bool, data: &[u8]) {
-        if start {
-            self.segments.clear();
-        }
-        self.segments.extend_from_slice(data);
-
-        // Check ETSI spec conditions for label completion here
-        self.complete = true; // placeholder condition
-    }
-
-    fn get_label(&mut self) -> Option<&[u8]> {
-        if self.complete {
-            Some(&self.segments)
-        } else {
-            None
+            toggle: prefix[0] & 0x80 != 0,
+            first: prefix[0] & 0x40 != 0,
+            last: prefix[0] & 0x20 != 0,
+            dl_plus_link: prefix[1] & 0x80 != 0,
+            seg_num: if prefix[0] & 0x40 != 0 {
+                0
+            } else {
+                (prefix[1] & 0x70) >> 4
+            },
+            chars: data.to_vec(),
         }
     }
 }
 
 #[derive(Debug)]
-struct MOTAssembler {
+struct DLAssembler {
+    segments: BTreeMap<u8, DLSegment>,
+    current_toggle: Option<bool>,
+    complete_toggle: Option<bool>,
+}
+
+impl DLAssembler {
+    fn new() -> Self {
+        Self {
+            segments: BTreeMap::new(),
+            current_toggle: None,
+            complete_toggle: None,
+        }
+    }
+
+    fn feed(&mut self, start: bool, payload: &[u8]) {
+        if start {
+            self.segments.clear();
+            self.current_toggle = None;
+            self.complete_toggle = None;
+        }
+
+        let (prefix, data) = payload.split_at(2);
+        let prefix: &[u8; 2] = prefix.try_into().unwrap();
+
+        let seg = DLSegment::from_bytes(prefix, data);
+
+        // TODO: needs implementation. not sure if we have "correct" data until here...
+    }
+
+    fn is_complete(&self) -> bool {
+        // TODO: needs implementation. not sure if we have "correct" data until here...
+        false
+    }
+}
+
+#[derive(Debug)]
+pub struct MOTObject {
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct MOTAssembler {
     data: Vec<u8>,
     expected_len: usize,
+    header_parsed: bool,
     complete: bool,
+    in_progress: bool,
 }
 
 impl MOTAssembler {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             data: Vec::new(),
             expected_len: 0,
+            header_parsed: false,
             complete: false,
+            in_progress: false,
         }
     }
 
-    fn feed(&mut self, start: bool, segment: &[u8]) {
+    pub fn feed(&mut self, start: bool, segment: &[u8]) {
         if start {
-            self.data.clear();
-            // Parse header here to set expected_len (using ETSI EN 301 234)
+            // Reset state on fresh MOT start
+            // self.data.clear();
+            self.expected_len = 0;
+            self.header_parsed = false;
+            self.complete = false;
+            self.in_progress = true;
+
+            if let Some(size) = parse_mot_header_size(segment) {
+                self.expected_len = size;
+                self.header_parsed = true;
+            } else {
+                // log::warn!("MOT: Could not parse header size");
+            }
+
+            // Make sure we have enough bytes for header (at least 6)
+            // if segment.len() >= 6 {
+            //     self.expected_len = ((segment[4] as usize) << 8) | segment[5] as usize;
+            //     self.header_parsed = true;
+            // } else {
+            //     // Not enough for header yet; wait for more data
+            //     // self.expected_len = 0;
+            // }
         }
+
+        if !self.in_progress || self.complete {
+            return;
+        }
+
         self.data.extend_from_slice(segment);
 
-        // Check if complete (expected_len reached)
-        if self.data.len() >= self.expected_len && self.expected_len > 0 {
+        log::debug!(
+            "MOT: data.len = {}, expected_len = {}",
+            self.data.len(),
+            self.expected_len
+        );
+
+        // Fallback: if we didn't parse the header earlier (not enough bytes)
+        if !self.header_parsed && self.data.len() >= 6 {
+            self.expected_len = ((self.data[4] as usize) << 8) | self.data[5] as usize;
+            self.header_parsed = true;
+        }
+
+        if self.header_parsed && self.data.len() >= self.expected_len {
             self.complete = true;
+            self.in_progress = false;
+            // self.data.clear();
         }
     }
 
-    fn get_mot_object(&self) -> Option<&[u8]> {
-        if self.complete {
-            Some(&self.data)
-        } else {
-            None
-        }
-    }
     fn is_valid_mot_type(&self, type_: i8) -> bool {
         // Check if type_ is a valid MOT type (using ETSI EN 301 234)
+        // TODO: just dummy implementation here...
         true
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.complete
+    }
+
+    pub fn take(&mut self) -> Option<MOTObject> {
+        if !self.complete || self.expected_len == 0 {
+            return None;
+        }
+
+        let mut mot_data = Vec::with_capacity(self.expected_len);
+        std::mem::swap(&mut self.data, &mut mot_data);
+        mot_data.truncate(self.expected_len);
+
+        self.expected_len = 0;
+        self.header_parsed = false;
+        self.complete = false;
+        self.in_progress = false;
+
+        Some(MOTObject { data: mot_data })
     }
 }
 
@@ -343,11 +464,7 @@ impl PADDecoder {
         }
 
         let used_xpad_len = xpad_bytes.len().min(64);
-        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len]
-            .iter()
-            .rev()
-            .copied()
-            .collect();
+        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
 
         let fpad_type = fpad_bytes[0] >> 6;
         let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
@@ -361,7 +478,7 @@ impl PADDecoder {
         if fpad_type != 0b00 {
             return;
         }
-        
+
         let (ci_list, ci_header_len) = if ci_flag {
             Self::build_ci_list(&xpad, fpad_bytes)
         } else if (xpad_ind == 0b01 || xpad_ind == 0b10) {
@@ -376,18 +493,18 @@ impl PADDecoder {
             } else {
                 // log::debug!("No prev_xpad_ci stored for continuation");
             }
-            return;  // Important: exit after processing continuation
+            return; // Important: exit after processing continuation
         } else {
-            return;  // invalid combination, exit early
+            return; // invalid combination, exit early
         };
-        
+
         if ci_list.is_empty() {
             return;
         }
 
         let payload_len: usize = ci_list.iter().map(|ci| ci.len).sum();
         let announced_len = ci_header_len + payload_len;
-        
+
         if announced_len != xpad.len() {
             log::warn!(
                 "PADDecoder: Announced X-PAD length mismatch ({} vs {}) — discarding",
@@ -396,18 +513,18 @@ impl PADDecoder {
             );
             return;
         }
-        
+
         let mut xpad_offset = ci_header_len;
         let mut xpad_ci_type_continued: Option<i8> = None;
-        
-        log::debug!("NUM CIs: {}", ci_list.len());
-        
+
+        // log::debug!("NUM CIs: {}", ci_list.len());
+
         for (i, ci) in ci_list.iter().enumerate() {
-            log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
-        
+            // log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
+
             self.process_ci_payload(ci, &xpad[xpad_offset..xpad_offset + ci.len]);
             xpad_offset += ci.len;
-        
+
             match ci.type_ {
                 1 => xpad_ci_type_continued = Some(1),
                 2 | 3 => xpad_ci_type_continued = Some(3),
@@ -418,7 +535,7 @@ impl PADDecoder {
                 }
             }
         }
-        
+
         // Set up last_xpad_ci correctly for continuation next time:
         if let Some(type_cont) = xpad_ci_type_continued {
             self.last_xpad_ci = Some(XPAD_CI {
@@ -479,14 +596,13 @@ impl PADDecoder {
         match prev_ci.type_ {
             2 | 3 => {
                 self.dl_assembler.feed(false, payload);
-                if let Some(label) = self.dl_assembler.get_label() {
-                    // log::info!("Dynamic Label: {}", readable_label(label));
-                }
             }
             other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
                 self.mot_assembler.feed(false, payload);
-                if let Some(mot_object) = self.mot_assembler.get_mot_object() {
-                    // log::info!("MOT object received: {} bytes", mot_object.len());
+
+                if self.mot_assembler.is_complete() {
+                    let obj = self.mot_assembler.take().unwrap();
+                    println!("Received MOT object with {} bytes", obj.data.len());
                 }
             }
             _ => log::warn!("Unhandled continuation CI type: {}", prev_ci.type_),
@@ -497,20 +613,20 @@ impl PADDecoder {
         match ci.type_ {
             1 => {
                 // DGLI (placeholder handling)
-                log::debug!("Received DGLI payload: {:02X?}", payload);
+                // log::debug!("Received DGLI payload: {:02X?}", payload);
             }
             2 | 3 => {
                 let is_start = ci.type_ == 2;
                 self.dl_assembler.feed(is_start, payload);
-                if let Some(label) = self.dl_assembler.get_label() {
-                    // log::info!("Dynamic Label: {}", readable_label(label));
-                }
             }
             other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
-                let is_start = other_type % 2 == 0; // adjust condition per ETSI spec if needed
+                // let is_start = other_type % 2 == 0; // adjust condition per ETSI spec if needed
+                let is_start = other_type == 12;
                 self.mot_assembler.feed(is_start, payload);
-                if let Some(mot_object) = self.mot_assembler.get_mot_object() {
-                    // log::info!("MOT object received: {} bytes", mot_object.len());
+
+                if self.mot_assembler.is_complete() {
+                    let obj = self.mot_assembler.take().unwrap();
+                    println!("Received MOT object with {} bytes", obj.data.len());
                 }
             }
             _ => log::warn!("Unhandled CI type: {}", ci.type_),
