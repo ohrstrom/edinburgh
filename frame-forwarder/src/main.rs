@@ -1,6 +1,7 @@
 mod edi_frame_extractor;
 mod utils;
 
+use bytes::Bytes;
 use clap::Parser;
 use dashmap::DashMap;
 use edi_frame_extractor::EDIFrameExtractor;
@@ -10,16 +11,24 @@ use std::io;
 use std::sync::Arc;
 use tokio::io::Interest;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, Mutex, oneshot};
+use tokio::sync::{broadcast, oneshot, Mutex};
+use tokio_tungstenite::accept_hdr_async;
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
-use tokio_tungstenite::tungstenite::Error as WsError;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
-use tokio_tungstenite::accept_hdr_async;
+use tokio_tungstenite::tungstenite::Error as WsError;
+use tokio_tungstenite::tungstenite::Message as WsMessage;
 
-
-type SharedReceivers = Arc<DashMap<String, (broadcast::Sender<Vec<u8>>, tokio::task::JoinHandle<()>, Arc<Mutex<Option<oneshot::Receiver<Result<(), String>>>>>)>>;
-
+type SharedReceivers = Arc<
+    DashMap<
+        String,
+        (
+            broadcast::Sender<Vec<u8>>,
+            tokio::task::JoinHandle<()>,
+            Arc<Mutex<Option<oneshot::Receiver<Result<(), String>>>>>,
+        ),
+    >,
+>;
 
 /// EDI Frame Forwarder
 #[derive(Parser, Debug)]
@@ -103,16 +112,16 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
             let (tx, _) = broadcast::channel(100);
             let (conn_status_tx, conn_status_rx) = oneshot::channel();
 
-            let task_handle =
-                tokio::spawn(start_edi_extractor(host.clone(), port.clone(), tx.clone(), conn_status_tx));
+            let task_handle = tokio::spawn(start_edi_extractor(
+                host.clone(),
+                port.clone(),
+                tx.clone(),
+                conn_status_tx,
+            ));
             (tx, task_handle, Arc::new(Mutex::new(Some(conn_status_rx))))
         });
 
-        (
-            ws_stream,
-            entry.0.subscribe(),
-            entry.2.clone(),
-        )
+        (ws_stream, entry.0.subscribe(), entry.2.clone())
     };
 
     // Check TCP connection status before entering main loop
@@ -128,7 +137,10 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
             return;
         }
         */
-        if let Err(conn_err) = conn_signal.await.unwrap_or_else(|_| Err("Internal channel error".into())) {
+        if let Err(conn_err) = conn_signal
+            .await
+            .unwrap_or_else(|_| Err("Internal channel error".into()))
+        {
             log::error!("TCP connection failed for {}: {}", key, conn_err);
             let close_frame = CloseFrame {
                 code: CloseCode::Error,
@@ -138,7 +150,7 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
                 log::warn!("Failed to send WS close frame: {}", e);
                 return;
             }
-        
+
             // Explicitly flush/await the close handshake by reading from ws_stream until it closes.
             while let Some(msg) = ws_stream.next().await {
                 match msg {
@@ -146,21 +158,50 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
                     Err(_) => break,   // connection error or closed
                 }
             }
-        
+
             return;
         }
     }
 
-    // If successful, proceed normally
-    while let Ok(data) = rx.recv().await {
-        if let Err(e) = ws_stream.send(data.into()).await {
-            match &e {
-                WsError::Io(io_err) if io_err.kind() == io::ErrorKind::BrokenPipe => {}
-                _ => {
-                    log::warn!("ws send error: {}", e);
+    loop {
+        tokio::select! {
+            // Handle disconnect or incoming client message
+            ws_msg = ws_stream.next() => {
+                match ws_msg {
+                    Some(Ok(WsMessage::Close(frame))) => {
+                        log::info!("Client sent close frame: {:?}", frame);
+                        break;
+                    }
+                    Some(Ok(_)) => {
+                        // eventually handle client messages (ping/keepalive) here
+                        continue;
+                    }
+                    Some(Err(e)) => {
+                        log::warn!("WebSocket client error: {}", e);
+                        break;
+                    }
+                    None => {
+                        log::info!("Client disconnected (stream ended)");
+                        break;
+                    }
                 }
             }
-            break;
+
+            // broadcast data from the TCP source
+            broadcast_msg = rx.recv() => {
+                match broadcast_msg {
+                    Ok(data) => {
+                        if let Err(e) = ws_stream.send(WsMessage::Binary(Bytes::from(data))).await {
+                            log::warn!("WebSocket send error: {}", e);
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        // Sender dropped or channel closed
+                        break;
+                    }
+                }
+            }
         }
     }
 
