@@ -279,7 +279,7 @@ impl PADDecoder {
             mot_assembler: MOTAssembler::new(),
         }
     }
-    pub fn feed(&mut self, xpad_bytes: &[u8], fpad_bytes: &[u8]) {
+    pub fn feed(&mut self, fpad_bytes: &[u8], xpad_bytes: &[u8]) {
         if fpad_bytes.len() < 2 {
             log::warn!("PADDecoder: Missing FPAD bytes");
             return;

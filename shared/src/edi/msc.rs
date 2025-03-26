@@ -87,6 +87,23 @@ impl AACPResult {
     }
 }
 
+#[derive(Derivative, Clone, Serialize)]
+#[derivative(Debug)]
+pub struct PADResult {
+    pub fpad: Vec<u8>,
+    #[derivative(Debug(format_with = "PADResult::debug_xpad"))]
+    pub xpad: Vec<u8>,
+}
+
+impl PADResult {
+    pub fn new(fpad: Vec<u8>, xpad: Vec<u8>) -> Self {
+        Self { fpad, xpad }
+    }
+    fn debug_xpad(xpad: &Vec<u8>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} bytes", xpad.len())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum FeedError {
     #[error("Frame length mismatch: {l1} != {l2}")]
@@ -116,7 +133,6 @@ pub struct AACPExctractor {
     au_start: Vec<usize>,
     audio_format: Option<AudioFormat>,
     au_frames: Vec<Vec<u8>>,
-    //
     pad_decoder: PADDecoder,
 }
 
@@ -134,7 +150,6 @@ impl AACPExctractor {
             au_start: vec![0; 7],
             audio_format: None,
             au_frames: Vec::new(),
-            //
             pad_decoder: PADDecoder::new(scid),
         }
     }
@@ -186,7 +201,6 @@ impl AACPExctractor {
             return Ok(FeedResult::Buffering);
         }
 
-        // copy buffer
         self.sf_buff.copy_from_slice(&self.sf_raw[0..self.sf_len]);
 
         if !self.re_sync() {
@@ -233,9 +247,9 @@ impl AACPExctractor {
 
             // check for PAD data. locked to SCID 6 (edi-ch.digris.net:8855 0x4DA4 open broadcast)
             if self.scid == 6 {
-                let pad_data = Self::extract_pad(&au_data[..au_len - 2]);
-                if let Some(pad_data) = pad_data {
-                    self.pad_decoder.feed(&pad_data.0, &pad_data.1);
+                let pad = Self::extract_pad(&au_data[..au_len - 2]);
+                if let Some(pad) = pad {
+                    self.pad_decoder.feed(&pad.fpad, &pad.xpad);
                 }
             }
         }
@@ -263,16 +277,16 @@ impl AACPExctractor {
             return false;
         }
 
-        // abort processiung if no audio format is set
+        // abort processing if no audio format is set
         if self.audio_format.is_none() {
             // log::debug!("AD: no audio format yet");
             return true;
         }
 
-        // NOTE: is this how it shoud be done??
+        // NOTE: is this how it should be done??
         let sf_format = self.audio_format.as_ref().unwrap();
 
-        // set / update values for current subframe
+        // set / update values for current sub-frame
         self.au_count = sf_format.au_count;
 
         // NOTE: check if this is correct
@@ -314,7 +328,7 @@ impl AACPExctractor {
         return true;
     }
 
-    fn extract_pad(au_data: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    fn extract_pad(au_data: &[u8]) -> Option<(PADResult)> {
         if au_data.len() < 3 {
             return None;
         }
@@ -324,13 +338,11 @@ impl AACPExctractor {
             return None;
         }
 
-        // log::debug!("PAD: {:?}", au_data.len());
-
         let mut pad_start = 2;
         let mut pad_len = au_data[1] as usize;
 
         if pad_len == 255 {
-            // NOTE: Actual length is 255 + next byte
+            // actual length is 255 + next byte
             if au_data.len() < 4 {
                 return None;
             }
@@ -345,18 +357,10 @@ impl AACPExctractor {
         let xpad_data = &au_data[pad_start..pad_start + pad_len - FPAD_LEN];
         let fpad_data = &au_data[pad_start + pad_len - FPAD_LEN..pad_start + pad_len];
 
-        let xpad_len = pad_len - FPAD_LEN;
+        let pad = PADResult::new(fpad_data.to_vec(), xpad_data.to_vec());
 
-        log::debug!(
-            "PAD: pad = {:3}, xpad = {:3} fpad = {:3}",
-            pad_len,
-            xpad_data.len(),
-            fpad_data.len()
-        );
+        // log::debug!("PAD: {:?}", pad);
 
-        // log::debug!("XPAD: {:02X?}", &xpad_data[..min(8, xpad_data.len())]);
-        // log::debug!("FPAD: {:02X?}", &fpad_data[..min(8, fpad_data.len())]);
-
-        return Some((xpad_data.to_vec(), fpad_data.to_vec()));
+        return Some(pad);
     }
 }

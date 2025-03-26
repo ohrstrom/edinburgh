@@ -85,10 +85,6 @@ const connect = async () => {
 
   }
 
-  // edi.on_edi_event(async (evt) => {
-  //   console.log('EDI EVENT:', evt)
-  // })
-
   edi.on_ensemble_update(async (ensembleData) => {
     console.log('ENSEMBLE:', ensembleData)
     Object.assign(ensemble, ensembleData)

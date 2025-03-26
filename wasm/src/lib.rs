@@ -4,8 +4,6 @@ use wee_alloc::WeeAlloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 */
 
-mod audio;
-
 use log::{self, Level};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -105,11 +103,6 @@ impl EDI {
     pub async fn reset(&mut self) -> Result<(), JsValue> {
         self.inner.borrow_mut().reset();
         Ok(())
-    }
-
-    #[wasm_bindgen]
-    pub fn on_edi_event(&self, callback: js_sys::Function) {
-        *self.cb.borrow_mut() = Some(callback);
     }
 
     #[wasm_bindgen]
