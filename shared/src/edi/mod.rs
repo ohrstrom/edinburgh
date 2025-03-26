@@ -3,6 +3,7 @@ mod ensemble;
 mod fic;
 mod frame;
 mod msc;
+mod pad;
 
 use derivative::Derivative;
 use log;
@@ -60,26 +61,23 @@ pub struct EDISource {
     ensemble: Ensemble,
     subchannels: Vec<EDISubchannel>,
     scid: u8,
-    // on_edi_frame: Option<Box<dyn FnMut(&Frame) + Send>>,
     // on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
     #[derivative(Debug = "ignore")]
     on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
-    // #[derivative(Debug = "ignore")]
-    // on_aac_segment: Option<fn(&[u8])>,
 }
 
 impl EDISource {
     pub fn new(
+        scid: Option<u8>,
         event_tx: UnboundedSender<EDIEvent>,
         on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
-        // on_aac_segment: Option<fn(&[u8])>,
     ) -> Self {
         EDISource {
             event_tx,
             ensemble: Ensemble::new(),
             subchannels: Vec::new(),
-            scid: 0,
-            // on_edi_frame: None,
+            // scid: scid.unwrap_or(0),
+            scid: scid.unwrap_or(0),
             // on_ensemble_update: None,
             on_aac_segment: on_aac_segment,
         }
@@ -88,20 +86,12 @@ impl EDISource {
     pub async fn feed(&mut self, data: &[u8]) {
         match Frame::from_bytes(data) {
             Ok(frame) => {
-                // if let Some(ref callback) = self.on_edi_frame {
-                //     let frame_js = to_value(&frame).unwrap_or(JsValue::NULL);
-                //     let _ = callback.call1(&JsValue::NULL, &frame_js).ok();
-                // }
 
                 for tag in &frame.tags {
                     match tag {
+
                         Tag::DETI(tag) => {
                             if self.ensemble.feed(tag, &self.event_tx).await {
-                                // if let Some(ref callback) = self.on_ensemble_update {
-                                //     let ensemble_js =
-                                //         to_value(&self.ensemble).unwrap_or(JsValue::NULL);
-                                //     let _ = callback.call1(&JsValue::NULL, &ensemble_js).ok();
-                                // }
                                 // if let Some(ref callback) = self.on_ensemble_update {
                                 //     let _ = callback.call1(&self.ensemble).ok();
                                 // }
@@ -133,9 +123,7 @@ impl EDISource {
                                     // audio frames
                                     for frame in r.frames {
                                         let aac_frame = AACPFrame::from_bytes(scid, frame);
-                                        // log::debug!("AAC frame: {:?}", aac_frame);
                                         if let Some(ref mut callback) = self.on_aac_segment {
-                                            // let _ = callback.call1(&aac_frame).ok();
                                             let _ = callback(&aac_frame);
                                         }
                                     }
@@ -167,51 +155,13 @@ impl EDISource {
         };
     }
 
-    // config
     pub fn set_scid(&mut self, scid: u8) {
         self.scid = scid;
     }
 
     pub fn reset(&mut self) {
-        log::info!("EDI:reset");
+        log::info!("EDISource: reset");
         self.ensemble.reset();
         self.subchannels.clear();
     }
-
-    // callbacks
-    /*
-    pub fn set_on_edi_frame(&mut self, callback: Function) {
-        self.on_edi_frame = Some(callback);
-    }
-
-    pub fn set_on_ensemble_update(&mut self, callback: Function) {
-        self.on_ensemble_update = Some(callback);
-    }
-
-    pub fn set_on_aac_segment(&mut self, callback: Function) {
-        self.on_aac_segment = Some(callback);
-    }
-    */
-
-    // Callbacks
-    // pub fn set_on_edi_frame<F>(&mut self, callback: F)
-    // where
-    //     F: FnMut(&EDIFrame) + Send + 'static,
-    // {
-    //     self.on_edi_frame = Some(Box::new(callback));
-    // }
-
-    // pub fn set_on_ensemble_update<F>(&mut self, callback: F)
-    // where
-    //     F: FnMut(&Ensemble) + Send + 'static,
-    // {
-    //     self.on_ensemble_update = Some(Box::new(callback));
-    // }
-
-    // pub fn set_on_aac_segment<F>(&mut self, callback: F)
-    // where
-    //     F: FnMut(&AACSegment) + Send + 'static,
-    // {
-    //     self.on_aac_segment = Some(Box::new(callback));
-    // }
 }

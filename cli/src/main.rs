@@ -1,6 +1,6 @@
-mod edi;
 mod edi_frame_extractor;
-mod utils;
+
+use shared::utils;
 
 use colog;
 use log;
@@ -17,8 +17,8 @@ use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use edi::bus::EDIEvent;
-use edi::{AACPFrame, EDISource};
+use shared::edi::bus::EDIEvent;
+use shared::edi::{AACPFrame, EDISource};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -87,16 +87,13 @@ impl EDIHandler {
         while let Some(event) = self.receiver.recv().await {
             match event {
                 EDIEvent::EnsembleUpdated(ensemble) => {
-                    // log::debug!("Ensemble updated: {:?}", ensemble);
                     log::debug!("Ensemble updated: 0x{:4x}", ensemble.eid.unwrap_or(0));
                 }
                 EDIEvent::AACPFramesExtracted(r) => {
                     if r.scid == self.scid.unwrap_or(0) {
-                        // log::debug!("AACPFramesExtracted: {:?}", r);
                         for frame in r.frames {
                             self.audio_decoder.feed(&frame);
                         }
-                        // self.audio_decoder.feed(&frame.data);
                     }
                 }
             }
@@ -119,9 +116,8 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // log setup
+
     std::env::set_var("RUST_LOG", "debug");
-    // colog::init();
     env_logger::init();
 
     let args = Args::parse();
@@ -142,31 +138,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (event_tx, mut event_rx) = unbounded_channel::<EDIEvent>();
 
+    /*
     let audio_decoder = Arc::new(Mutex::new(AudioDecoder::new()));
 
     let aac_callback: Box<dyn FnMut(&AACPFrame) + Send> = Box::new({
-        let audio_decoder = Arc::clone(&audio_decoder); // Clone Arc for closure capture
+        let audio_decoder = Arc::clone(&audio_decoder);
         move |frame: &AACPFrame| {
             if let Ok(mut decoder) = audio_decoder.lock() {
-                // decoder.feed(&frame.data);
-                // if frame.scid == 6 {
-                //     decoder.feed(&frame.data);
-                // }
+                if frame.scid == args.scid.unwrap_or(0) {
+                    decoder.feed(&frame.data);
+                }
             }
         }
     });
 
     let mut source = EDISource::new(event_tx, Some(aac_callback));
+    */
 
-    // let mut source = EDISource::new(event_tx, Some(callback));
+    let mut source = EDISource::new(args.scid, event_tx, None);
 
     let event_handler = EDIHandler::new(args.scid, event_rx);
 
     tokio::spawn(async move {
         event_handler.run().await;
     });
-
-    // extractor.frame.data.resize(0, 0);
 
     loop {
         let ready = stream.ready(Interest::READABLE).await?;

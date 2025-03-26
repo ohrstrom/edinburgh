@@ -15,7 +15,7 @@ impl fmt::Display for FrameDecodeError {
 
 impl std::error::Error for FrameDecodeError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SyncMagic {
     pattern: Vec<u8>,
     name: String,
@@ -34,7 +34,7 @@ impl SyncMagic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AFFrame {
     // NOTE: it looks like we only have AF frames..
     pub data: Vec<u8>,
@@ -104,16 +104,6 @@ impl AFFrame {
 impl fmt::Display for AFFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AF ({})", self.data.len())
-    }
-}
-
-pub struct EDIFrameResult {
-    pub data: Vec<u8>,
-}
-
-impl EDIFrameResult {
-    fn new(data: Vec<u8>) -> Self {
-        EDIFrameResult { data }
     }
 }
 

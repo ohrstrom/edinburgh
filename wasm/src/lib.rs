@@ -5,8 +5,6 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 */
 
 mod audio;
-mod edi;
-mod utils;
 
 use log::{self, Level};
 use std::cell::RefCell;
@@ -22,8 +20,10 @@ use futures::channel::mpsc::unbounded;
 use futures::StreamExt;
 
 use console_log;
-use edi::bus::EDIEvent;
-use edi::EDISource;
+
+use shared::utils;
+use shared::edi::bus::EDIEvent;
+use shared::edi::EDISource;
 
 #[derive(Clone)]
 #[wasm_bindgen]
@@ -44,7 +44,7 @@ impl EDI {
         let (event_tx, mut event_rx) = unbounded::<EDIEvent>();
         log::info!("EDI:init");
 
-        let edi_source = Rc::new(RefCell::new(EDISource::new(event_tx, None)));
+        let edi_source = Rc::new(RefCell::new(EDISource::new(None, event_tx, None)));
 
         let cb = Rc::new(RefCell::new(None));
         let on_ensemble_update_cb = Rc::new(RefCell::new(None));

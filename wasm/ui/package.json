@@ -12,7 +12,7 @@
     "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
-    "format": "prettier --write ui/"
+    "format": "prettier --write src/"
   },
   "dependencies": {
     "@vueuse/core": "^13.0.0",

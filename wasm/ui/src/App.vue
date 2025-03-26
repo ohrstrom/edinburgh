@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 
-import { EDI } from '../pkg/edinburgh_wasm'
+import { EDI } from '../../pkg'
 
 import Ensemble from './components/Ensemble.vue'
 import Service from './components/Service.vue'
@@ -153,9 +153,25 @@ const disconnect = async () => {
   selectedServiceSid.value = 0
   selectedScid.value = 0
 
+
   if (ws) {
-    ws.close()
-    ws = null
+    ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
+
+    try {
+      ws.close(1000, "Client closed connection");
+
+      // Wait for it to fully close
+      await new Promise((resolve) => {
+        ws.onclose = () => {
+          resolve();
+        };
+      });
+
+    } catch (e) {
+      console.warn("WebSocket close threw:", e);
+    }
+
+    ws = null;
   }
 
   edi.reset()

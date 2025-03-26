@@ -4,3 +4,6 @@ Cargo.lock
 
 .DS_Store
 docs/
+
+__ref/
+__src/

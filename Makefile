@@ -14,16 +14,9 @@ ADDR ?= 213.232.205.101:8855
 run-cli:
 	cargo run -p $(CLI_BIN) -- --addr $(ADDR)
 
-.PHONY: run-cli
-run-cli-sync:
-	cargo run -p $(CLI_BIN) --bin $(CLI_BIN)-sync -- $(ADDR)
-
 .PHONY: run-frame-forwarder
 run-frame-forwarder:
 	cargo run -p $(FRAME_FORWARDER_BIN) -- $(ADDR)
-
-.PHONY: run-all
-run-all: run-cli run-frame-forwarder
 
 .PHONY: fmt
 fmt:
@@ -36,3 +29,15 @@ clippy:
 .PHONY: clean
 clean:
 	cargo clean
+
+.PHONY: build
+build:
+	cargo build --package edinburgh-wasm --target wasm32-unknown-unknown
+	cargo build --package edinburgh
+	cargo build --package edinburgh-frame-forwarder
+
+.PHONY: release
+release:
+	cargo build --release --package edinburgh-wasm --target wasm32-unknown-unknown
+	cargo build --release --package edinburgh
+	cargo build --release --package edinburgh-frame-forwarder
