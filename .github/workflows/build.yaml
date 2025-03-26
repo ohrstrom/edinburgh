@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    name: Build Rust Workspace
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build edinburgh
+        run: cargo build --package edinburgh
+
+      - name: Build edinburgh-frame-forwarder
+        run: cargo build --package edinburgh-frame-forwarder
+
+      - name: Build edinburgh-frame-forwarder
+        run: cargo build --package edinburgh-wasm --target wasm32-unknown-unknown
