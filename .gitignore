@@ -3,7 +3,8 @@
 Cargo.lock
 
 .DS_Store
-docs/
+.vscode/
 
+docs/
 __ref/
 __src/
