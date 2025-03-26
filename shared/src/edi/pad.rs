@@ -203,8 +203,8 @@ impl MOTAssembler {
         }
     }
 
-    fn is_valid_mot_type(&self, type_: i8) -> bool {
-        // Check if type_ is a valid MOT type (using ETSI EN 301 234)
+    fn is_valid_mot_type(&self, kind: i8) -> bool {
+        // Check if kind is a valid MOT type (using ETSI EN 301 234)
         // TODO: just dummy implementation here...
         true
     }
@@ -233,30 +233,30 @@ impl MOTAssembler {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XPAD_CI {
-    pub type_: i8,
+    pub kind: i8,
     pub len: usize,
 }
 
 impl XPAD_CI {
-    pub fn new(len: usize, type_: u8) -> Self {
+    pub fn new(len: usize, kind: u8) -> Self {
         Self {
             len,
-            type_: type_ as i8,
+            kind: kind as i8,
         }
     }
     pub fn from_raw(raw: u8) -> Self {
         let len_index = (raw >> 5) as usize;
         let len = XPAD_CI_LEN_LOOKUP.get(len_index).copied().unwrap_or(0);
-        let type_ = raw & 0x1F;
-        // log::debug!("XPAD RAW: len = {}, type = {}", len, type_);
-        Self::new(len, type_)
+        let kind = raw & 0x1F;
+        // log::debug!("XPAD RAW: len = {}, type = {}", len, kind);
+        Self::new(len, kind)
     }
     pub fn reset() -> Self {
-        Self { type_: -1, len: 0 }
+        Self { kind: -1, len: 0 }
     }
 
     pub fn is_valid(&self) -> bool {
-        self.type_ != -1
+        self.kind != -1
     }
 }
 
@@ -307,8 +307,7 @@ impl PADDecoder {
             // Continuation: Don't build new CI list, process data directly.
             if let Some(prev_ci) = &prev_xpad_ci {
                 if prev_ci.is_valid() {
-                    // log::debug!("Continuing previous XPAD CI: {:?}", prev_ci);
-                    self.process_continuation_data(prev_ci, &xpad);
+                    self.process_ci(true, prev_ci, &xpad);
                 } else {
                     log::debug!("Invalid prev_xpad_ci for continuation");
                 }
@@ -336,35 +335,35 @@ impl PADDecoder {
             return;
         }
 
-        let mut xpad_offset = ci_header_len;
-        let mut xpad_ci_type_continued: Option<i8> = None;
+        let mut offset = ci_header_len;
+        let mut ci_kind_continued: Option<i8> = None;
 
         // log::debug!("NUM CIs: {}", ci_list.len());
 
         for (i, ci) in ci_list.iter().enumerate() {
-            // log::debug!("CI[{}] = type {:2}, len {:2}", i, ci.type_, ci.len);
+            // log::debug!("CI = type {:2}, len {:2}", ci.kind, ci.len);
 
-            self.process_ci_payload(ci, &xpad[xpad_offset..xpad_offset + ci.len]);
-            xpad_offset += ci.len;
+            self.process_ci(false, ci, &xpad[offset..offset + ci.len]);
+            offset += ci.len;
 
-            match ci.type_ {
-                1 => xpad_ci_type_continued = Some(1),
-                2 | 3 => xpad_ci_type_continued = Some(3),
+            match ci.kind {
+                1 => ci_kind_continued = Some(1),
+                2 | 3 => ci_kind_continued = Some(3),
                 other_type => {
                     if self.mot_assembler.is_valid_mot_type(other_type) {
-                        xpad_ci_type_continued = Some(other_type);
+                        ci_kind_continued = Some(other_type);
                     }
                 }
             }
         }
 
         // Set up last_xpad_ci correctly for continuation next time:
-        if let Some(type_cont) = xpad_ci_type_continued {
+        if let Some(kind) = ci_kind_continued {
             self.last_xpad_ci = Some(XPAD_CI {
-                type_: type_cont,
+                kind: kind,
                 len: announced_len,
             });
-            // log::debug!("Updated last_xpad_ci: type={}, len={}", type_cont, announced_len);
+            // log::debug!("Updated last_xpad_ci: type={}, len={}", kindcont, announced_len);
         } else {
             log::debug!("No continuation set for last_xpad_ci");
         }
@@ -391,18 +390,18 @@ impl PADDecoder {
         match xpad_ind {
             0b01 => {
                 if xpad.len() >= 1 {
-                    let type_ = xpad[0] & 0x1F;
-                    if type_ != 0 {
-                        ci_list.push(XPAD_CI::new(3, type_));
+                    let kind = xpad[0] & 0x1F;
+                    if kind != 0 {
+                        ci_list.push(XPAD_CI::new(3, kind));
                         ci_header_len = 1;
                     }
                 }
             }
             0b10 => {
                 for &raw in xpad.iter().take(4) {
-                    let type_ = raw & 0x1F;
+                    let kind = raw & 0x1F;
                     ci_header_len += 1;
-                    if type_ == 0 {
+                    if kind == 0 {
                         break;
                     }
                     ci_list.push(XPAD_CI::from_raw(raw));
@@ -414,44 +413,21 @@ impl PADDecoder {
         (ci_list, ci_header_len)
     }
 
-    fn process_continuation_data(&mut self, prev_ci: &XPAD_CI, payload: &[u8]) {
-        match prev_ci.type_ {
-            2 | 3 => {
-                self.dl_assembler.feed(false, payload);
-            }
-            other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
-                self.mot_assembler.feed(false, payload);
-
-                if self.mot_assembler.is_complete() {
-                    let obj = self.mot_assembler.take().unwrap();
-                    println!("Received MOT object with {} bytes", obj.data.len());
-                }
-            }
-            _ => log::warn!("Unhandled continuation CI type: {}", prev_ci.type_),
-        }
-    }
-
-    fn process_ci_payload(&mut self, ci: &XPAD_CI, payload: &[u8]) {
-        match ci.type_ {
+    fn process_ci(&mut self, is_continuation: bool, ci: &XPAD_CI, payload: &[u8]) {
+        match ci.kind {
             1 => {
-                // DGLI (placeholder handling)
-                // log::debug!("Received DGLI payload: {:02X?}", payload);
+                // DGLI - Data Group Length Indicator
+                log::debug!("DGLI: {:02X?}", payload);
             }
             2 | 3 => {
-                let is_start = ci.type_ == 2;
-                self.dl_assembler.feed(is_start, payload);
+                let is_start = ci.kind == 2 && !is_continuation;
+                // self.dl_assembler.feed(is_start, payload);
             }
-            other_type if self.mot_assembler.is_valid_mot_type(other_type) => {
-                // let is_start = other_type % 2 == 0; // adjust condition per ETSI spec if needed
-                let is_start = other_type == 12;
-                self.mot_assembler.feed(is_start, payload);
-
-                if self.mot_assembler.is_complete() {
-                    let obj = self.mot_assembler.take().unwrap();
-                    println!("Received MOT object with {} bytes", obj.data.len());
-                }
+            12 | 13 => {
+                let is_start = ci.kind == 12 && !is_continuation;
+                // self.mot_assembler.feed(is_start, payload);
             }
-            _ => log::warn!("Unhandled CI type: {}", ci.type_),
+            _ => log::warn!("Unhandled CI type: {}", ci.kind),
         }
     }
 }
