@@ -34,14 +34,14 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-#      - name: Build edinburgh
-#        run: cargo build --package edinburgh
-#
-#      - name: Build edinburgh-frame-forwarder
-#        run: cargo build --package edinburgh-frame-forwarder
+      - name: Build edinburgh
+        run: cargo build --package edinburgh
 
-#      - name: Install wasm-pack
-#        run: cargo install wasm-pack
+      - name: Build edinburgh-frame-forwarder
+        run: cargo build --package edinburgh-frame-forwarder
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
 
       - name: Install wasm-pack (prebuilt)
         run: |
