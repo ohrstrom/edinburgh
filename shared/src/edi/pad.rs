@@ -3,7 +3,7 @@ use log;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
-const XPAD_CI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+
 
 fn parse_mot_header_size(segment: &[u8]) -> Option<usize> {
     let mut i = 1;
@@ -231,13 +231,15 @@ impl MOTAssembler {
     }
 }
 
+const XPADCI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct XPAD_CI {
+pub struct XPADCI {
     pub kind: i8,
     pub len: usize,
 }
 
-impl XPAD_CI {
+impl XPADCI {
     pub fn new(len: usize, kind: u8) -> Self {
         Self {
             len,
@@ -246,7 +248,7 @@ impl XPAD_CI {
     }
     pub fn from_raw(raw: u8) -> Self {
         let len_index = (raw >> 5) as usize;
-        let len = XPAD_CI_LEN_LOOKUP.get(len_index).copied().unwrap_or(0);
+        let len = XPADCI_LEN_LOOKUP.get(len_index).copied().unwrap_or(0);
         let kind = raw & 0x1F;
         // log::debug!("XPAD RAW: len = {}, type = {}", len, kind);
         Self::new(len, kind)
@@ -260,10 +262,41 @@ impl XPAD_CI {
     }
 }
 
+
+
+#[derive(Debug)]
+pub struct DataGroup {
+    pub size: usize,
+    pub size_needed: usize,
+    pub raw: Vec<u8>,
+}
+
+impl DataGroup {
+    pub fn new(size: usize) -> Self {
+        Self {
+            size,
+            size_needed: size,
+            raw: Vec::new(),
+        }
+    }
+    pub fn init(&mut self, size: usize) {
+        log::debug!("DataGroup: init {} bytes", size);
+        self.size_needed = size;
+        self.raw.clear();
+    }
+    pub fn feed(&mut self, data: &[u8]) {
+        log::debug!("DataGroup: feed {} bytes", data.len());
+    }
+}
+
 #[derive(Debug)]
 pub struct PADDecoder {
     scid: u8,
-    last_xpad_ci: Option<XPAD_CI>,
+    last_xpad_ci: Option<XPADCI>,
+    //
+    next_dg_size: usize,
+    //
+    mot_dg: DataGroup,
     //
     dl_assembler: DLAssembler,
     mot_assembler: MOTAssembler,
@@ -274,6 +307,10 @@ impl PADDecoder {
         Self {
             scid,
             last_xpad_ci: None,
+            //
+            next_dg_size: 0,
+            //
+            mot_dg: DataGroup::new(0),
             //
             dl_assembler: DLAssembler::new(),
             mot_assembler: MOTAssembler::new(),
@@ -319,7 +356,15 @@ impl PADDecoder {
             return; // invalid combination, exit early
         };
 
+
+        // if ci_list.is_empty() {
+        //     return;
+        // }
+
         if ci_list.is_empty() {
+            if let Some(prev_ci) = prev_xpad_ci {
+                self.last_xpad_ci = Some(prev_ci);
+            }
             return;
         }
 
@@ -342,24 +387,20 @@ impl PADDecoder {
 
         for (i, ci) in ci_list.iter().enumerate() {
             // log::debug!("CI = type {:2}, len {:2}", ci.kind, ci.len);
-
             self.process_ci(false, ci, &xpad[offset..offset + ci.len]);
             offset += ci.len;
 
             match ci.kind {
                 1 => ci_kind_continued = Some(1),
                 2 | 3 => ci_kind_continued = Some(3),
-                other_type => {
-                    if self.mot_assembler.is_valid_mot_type(other_type) {
-                        ci_kind_continued = Some(other_type);
-                    }
-                }
+                12 | 13 => ci_kind_continued = Some(13),
+                _ => {}
             }
         }
 
-        // Set up last_xpad_ci correctly for continuation next time:
+        // Set up last_xpad_ci for continuation next time:
         if let Some(kind) = ci_kind_continued {
-            self.last_xpad_ci = Some(XPAD_CI {
+            self.last_xpad_ci = Some(XPADCI {
                 kind: kind,
                 len: announced_len,
             });
@@ -371,7 +412,9 @@ impl PADDecoder {
         // TODO: Feed payload data (after header) to DL/MOT assemblers
     }
 
-    fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPAD_CI>, usize) {
+
+
+    fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPADCI>, usize) {
         let mut ci_list = Vec::new();
         let mut ci_header_len = 0;
 
@@ -389,23 +432,33 @@ impl PADDecoder {
 
         match xpad_ind {
             0b01 => {
+                // short format: 1 byte
                 if xpad.len() >= 1 {
                     let kind = xpad[0] & 0x1F;
                     if kind != 0 {
-                        ci_list.push(XPAD_CI::new(3, kind));
+                        ci_list.push(XPADCI::new(3, kind));
                         ci_header_len = 1;
                     }
                 }
             }
             0b10 => {
+                // long format: multiple CIs
                 for &raw in xpad.iter().take(4) {
                     let kind = raw & 0x1F;
                     ci_header_len += 1;
                     if kind == 0 {
                         break;
                     }
-                    ci_list.push(XPAD_CI::from_raw(raw));
+                    ci_list.push(XPADCI::from_raw(raw));
                 }
+                // for &byte in xpad {
+                //     let kind = byte & 0x1F;
+                //     ci_header_len += 1;
+                //     if kind == 0 {
+                //         break;
+                //     }
+                //     ci_list.push(XPADCI::from_raw(byte));
+                // }
             }
             _ => {}
         }
@@ -413,21 +466,45 @@ impl PADDecoder {
         (ci_list, ci_header_len)
     }
 
-    fn process_ci(&mut self, is_continuation: bool, ci: &XPAD_CI, payload: &[u8]) {
+    fn process_ci(&mut self, is_continuation: bool, ci: &XPADCI, payload: &[u8]) {
+        // log::debug!("CI: kind: {}", ci.kind);
         match ci.kind {
             1 => {
                 // DGLI - Data Group Length Indicator
-                log::debug!("DGLI: {:02X?}", payload);
+                // log::debug!("DGLI: {:?} - {:02X?}", ci, payload);
+                // self.process_dgli(is_continuation, payload);
+                let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
+                log::debug!("DGLI: len: {}", dg_size);
+                self.next_dg_size = dg_size as usize;
             }
             2 | 3 => {
                 let is_start = ci.kind == 2 && !is_continuation;
                 // self.dl_assembler.feed(is_start, payload);
             }
             12 | 13 => {
-                let is_start = ci.kind == 12 && !is_continuation;
-                // self.mot_assembler.feed(is_start, payload);
+
+                log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
+
+                // let is_start = ci.kind == 12 && !is_continuation;
+                //
+                // if is_start {
+                //     // MOT start. initialize DG
+                //     self.mot_dg.init(self.next_dg_size);
+                //     self.next_dg_size = 0;
+                // }
+                //
+                // self.mot_dg.feed(&payload);
+
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),
         }
+    }
+
+    // CI kind specific processing
+    fn process_dgli(&mut self, is_continuation: bool, payload: &[u8]) {
+        // log::debug!("DGLI: cont: {:?} - {:02X?}", is_continuation, payload);
+        let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
+        log::debug!("DGLI: len: {}", dg_size);
+        self.next_dg_size = dg_size as usize;
     }
 }

@@ -361,6 +361,16 @@ impl AACPExctractor {
 
         // log::debug!("PAD: {:?}", pad);
 
+        // log::debug!(
+        //     "PAD: {} - {}",
+        //     pad.fpad[0..2]
+        //         .iter()
+        //         .map(|byte| format!("{:08b}", byte))
+        //         .collect::<Vec<_>>()
+        //         .join(" "),
+        //     pad.xpad.len()
+        // );
+
         return Some(pad);
     }
 }
