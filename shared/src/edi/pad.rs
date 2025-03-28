@@ -329,8 +329,6 @@ impl PADDecoder {
         let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
         let ci_flag = fpad_bytes[1] & 0x02 != 0;
 
-        // log::debug!("FPAD: {} - {} - {}", fpad_type, xpad_ind, ci_flag);
-
         let prev_xpad_ci = self.last_xpad_ci.clone();
         self.last_xpad_ci = None;
 
@@ -341,21 +339,18 @@ impl PADDecoder {
         let (ci_list, ci_header_len) = if ci_flag {
             Self::build_ci_list(&xpad, fpad_bytes)
         } else if (xpad_ind == 0b01 || xpad_ind == 0b10) {
-            // Continuation: Don't build new CI list, process data directly.
             if let Some(prev_ci) = &prev_xpad_ci {
                 if prev_ci.is_valid() {
-                    self.process_ci(true, prev_ci, &xpad);
+                    (vec![prev_ci.clone()], 0)
                 } else {
-                    log::debug!("Invalid prev_xpad_ci for continuation");
+                    return;
                 }
             } else {
-                // log::debug!("No prev_xpad_ci stored for continuation");
+                return;
             }
-            return; // Important: exit after processing continuation
         } else {
-            return; // invalid combination, exit early
+            return;
         };
-
 
         // if ci_list.is_empty() {
         //     return;
@@ -408,8 +403,6 @@ impl PADDecoder {
         } else {
             log::debug!("No continuation set for last_xpad_ci");
         }
-
-        // TODO: Feed payload data (after header) to DL/MOT assemblers
     }
 
 
@@ -451,14 +444,6 @@ impl PADDecoder {
                     }
                     ci_list.push(XPADCI::from_raw(raw));
                 }
-                // for &byte in xpad {
-                //     let kind = byte & 0x1F;
-                //     ci_header_len += 1;
-                //     if kind == 0 {
-                //         break;
-                //     }
-                //     ci_list.push(XPADCI::from_raw(byte));
-                // }
             }
             _ => {}
         }
@@ -471,8 +456,6 @@ impl PADDecoder {
         match ci.kind {
             1 => {
                 // DGLI - Data Group Length Indicator
-                // log::debug!("DGLI: {:?} - {:02X?}", ci, payload);
-                // self.process_dgli(is_continuation, payload);
                 let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
                 log::debug!("DGLI: len: {}", dg_size);
                 self.next_dg_size = dg_size as usize;
@@ -482,11 +465,9 @@ impl PADDecoder {
                 // self.dl_assembler.feed(is_start, payload);
             }
             12 | 13 => {
-
                 log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
 
                 // let is_start = ci.kind == 12 && !is_continuation;
-                //
                 // if is_start {
                 //     // MOT start. initialize DG
                 //     self.mot_dg.init(self.next_dg_size);
@@ -498,13 +479,5 @@ impl PADDecoder {
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),
         }
-    }
-
-    // CI kind specific processing
-    fn process_dgli(&mut self, is_continuation: bool, payload: &[u8]) {
-        // log::debug!("DGLI: cont: {:?} - {:02X?}", is_continuation, payload);
-        let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
-        log::debug!("DGLI: len: {}", dg_size);
-        self.next_dg_size = dg_size as usize;
     }
 }
