@@ -3,8 +3,6 @@ use log;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
-
-
 fn parse_mot_header_size(segment: &[u8]) -> Option<usize> {
     let mut i = 1;
 
@@ -262,30 +260,87 @@ impl XPADCI {
     }
 }
 
-
-
 #[derive(Debug)]
-pub struct DataGroup {
-    pub size: usize,
+pub struct DLDataGroup {
     pub size_needed: usize,
-    pub raw: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
-impl DataGroup {
-    pub fn new(size: usize) -> Self {
+impl DLDataGroup {
+    fn new() -> Self {
         Self {
-            size,
-            size_needed: size,
-            raw: Vec::new(),
+            size_needed: 2 + 2, // default minimum: header + CRC
+            data: Vec::new(),
         }
     }
-    pub fn init(&mut self, size: usize) {
-        log::debug!("DataGroup: init {} bytes", size);
-        self.size_needed = size;
-        self.raw.clear();
+    fn init(&mut self) {
+        self.size_needed = 2 + 2; // default minimum: header + CRC
+        self.data.clear();
     }
-    pub fn feed(&mut self, data: &[u8]) {
-        log::debug!("DataGroup: feed {} bytes", data.len());
+
+    pub fn feed(&mut self, input: &[u8]) -> Option<Vec<u8>> {
+        let remaining = self.size_needed.saturating_sub(self.data.len());
+        self.data.extend_from_slice(&input[..input.len().min(remaining)]);
+
+        // once we have the 2-byte header, compute actual size
+        if self.data.len() >= 2 && self.size_needed == 4 {
+            let is_command = self.data[0] & 0x10 != 0;
+            let field_len = if is_command {
+                match self.data[0] & 0x0F {
+                    0x01 => 0, // Remove label
+                    0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
+                    _ => 0,
+                }
+            } else {
+                (self.data[0] & 0x0F) + 1
+            };
+            self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
+        }
+
+        if self.data.len() == self.size_needed {
+            let mut complete = Vec::new();
+            std::mem::swap(&mut complete, &mut self.data);
+            Some(complete)
+        } else {
+            None
+        }
+    }
+
+    fn __feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
+        // TODO: implement feed logic
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct MOTDataGroup {
+    pub size_needed: usize,
+    pub data: Vec<u8>,
+}
+
+impl MOTDataGroup {
+    fn new() -> Self {
+        Self {
+            size_needed: 0,
+            data: Vec::new(),
+        }
+    }
+    fn init(&mut self, size: usize) {
+        self.size_needed = size;
+        self.data.clear();
+    }
+
+    fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
+        let remaining = self.size_needed.saturating_sub(self.data.len());
+        self.data.extend_from_slice(&data[..data.len().min(remaining)]);
+
+        if self.data.len() == self.size_needed {
+            let mut dg = Vec::new();
+            std::mem::swap(&mut self.data, &mut dg);
+            Some(dg)
+        } else {
+            None
+        }
     }
 }
 
@@ -296,7 +351,8 @@ pub struct PADDecoder {
     //
     next_dg_size: usize,
     //
-    mot_dg: DataGroup,
+    dl_dg: DLDataGroup,
+    mot_dg: MOTDataGroup,
     //
     dl_assembler: DLAssembler,
     mot_assembler: MOTAssembler,
@@ -310,7 +366,8 @@ impl PADDecoder {
             //
             next_dg_size: 0,
             //
-            mot_dg: DataGroup::new(0),
+            dl_dg: DLDataGroup::new(),
+            mot_dg: MOTDataGroup::new(),
             //
             dl_assembler: DLAssembler::new(),
             mot_assembler: MOTAssembler::new(),
@@ -405,8 +462,6 @@ impl PADDecoder {
         }
     }
 
-
-
     fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPADCI>, usize) {
         let mut ci_list = Vec::new();
         let mut ci_header_len = 0;
@@ -457,24 +512,39 @@ impl PADDecoder {
             1 => {
                 // DGLI - Data Group Length Indicator
                 let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
-                log::debug!("DGLI: len: {}", dg_size);
+                // log::debug!("DGLI: len: {}", dg_size);
                 self.next_dg_size = dg_size as usize;
             }
             2 | 3 => {
                 let is_start = ci.kind == 2 && !is_continuation;
-                // self.dl_assembler.feed(is_start, payload);
+
+                // log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
+
+                if is_start && self.dl_dg.data.is_empty() {
+                    self.dl_dg.init();
+                }
+
+                if let Some(dg_data) = self.dl_dg.feed(&payload) {
+                    // log::debug!("DL Data Group complete: {} bytes", dg_data.len());
+                    log::debug!("DL Data Group complete: {:?}", dg_data);
+                    // self.dl_assembler.feed(&dg_data);
+                }
             }
             12 | 13 => {
-                log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
+                // log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
 
-                // let is_start = ci.kind == 12 && !is_continuation;
-                // if is_start {
-                //     // MOT start. initialize DG
-                //     self.mot_dg.init(self.next_dg_size);
-                //     self.next_dg_size = 0;
-                // }
-                //
-                // self.mot_dg.feed(&payload);
+                let is_start = ci.kind == 12 && !is_continuation;
+                if is_start {
+                    // MOT start. initialize DG
+                    self.mot_dg.init(self.next_dg_size);
+                    self.next_dg_size = 0;
+                }
+
+                if let Some(dg_data) = self.mot_dg.feed(&payload) {
+                    // log::debug!("MOT Data Group complete: {} bytes", dg_data.len());
+                    // self.mot_assembler.feed(&dg_data);
+                }
+
 
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),
