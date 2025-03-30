@@ -1,3 +1,5 @@
+use super::MSCDataGroup;
+
 const DL_LEN_MAX: usize = 8 * 16;
 
 #[derive(Debug)]
@@ -8,8 +10,8 @@ impl DLDecoder {
         Self {}
     }
 
-    pub fn feed(&mut self, dg_data: &[u8]) {
-        log::debug!("DLDecoder: feed: {:?}", dg_data);
+    pub fn feed(&mut self, dg: &MSCDataGroup) {
+        log::debug!("DL DG: {:#?}", dg);
     }
 }
 

@@ -99,6 +99,128 @@ impl XPADCI {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct MSCDataGroup {
+    pub is_valid: bool,
+    pub extension_flag: bool,
+    pub segment_flag: bool,
+    pub user_access_flag: bool,
+    pub seg_type: u8,
+    pub continuity_index: u8,
+    pub repetition_index: u8,
+    pub extension_field: Option<u16>,
+    pub last_flag: bool,
+    pub segment_num: Option<u16>,
+    pub transport_id_flag: bool,
+    pub length_indicator: u8,
+    pub transport_id: Option<u16>,
+    pub end_user_addr_field: Vec<u8>,
+    #[derivative(Debug(format_with = "MSCDataGroup::debug_data_field"))]
+    pub data_field: Vec<u8>,
+}
+
+impl MSCDataGroup {
+    pub fn from_bytes(data: &[u8]) -> Self {
+        let mut dg = MSCDataGroup {
+            is_valid: false,
+            extension_flag: false,
+            segment_flag: false,
+            user_access_flag: false,
+            seg_type: 0,
+            continuity_index: 0,
+            repetition_index: 0,
+            extension_field: None,
+            last_flag: false,
+            segment_num: None,
+            transport_id_flag: false,
+            length_indicator: 0,
+            transport_id: None,
+            end_user_addr_field: Vec::new(),
+            data_field: Vec::new(),
+        };
+
+        if data.len() < 2 {
+            return dg; // Invalid, too short
+        }
+
+        let mut idx = 0;
+
+        let header = data[idx];
+        idx += 1;
+
+        let crc_flag = header & 0x40 != 0;
+        dg.extension_flag = header & 0x80 != 0;
+        dg.segment_flag = header & 0x20 != 0;
+        dg.user_access_flag = header & 0x10 != 0;
+        dg.seg_type = header & 0x0F;
+
+        let second_byte = data[idx];
+        idx += 1;
+
+        dg.continuity_index = (second_byte >> 4) & 0x0F;
+        dg.repetition_index = second_byte & 0x0F;
+
+        if dg.extension_flag {
+            if data.len() < idx + 2 {
+                return dg;
+            }
+            dg.extension_field = Some(((data[idx] as u16) << 8) | data[idx + 1] as u16);
+            idx += 2;
+        }
+
+        if dg.segment_flag {
+            if data.len() < idx + 2 {
+                return dg;
+            }
+            let high = data[idx] as u16 & 0x7F;
+            let low = data[idx + 1] as u16;
+            dg.last_flag = data[idx] & 0x80 != 0;
+            dg.segment_num = Some((high << 8) | low);
+            idx += 2;
+        }
+
+        if dg.user_access_flag {
+            let byte = data[idx];
+            idx += 1;
+
+            dg.transport_id_flag = byte & 0x10 != 0;
+            dg.length_indicator = byte & 0x0F;
+
+            if dg.transport_id_flag {
+                if data.len() < idx + 2 {
+                    return dg;
+                }
+                dg.transport_id = Some(((data[idx] as u16) << 8) | data[idx + 1] as u16);
+                idx += 2;
+            }
+
+            let address_len = dg.length_indicator as usize - if dg.transport_id_flag { 2 } else { 0 };
+            if address_len > 0 && data.len() >= idx + address_len {
+                dg.end_user_addr_field = data[idx..idx + address_len].to_vec();
+                idx += address_len;
+            }
+        }
+
+        // At this point, idx is at the start of the data field
+        let crc_len = if crc_flag { 2 } else { 0 };
+        if data.len() >= idx + crc_len {
+            let data_field_len = data.len() - idx - crc_len;
+
+            // NOTE: should we remove first 2 bytes of data first?
+            //       they contain segmentation metadata.
+
+            dg.data_field = data[idx..idx + data_field_len].to_vec();
+        }
+
+        dg.is_valid = true; // NOTE: this should be checked ;)
+        dg
+    }
+    fn debug_data_field(data: &Vec<u8>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} bytes", data.len())
+    }
+}
+
 #[derive(Debug)]
 pub struct DLDataGroup {
     pub size_needed: usize,
@@ -117,6 +239,36 @@ impl DLDataGroup {
         self.data.clear();
     }
 
+    pub fn feed(&mut self, input: &[u8]) -> Option<MSCDataGroup> {
+        let remaining = self.size_needed.saturating_sub(self.data.len());
+        self.data
+            .extend_from_slice(&input[..input.len().min(remaining)]);
+
+        // once we have the 2-byte header, compute actual size
+        if self.data.len() >= 2 && self.size_needed == 4 {
+            let is_command = self.data[0] & 0x10 != 0;
+            let field_len = if is_command {
+                match self.data[0] & 0x0F {
+                    0x01 => 0,                                                   // Remove label
+                    0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
+                    _ => 0,
+                }
+            } else {
+                (self.data[0] & 0x0F) + 1
+            };
+            self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
+        }
+
+        if self.data.len() == self.size_needed {
+            let dg = MSCDataGroup::from_bytes(&self.data);
+            self.data.clear();
+            Some(dg)
+        } else {
+            None
+        }
+    }
+
+    /*
     pub fn feed(&mut self, input: &[u8]) -> Option<Vec<u8>> {
         let remaining = self.size_needed.saturating_sub(self.data.len());
         self.data
@@ -145,11 +297,7 @@ impl DLDataGroup {
             None
         }
     }
-
-    fn __feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
-        // TODO: implement feed logic
-        None
-    }
+    */
 }
 
 #[derive(Debug)]
@@ -170,6 +318,20 @@ impl MOTDataGroup {
         self.data.clear();
     }
 
+    fn feed(&mut self, data: &[u8]) -> Option<MSCDataGroup> {
+        let remaining = self.size_needed.saturating_sub(self.data.len());
+        self.data
+            .extend_from_slice(&data[..data.len().min(remaining)]);
+
+        if self.data.len() == self.size_needed {
+            let dg = MSCDataGroup::from_bytes(&self.data);
+            self.data.clear();
+            Some(dg)
+        } else {
+            None
+        }
+    }
+    /*
     fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
         let remaining = self.size_needed.saturating_sub(self.data.len());
         self.data
@@ -183,6 +345,7 @@ impl MOTDataGroup {
             None
         }
     }
+    */
 }
 
 #[derive(Debug)]
@@ -365,8 +528,9 @@ impl PADDecoder {
                     self.dl_dg.init();
                 }
 
-                if let Some(dg_data) = self.dl_dg.feed(&payload) {
-                    // self.dl_decoder.feed(&dg_data);
+                if let Some(dg) = self.dl_dg.feed(&payload) {
+                    // log::debug!("DL DG: {:#?}", dg);
+                    // self.dl_decoder.feed(&dg);
                 }
             }
             12 | 13 => {
@@ -379,9 +543,8 @@ impl PADDecoder {
                     self.next_dg_size = 0;
                 }
 
-                if let Some(dg_data) = self.mot_dg.feed(&payload) {
-                    // log::debug!("MOT Data Group complete: {} bytes", dg_data.len());
-                    self.mot_decoder.feed(&dg_data);
+                if let Some(dg) = self.mot_dg.feed(&payload) {
+                    self.mot_decoder.feed(&dg);
                 }
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),
