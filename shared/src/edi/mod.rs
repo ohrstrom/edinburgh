@@ -4,6 +4,7 @@ mod fic;
 mod frame;
 mod msc;
 mod pad;
+mod tables;
 
 use derivative::Derivative;
 use log;
@@ -86,10 +87,8 @@ impl EDISource {
     pub async fn feed(&mut self, data: &[u8]) {
         match Frame::from_bytes(data) {
             Ok(frame) => {
-
                 for tag in &frame.tags {
                     match tag {
-
                         Tag::DETI(tag) => {
                             if self.ensemble.feed(tag, &self.event_tx).await {
                                 // if let Some(ref callback) = self.on_ensemble_update {

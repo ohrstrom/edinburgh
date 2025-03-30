@@ -224,7 +224,8 @@ impl AACPExctractor {
                     self.audio_format = Some(af);
                 }
                 Err(err) => {
-                    log::warn!("Format error: {} {:?}", self.scid, err);
+                    // NOTE: silenced log for the moment
+                    // log::warn!("Format error: {} {:?}", self.scid, err);
                 }
             }
         }

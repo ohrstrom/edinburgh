@@ -9,7 +9,6 @@ use thiserror::Error;
 use dl::DLDecoder;
 use mot::MOTDecoder;
 
-
 fn parse_mot_header_size(segment: &[u8]) -> Option<usize> {
     let mut i = 1;
 
@@ -195,7 +194,11 @@ impl MSCDataGroup {
                 idx += 2;
             }
 
-            let address_len = dg.length_indicator as usize - if dg.transport_id_flag { 2 } else { 0 };
+            // let address_len = dg.length_indicator as usize - if dg.transport_id_flag { 2 } else { 0 };
+
+            let transport_id_len = if dg.transport_id_flag { 2 } else { 0 };
+            let address_len = (dg.length_indicator as usize).saturating_sub(transport_id_len);
+
             if address_len > 0 && data.len() >= idx + address_len {
                 dg.end_user_addr_field = data[idx..idx + address_len].to_vec();
                 idx += address_len;
