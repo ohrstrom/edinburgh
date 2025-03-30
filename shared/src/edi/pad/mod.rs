@@ -1,5 +1,5 @@
-mod dl;
-mod mot;
+pub mod dl;
+pub mod mot;
 
 use derivative::Derivative;
 use log;

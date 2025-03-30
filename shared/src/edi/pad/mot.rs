@@ -303,7 +303,7 @@ impl MOTDecoder {
                         match obj.content_type {
                             Some(2) => {
                                 let mot_image = MOTImage::new(obj.content_subtype.unwrap_or(0), obj.body.clone());
-                                log::debug!("MOT image: {:?}", mot_image);
+                                // log::debug!("MOT image: {:?}", mot_image);
                             }
                             _ => {
                                 log::warn!("MOT unknown content type: {}", obj.content_type.unwrap_or(0));

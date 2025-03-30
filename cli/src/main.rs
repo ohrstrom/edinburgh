@@ -96,6 +96,9 @@ impl EDIHandler {
                         }
                     }
                 }
+                EDIEvent::MOTImageReceived(m) => {
+                    log::debug!("MOT image received: {:?}", m);
+                }
             }
         }
     }

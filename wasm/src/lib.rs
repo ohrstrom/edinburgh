@@ -79,6 +79,9 @@ impl EDI {
                             // }
                         }
                     }
+                    EDIEvent::MOTImageReceived(m) => {
+                        log::debug!("MOT image received: {:?}", m);
+                    }
                 }
 
                 if let Some(callback) = edi_clone.cb.borrow().as_ref() {
