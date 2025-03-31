@@ -17,6 +17,8 @@ let decoder: AudioDecoder
 const ediHost = ref('edi-ch.digris.net')
 const ediPort = ref(8855)
 
+const imgSrc = ref('')
+
 const numFramesReceived = ref(0)
 const selectedServiceSid = ref(0)
 const selectedScid = ref(0)
@@ -108,6 +110,12 @@ const connect = async () => {
 
     // await processAACSegment(new Uint8Array(aacSegment.data))
   })
+
+  edi.on_mot_image_received(async (motImage) => {
+    console.log('MOT IMAGE:', motImage)
+    imgSrc.value = `data:${motImage.mimetype};base64,${motImage.data}`
+  })
+
 }
 
 
@@ -292,6 +300,9 @@ const selectService = async (sid: number) => {
         <pre v-text="service" />
       </div>
 
+      <div v-if="imgSrc">
+        <img :src="imgSrc" alt="MOT Image" />
+      </div>
 
       <div>
         <div>

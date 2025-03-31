@@ -17,7 +17,7 @@ use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use shared::edi::bus::EDIEvent;
+use shared::edi::bus::{EDIEvent, init_event_bus};
 use shared::edi::{AACPFrame, EDISource};
 
 #[derive(Derivative)]
@@ -97,7 +97,7 @@ impl EDIHandler {
                     }
                 }
                 EDIEvent::MOTImageReceived(m) => {
-                    log::debug!("MOT image received: {:?}", m);
+                    log::debug!("MOT image received: {:?}", m.md5);
                 }
             }
         }
@@ -138,7 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut extractor = EDIFrameExtractor::new();
 
-    let (event_tx, mut event_rx) = unbounded_channel::<EDIEvent>();
+    let event_rx = init_event_bus();
 
     /*
     let audio_decoder = Arc::new(Mutex::new(AudioDecoder::new()));
@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut source = EDISource::new(event_tx, Some(aac_callback));
     */
 
-    let mut source = EDISource::new(args.scid, event_tx, None);
+    let mut source = EDISource::new(args.scid, None);
 
     let event_handler = EDIHandler::new(args.scid, event_rx);
 

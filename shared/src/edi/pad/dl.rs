@@ -3,16 +3,158 @@ use super::MSCDataGroup;
 const DL_LEN_MAX: usize = 8 * 16;
 
 #[derive(Debug)]
-pub struct DLDecoder {}
+pub struct DLObject {
+    pub chars: Vec<u8>,
+    pub charset: u8,
+    seg_count: u8,
+}
+
+impl DLObject {
+    pub fn new() -> Self {
+        Self {
+            chars: Vec::new(),
+            charset: 0,
+            seg_count: 0,
+        }
+    }
+    pub fn decode_label(&self) -> String {
+        let label = &self.chars;
+        match self.charset {
+            0xF => String::from_utf8_lossy(label).to_string(),
+            0x4 => label.iter().map(|&b| b as char).collect(),
+            0x0 => label
+                .iter()
+                .map(|&b| char::from_u32(EBU_LATIN_TO_UNICODE[b as usize] as u32).unwrap_or('?'))
+                .collect(),
+            0x6 => {
+                let mut chars = String::new();
+                for chunk in label.chunks(2) {
+                    if chunk.len() == 2 {
+                        let code = u16::from_be_bytes([chunk[0], chunk[1]]);
+                        if let Some(ch) = char::from_u32(code as u32) {
+                            chars.push(ch);
+                        } else {
+                            chars.push('�');
+                        }
+                    }
+                }
+                chars
+            }
+            _ => "[unsupported charset]".into(),
+        }
+    }
+}
+
+
+
+#[derive(Debug)]
+pub struct DLDecoder {
+    current: DLObject,
+}
 
 impl DLDecoder {
     pub fn new() -> Self {
-        Self {}
+        Self { current: DLObject::new() }
     }
 
-    pub fn feed(&mut self, dg: &MSCDataGroup) {
-        log::debug!("DL DG: {:#?}", dg);
+    pub fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
+
+        if data.len() < 2 {
+            return None;
+        }
+
+
+        let flags = data[0];
+        let num_chars = (flags & 0x0F) + 1;
+        let is_first = flags & 0x40 != 0;
+        let is_last = flags & 0x20 != 0;
+        let toggle = (flags & 0x80) >> 7;
+
+        // let seg_no = (data[1] >> 4) & 0x07;
+        // let charset = (data[1] >> 4) & 0x0F;
+
+        // log::debug!(
+        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
+        //     toggle,
+        //     is_first,
+        //     is_last,
+        //     num_chars,
+        //     data.len(),
+        //     data,
+        // );
+
+        let nibble = (data[1] >> 4) & 0x0F;
+        let (seg_no, charset) = if is_first {
+            (0, Some(nibble)) // charset = full 4 bits
+        } else {
+            (nibble & 0x07, None) // charset not in data
+        };
+
+        if is_first {
+            self.reset();
+            self.current.charset = charset.unwrap_or(0);
+        }
+
+        let start = 2;
+        let end = start + num_chars as usize;
+        if data.len() >= end {
+            self.current.chars.extend_from_slice(&data[start..end]);
+        } else {
+            // log::warn!("DL: segment too short: expected {} bytes, got {}", end, data.len());
+            return None;
+        }
+
+        log::debug!(
+            "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
+            toggle,
+            is_first,
+            is_last,
+            num_chars,
+            data.len(),
+            String::from_utf8_lossy(&data[start..end]),
+        );
+
+
+        // log::debug!("DL current chars: {:?}", self.current.chars.len());
+
+        // log::debug!("🔤 DL UTF-8: {:?}", String::from_utf8_lossy(&self.current.chars));
+
+
+        if is_last {
+            log::debug!("DL: {}", self.current.decode_label());
+            self.reset();
+        }
+
+        // log::debug!("DL: {}", self.current.decode_label());
+
+
+        // log::debug!(
+        //     "DL: first = {} - last = {} - charset = {} - seg_no = {}",
+        //     is_first,
+        //     is_last,
+        //     charset.unwrap_or(0),
+        //     seg_no,
+        // );
+
+        None
+
     }
+
+    pub fn reset(&mut self) {
+        self.current = DLObject::new();
+    }
+
+    /*
+    pub fn feed(&mut self, dg: &MSCDataGroup) {
+
+        let data = &dg.data_field;
+
+        log::debug!("DL: DG: {:?}", dg);
+
+        log::debug!("DL: data: {:?}", data);
+
+    }
+    */
 }
 
 static EBU_LATIN_TO_UNICODE: [u16; 256] = [

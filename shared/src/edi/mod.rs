@@ -1,9 +1,9 @@
 pub mod bus;
+pub mod pad;
 mod ensemble;
 mod fic;
 mod frame;
 mod msc;
-mod pad;
 mod tables;
 
 use derivative::Derivative;
@@ -16,11 +16,6 @@ use ensemble::Ensemble;
 use frame::Frame;
 use frame::Tag;
 
-#[cfg(target_arch = "wasm32")]
-use futures::channel::mpsc::UnboundedSender;
-
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Serialize)]
 pub struct AACPFrame {
@@ -58,7 +53,6 @@ impl EDISubchannel {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct EDISource {
-    event_tx: UnboundedSender<EDIEvent>,
     ensemble: Ensemble,
     subchannels: Vec<EDISubchannel>,
     scid: u8,
@@ -70,11 +64,9 @@ pub struct EDISource {
 impl EDISource {
     pub fn new(
         scid: Option<u8>,
-        event_tx: UnboundedSender<EDIEvent>,
         on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
     ) -> Self {
         EDISource {
-            event_tx,
             ensemble: Ensemble::new(),
             subchannels: Vec::new(),
             // scid: scid.unwrap_or(0),
@@ -90,7 +82,7 @@ impl EDISource {
                 for tag in &frame.tags {
                     match tag {
                         Tag::DETI(tag) => {
-                            if self.ensemble.feed(tag, &self.event_tx).await {
+                            if self.ensemble.feed(tag).await {
                                 // if let Some(ref callback) = self.on_ensemble_update {
                                 //     let _ = callback.call1(&self.ensemble).ok();
                                 // }
@@ -107,7 +99,8 @@ impl EDISource {
                             let sc = match self.subchannels.iter_mut().find(|x| x.scid == scid) {
                                 Some(sc) => sc,
                                 None => {
-                                    let sc = EDISubchannel::new(scid);
+                                    let mut sc = EDISubchannel::new(scid);
+                                    sc.audio_extractor.extract_pad = self.scid == scid;
                                     self.subchannels.push(sc);
                                     self.subchannels.last_mut().unwrap()
                                 }
@@ -115,7 +108,7 @@ impl EDISource {
 
                             match sc
                                 .audio_extractor
-                                .feed(&slice_data, slice_len, &self.event_tx)
+                                .feed(&slice_data, slice_len)
                                 .await
                             {
                                 Ok(FeedResult::Complete(r)) => {

@@ -1,18 +1,18 @@
 use super::MSCDataGroup;
+use crate::edi::bus::{EDIEvent, emit_event};
 use derivative::Derivative;
-use log::debug;
 use md5::{compute, Digest};
 use base64;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct MOTImage {
-    mimetype: String,
+    pub mimetype: String,
     #[serde(serialize_with = "MOTImage::serialize_md5")]
-    md5: [u8; 16],
-    len: usize,
+    pub md5: [u8; 16],
+    pub len: usize,
     #[serde(serialize_with = "MOTImage::serialize_data")]
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl MOTImage {
@@ -304,6 +304,7 @@ impl MOTDecoder {
                             Some(2) => {
                                 let mot_image = MOTImage::new(obj.content_subtype.unwrap_or(0), obj.body.clone());
                                 // log::debug!("MOT image: {:?}", mot_image);
+                                emit_event(EDIEvent::MOTImageReceived(mot_image));
                             }
                             _ => {
                                 log::warn!("MOT unknown content type: {}", obj.content_type.unwrap_or(0));

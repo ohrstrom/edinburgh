@@ -1,16 +1,10 @@
-// use futures::channel::mpsc::UnboundedSender;
 use log;
 use serde::Serialize;
 
-use super::bus::EDIEvent;
+use super::bus::{EDIEvent, emit_event};
 use super::fic::FIG;
 use super::frame::DETITag;
 
-#[cfg(target_arch = "wasm32")]
-use futures::channel::mpsc::UnboundedSender;
-
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Service {
@@ -50,7 +44,7 @@ impl Ensemble {
             services: Vec::new(),
         }
     }
-    pub async fn feed(&mut self, tag: &DETITag, event_tx: &UnboundedSender<EDIEvent>) -> bool {
+    pub async fn feed(&mut self, tag: &DETITag) -> bool {
         // log::debug!("Ensemble::feed: {:?}", tag);
 
         let mut updated = false;
@@ -169,13 +163,7 @@ impl Ensemble {
         }
 
         if updated {
-            // log::debug!("Ensemble updated (local): {:?}", self);
-
-            #[cfg(target_arch = "wasm32")]
-            let _ = event_tx.unbounded_send(EDIEvent::EnsembleUpdated(self.clone()));
-
-            #[cfg(not(target_arch = "wasm32"))]
-            let _ = event_tx.send(EDIEvent::EnsembleUpdated(self.clone()));
+            emit_event(EDIEvent::EnsembleUpdated(self.clone()));
         }
 
         updated

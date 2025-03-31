@@ -214,6 +214,8 @@ impl MSCDataGroup {
             //       they contain segmentation metadata.
 
             dg.data_field = data[idx..idx + data_field_len].to_vec();
+        } else {
+            log::warn!("MSCDataGroup: Not enough data for data field");
         }
 
         dg.is_valid = true; // NOTE: this should be checked ;)
@@ -242,6 +244,48 @@ impl DLDataGroup {
         self.data.clear();
     }
 
+    pub fn feed(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
+        self.data.extend_from_slice(payload);
+
+        let last = payload[0] & 0x20 != 0;
+
+        // log::debug!("DLDataGroup: last = {}", last);
+
+        if last {
+            let mut complete = Vec::new();
+            std::mem::swap(&mut complete, &mut self.data);
+            Some(complete)
+        } else {
+            None
+        }
+
+        // once we have the 2-byte header, compute actual size
+        // if self.data.len() >= 2 && self.size_needed == 4 {
+        //     let is_command = self.data[0] & 0x10 != 0;
+        //     let field_len = if is_command {
+        //         match self.data[0] & 0x0F {
+        //             0x01 => 0,                                                   // Remove label
+        //             0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
+        //             _ => 0,
+        //         }
+        //     } else {
+        //         (self.data[0] & 0x0F) + 1
+        //     };
+        //     self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
+        // }
+
+        // None
+
+        // if self.data.len() == self.size_needed {
+        //     let mut complete = Vec::new();
+        //     std::mem::swap(&mut complete, &mut self.data);
+        //     Some(complete)
+        // } else {
+        //     None
+        // }
+    }
+
+    /*
     pub fn feed(&mut self, input: &[u8]) -> Option<MSCDataGroup> {
         let remaining = self.size_needed.saturating_sub(self.data.len());
         self.data
@@ -266,36 +310,6 @@ impl DLDataGroup {
             let dg = MSCDataGroup::from_bytes(&self.data);
             self.data.clear();
             Some(dg)
-        } else {
-            None
-        }
-    }
-
-    /*
-    pub fn feed(&mut self, input: &[u8]) -> Option<Vec<u8>> {
-        let remaining = self.size_needed.saturating_sub(self.data.len());
-        self.data
-            .extend_from_slice(&input[..input.len().min(remaining)]);
-
-        // once we have the 2-byte header, compute actual size
-        if self.data.len() >= 2 && self.size_needed == 4 {
-            let is_command = self.data[0] & 0x10 != 0;
-            let field_len = if is_command {
-                match self.data[0] & 0x0F {
-                    0x01 => 0,                                                   // Remove label
-                    0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
-                    _ => 0,
-                }
-            } else {
-                (self.data[0] & 0x0F) + 1
-            };
-            self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
-        }
-
-        if self.data.len() == self.size_needed {
-            let mut complete = Vec::new();
-            std::mem::swap(&mut complete, &mut self.data);
-            Some(complete)
         } else {
             None
         }
@@ -334,33 +348,15 @@ impl MOTDataGroup {
             None
         }
     }
-    /*
-    fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
-        let remaining = self.size_needed.saturating_sub(self.data.len());
-        self.data
-            .extend_from_slice(&data[..data.len().min(remaining)]);
-
-        if self.data.len() == self.size_needed {
-            let mut dg = Vec::new();
-            std::mem::swap(&mut self.data, &mut dg);
-            Some(dg)
-        } else {
-            None
-        }
-    }
-    */
 }
 
 #[derive(Debug)]
 pub struct PADDecoder {
     scid: u8,
     last_xpad_ci: Option<XPADCI>,
-    //
     next_dg_size: usize,
-    //
     dl_dg: DLDataGroup,
     mot_dg: MOTDataGroup,
-    //
     dl_decoder: DLDecoder,
     mot_decoder: MOTDecoder,
 }
@@ -370,12 +366,9 @@ impl PADDecoder {
         Self {
             scid,
             last_xpad_ci: None,
-            //
             next_dg_size: 0,
-            //
             dl_dg: DLDataGroup::new(),
             mot_dg: MOTDataGroup::new(),
-            //
             dl_decoder: DLDecoder::new(),
             mot_decoder: MOTDecoder::new(),
         }
@@ -460,7 +453,7 @@ impl PADDecoder {
         // Set up last_xpad_ci for continuation next time:
         if let Some(kind) = ci_kind_continued {
             self.last_xpad_ci = Some(XPADCI {
-                kind: kind,
+                kind,
                 len: announced_len,
             });
             // log::debug!("Updated last_xpad_ci: type={}, len={}", kindcont, announced_len);
@@ -523,17 +516,30 @@ impl PADDecoder {
                 self.next_dg_size = dg_size as usize;
             }
             2 | 3 => {
+                // log::debug!("CI: kind: {} - {} bytes - data: {:?}", ci.kind, ci.len, payload);
+
+                /*
                 let is_start = ci.kind == 2 && !is_continuation;
 
-                // log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
-
                 if is_start && self.dl_dg.data.is_empty() {
+                    log::debug!("DG: init");
+                    self.dl_dg.init();
+                }
+                */
+
+                // let is_start = ci.kind == 2 && !is_continuation;
+                let is_start = ci.kind == 2;
+
+                if is_start {
+                    // log::debug!("DG: init");
                     self.dl_dg.init();
                 }
 
-                if let Some(dg) = self.dl_dg.feed(&payload) {
-                    // log::debug!("DL DG: {:#?}", dg);
-                    // self.dl_decoder.feed(&dg);
+                if let Some(data) = self.dl_dg.feed(&payload) {
+                    // log::debug!("DL DATA: {:#?}", data);
+                    // log::debug!("DG: parsed feed {} bytes - data: {:?}", data.len(), data);
+                    // log::debug!("🔤 DL UTF-8 (try): {:?}", String::from_utf8_lossy(&data));
+                    self.dl_decoder.feed(&data);
                 }
             }
             12 | 13 => {
@@ -547,7 +553,7 @@ impl PADDecoder {
                 }
 
                 if let Some(dg) = self.mot_dg.feed(&payload) {
-                    self.mot_decoder.feed(&dg);
+                    // self.mot_decoder.feed(&dg);
                 }
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),

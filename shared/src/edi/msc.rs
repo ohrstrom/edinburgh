@@ -1,15 +1,11 @@
-use super::bus::EDIEvent;
+use super::bus::{EDIEvent, emit_event};
 use super::pad::PADDecoder;
 use crate::utils;
 use derivative::Derivative;
 use log;
 use thiserror::Error;
-
-#[cfg(target_arch = "wasm32")]
-use futures::channel::mpsc::UnboundedSender;
 use serde::Serialize;
-#[cfg(not(target_arch = "wasm32"))]
-use tokio::sync::mpsc::UnboundedSender;
+
 
 const FPAD_LEN: usize = 2;
 
@@ -134,6 +130,8 @@ pub struct AACPExctractor {
     audio_format: Option<AudioFormat>,
     au_frames: Vec<Vec<u8>>,
     pad_decoder: PADDecoder,
+    //
+    pub extract_pad: bool,
 }
 
 impl AACPExctractor {
@@ -151,13 +149,14 @@ impl AACPExctractor {
             audio_format: None,
             au_frames: Vec::new(),
             pad_decoder: PADDecoder::new(scid),
+            //
+            extract_pad: false,
         }
     }
     pub async fn feed(
         &mut self,
         data: &[u8],
         f_len: usize,
-        event_tx: &UnboundedSender<EDIEvent>,
     ) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
 
@@ -247,7 +246,16 @@ impl AACPExctractor {
             self.au_frames.push(au_data[..au_len - 2].to_vec());
 
             // check for PAD data. locked to SCID 6 (edi-ch.digris.net:8855 0x4DA4 open broadcast)
+            /*
             if self.scid == 6 {
+                let pad = Self::extract_pad(&au_data[..au_len - 2]);
+                if let Some(pad) = pad {
+                    self.pad_decoder.feed(&pad.fpad, &pad.xpad);
+                }
+            }
+            */
+
+            if self.extract_pad {
                 let pad = Self::extract_pad(&au_data[..au_len - 2]);
                 if let Some(pad) = pad {
                     self.pad_decoder.feed(&pad.fpad, &pad.xpad);
@@ -259,11 +267,7 @@ impl AACPExctractor {
 
         let result: AACPResult = AACPResult::new(self.scid, self.au_frames.clone());
 
-        #[cfg(target_arch = "wasm32")]
-        let _ = event_tx.unbounded_send(EDIEvent::AACPFramesExtracted(result.clone()));
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let _ = event_tx.send(EDIEvent::AACPFramesExtracted(result.clone()));
+        emit_event(EDIEvent::AACPFramesExtracted(result.clone()));
 
         self.au_frames.clear();
 
@@ -329,7 +333,7 @@ impl AACPExctractor {
         return true;
     }
 
-    fn extract_pad(au_data: &[u8]) -> Option<(PADResult)> {
+    fn extract_pad(au_data: &[u8]) -> Option<PADResult> {
         if au_data.len() < 3 {
             return None;
         }

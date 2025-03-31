@@ -14,13 +14,12 @@ use web_sys::js_sys;
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
 
-use futures::channel::mpsc::unbounded;
 use futures::StreamExt;
 
 use console_log;
 
 use shared::utils;
-use shared::edi::bus::EDIEvent;
+use shared::edi::bus::{EDIEvent, init_event_bus};
 use shared::edi::EDISource;
 
 #[derive(Clone)]
@@ -30,6 +29,7 @@ pub struct EDI {
     cb: Rc<RefCell<Option<js_sys::Function>>>,
     on_ensemble_update_cb: Rc<RefCell<Option<js_sys::Function>>>,
     on_aac_segment_cb: Rc<RefCell<Option<js_sys::Function>>>,
+    on_mot_image_received_cb: Rc<RefCell<Option<js_sys::Function>>>,
 }
 
 #[wasm_bindgen]
@@ -39,20 +39,22 @@ impl EDI {
         utils::set_panic_hook();
         let _ = console_log::init_with_level(Level::Debug);
 
-        let (event_tx, mut event_rx) = unbounded::<EDIEvent>();
+        let mut event_rx = init_event_bus();
         log::info!("EDI:init");
 
-        let edi_source = Rc::new(RefCell::new(EDISource::new(None, event_tx, None)));
+        let edi_source = Rc::new(RefCell::new(EDISource::new(None, None)));
 
         let cb = Rc::new(RefCell::new(None));
         let on_ensemble_update_cb = Rc::new(RefCell::new(None));
         let on_aac_segment_cb = Rc::new(RefCell::new(None));
+        let on_mot_image_received_cb = Rc::new(RefCell::new(None));
 
         let edi = EDI {
             inner: edi_source,
             cb: Rc::clone(&cb),
             on_ensemble_update_cb: Rc::clone(&on_ensemble_update_cb),
             on_aac_segment_cb: Rc::clone(&on_aac_segment_cb),
+            on_mot_image_received_cb: Rc::clone(&on_mot_image_received_cb),
         };
 
         // Clone the edi instance for the async task.
@@ -73,14 +75,15 @@ impl EDI {
                             let this = JsValue::NULL;
                             let event_data = to_value(&r).unwrap();
                             cb.call1(&this, &event_data).unwrap();
-                            // for frame in &r.frames {
-                            //     let event_data = to_value(&frame).unwrap();
-                            //     cb.call1(&this, &event_data).unwrap();
-                            // }
                         }
                     }
                     EDIEvent::MOTImageReceived(m) => {
-                        log::debug!("MOT image received: {:?}", m);
+                        log::debug!("MOT image received: {:?}", m.md5);
+                        if let Some(cb) = edi_clone.on_mot_image_received_cb.borrow().as_ref() {
+                            let this = JsValue::NULL;
+                            let event_data = to_value(&m).unwrap();
+                            cb.call1(&this, &event_data).unwrap();
+                        }
                     }
                 }
 
@@ -116,5 +119,10 @@ impl EDI {
     #[wasm_bindgen]
     pub fn on_aac_segment(&self, callback: js_sys::Function) {
         *self.on_aac_segment_cb.borrow_mut() = Some(callback);
+    }
+
+    #[wasm_bindgen]
+    pub fn on_mot_image_received(&self, callback: js_sys::Function) {
+        *self.on_mot_image_received_cb.borrow_mut() = Some(callback);
     }
 }
