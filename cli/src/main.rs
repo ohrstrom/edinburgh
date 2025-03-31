@@ -98,10 +98,10 @@ impl EDIHandler {
                     }
                 }
                 EDIEvent::MOTImageReceived(m) => {
-                    // log::debug!("MOT image received: {:?}", m.md5);
+                    log::debug!("MOT image received: {:?}", m.scid);
                 }
                 EDIEvent::DLObjectReceived(d) => {
-                    // log::debug!("DL obj received: {:?}", d);
+                    log::debug!("DL obj received: {:?}", d.scid);
                 }
             }
         }

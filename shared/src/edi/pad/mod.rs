@@ -326,8 +326,8 @@ impl PADDecoder {
             next_dg_size: 0,
             dl_dg: DLDataGroup::new(),
             mot_dg: MOTDataGroup::new(),
-            dl_decoder: DLDecoder::new(),
-            mot_decoder: MOTDecoder::new(),
+            dl_decoder: DLDecoder::new(scid),
+            mot_decoder: MOTDecoder::new(scid),
         }
     }
     pub fn feed(&mut self, fpad_bytes: &[u8], xpad_bytes: &[u8]) {

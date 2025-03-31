@@ -100,6 +100,10 @@ impl Frame {
             // tags i guess we don't care
             "*ptr" => Ok(Tag::PTR(PTRTag())),
             "*dmy" => Ok(Tag::DMY(DMYTag())),
+            // tags i don't know what they are...
+            "Fsst" => Ok(Tag::FSST(FSSTTag {})),
+            "Fptt" => Ok(Tag::FPTT(FPTTTag {})),
+            "Fsid" => Ok(Tag::FSID(FSIDTag {})),
             _ => Err(TagError::Unsupported {
                 name: kind.to_string(),
             }),
@@ -123,6 +127,10 @@ pub enum Tag {
     //
     PTR(PTRTag),
     DMY(DMYTag),
+    //
+    FSST(FSSTTag),
+    FPTT(FPTTTag),
+    FSID(FSIDTag),
 }
 
 // tags i don't think we have to care about
@@ -227,3 +235,13 @@ impl ESTTag {
         Ok(Self { len, header, value })
     }
 }
+
+// some tags seen on sat2edi - don't know what do do with them...
+#[derive(Debug, Serialize)]
+pub struct FSSTTag {}
+
+#[derive(Debug, Serialize)]
+pub struct FPTTTag {}
+
+#[derive(Debug, Serialize)]
+pub struct FSIDTag {}

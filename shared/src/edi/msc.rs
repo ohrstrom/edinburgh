@@ -255,12 +255,12 @@ impl AACPExctractor {
             // }
 
 
-            if self.extract_pad {
+            // if self.extract_pad {
                 let pad = Self::extract_pad(&au_data[..au_len - 2]);
                 if let Some(pad) = pad {
                     self.pad_decoder.feed(&pad.fpad, &pad.xpad);
                 }
-            }
+            // }
         }
 
         self.f_count = 0;

@@ -131,7 +131,14 @@ impl EDISource {
 
                         // ignored tags
                         Tag::PTR(_tag) => {}
-                        Tag::DMY(_tag) => {} // unknown / unsupported tags
+                        Tag::DMY(_tag) => {}
+
+                        // unknown tags
+                        Tag::FSST(_tag) => {}
+                        Tag::FPTT(_tag) => {}
+                        Tag::FSID(_tag) => {}
+
+                        // unsupported tags
                                              /*
                                              tag => {
                                                  log::warn!("Unsupported tag: {:?}", tag);

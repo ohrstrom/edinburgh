@@ -7,6 +7,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct MOTImage {
+    pub scid: u8,
     pub mimetype: String,
     #[serde(serialize_with = "MOTImage::serialize_md5")]
     pub md5: [u8; 16],
@@ -16,7 +17,7 @@ pub struct MOTImage {
 }
 
 impl MOTImage {
-    pub fn new(kind: u16, data: Vec<u8>) -> Self {
+    pub fn new(scid: u8, kind: u16, data: Vec<u8>) -> Self {
         let mimetype = match kind {
             1 => "image/jpeg",
             3 => "image/png",
@@ -30,6 +31,7 @@ impl MOTImage {
         let hash = compute(&data).into();
 
         Self {
+            scid,
             mimetype,
             md5: hash,
             len: data.len(),
@@ -54,6 +56,7 @@ impl MOTImage {
 
 #[derive(Debug)]
 pub struct MOTObject {
+    scid: u8,
     // raw values
     pub transport_id: u16,
     pub header: Vec<u8>,
@@ -71,8 +74,9 @@ pub struct MOTObject {
 }
 
 impl MOTObject {
-    pub fn new(transport_id: u16) -> Self {
+    pub fn new(scid: u8, transport_id: u16) -> Self {
         Self {
+            scid,
             transport_id,
             header: Vec::new(),
             body: Vec::new(),
@@ -234,12 +238,13 @@ impl MOTObject {
 
 #[derive(Debug)]
 pub struct MOTDecoder {
+    scid: u8,
     pub current: Option<MOTObject>,
 }
 
 impl MOTDecoder {
-    pub fn new() -> Self {
-        Self { current: None }
+    pub fn new(scid: u8) -> Self {
+        Self { scid, current: None }
     }
     pub fn feed(&mut self, dg: &MSCDataGroup) {
         if !dg.is_valid || !dg.segment_flag {
@@ -264,7 +269,7 @@ impl MOTDecoder {
                 // Start new MOT object on header
                 log::debug!("MOT: header: {} bytes", data.len());
 
-                let mut obj = MOTObject::new(transport_id);
+                let mut obj = MOTObject::new(self.scid, transport_id);
                 obj.header.extend_from_slice(data);
                 obj.header_complete = dg.last_flag;
 
@@ -302,7 +307,7 @@ impl MOTDecoder {
 
                         match obj.content_type {
                             Some(2) => {
-                                let mot_image = MOTImage::new(obj.content_subtype.unwrap_or(0), obj.body.clone());
+                                let mot_image = MOTImage::new(self.scid, obj.content_subtype.unwrap_or(0), obj.body.clone());
                                 // log::debug!("MOT image: {:?}", mot_image);
                                 emit_event(EDIEvent::MOTImageReceived(mot_image));
                             }

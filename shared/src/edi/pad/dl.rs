@@ -1,5 +1,6 @@
 use super::MSCDataGroup;
 use crate::edi::bus::{EDIEvent, emit_event};
+use std::fmt;
 use derivative::Derivative;
 use serde::{Serialize, Serializer, ser::SerializeStruct};
 
@@ -22,6 +23,7 @@ fn decode_chars(chars: &[u8], charset: u8) -> String {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct DLObject {
+    pub scid: u8,
     toggle: u8,
     #[derivative(Debug = "ignore")]
     chars: Vec<u8>,
@@ -31,17 +33,32 @@ pub struct DLObject {
 }
 
 impl DLObject {
-    pub fn new() -> Self {
+    pub fn new(scid: u8, toggle: u8, charset: u8) -> Self {
         Self {
-            toggle: 2,
+            scid,
+            toggle,
+            charset,
             chars: Vec::new(),
-            charset: 0,
             dl_plus_tags: Vec::new(),
             seg_count: 0,
         }
     }
     pub fn decode_label(&self) -> String {
         decode_chars(&self.chars, self.charset)
+    }
+    pub fn get_dl_plus(&self) -> Vec<(DLPlusContentType, String)> {
+        let label = self.decode_label();
+        let label_chars: Vec<char> = label.chars().collect();
+
+        self.dl_plus_tags
+            .iter()
+            .map(|tag| {
+                let start = tag.start as usize;
+                let end = (start + tag.len as usize).min(label_chars.len());
+                let slice: String = label_chars[start..end].iter().collect();
+                (DLPlusContentType::from(tag.kind), slice)
+            })
+            .collect()
     }
 }
 
@@ -51,10 +68,21 @@ impl Serialize for DLObject {
         S: Serializer,
     {
         let mut s = serializer.serialize_struct("DLObject", 5)?;
+        s.serialize_field("scid", &self.scid)?;
         s.serialize_field("charset", &self.charset)?;
         s.serialize_field("dl_plus_tags", &self.dl_plus_tags)?;
+
         // derived fields
         s.serialize_field("label", &self.decode_label())?;
+
+        let dl_plus: std::collections::HashMap<_, _> = self
+            .get_dl_plus()
+            .into_iter()
+            .map(|(kind, text)| (format!("{:?}", kind), text))
+            .collect();
+
+        s.serialize_field("dl_plus", &dl_plus)?;
+
         s.end()
     }
 }
@@ -77,17 +105,52 @@ impl DLPlusTag {
     }
 }
 
+#[derive(Debug, Serialize, Clone, Copy)]
+#[repr(u8)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DLPlusContentType {
+    ItemTitle = 1,
+    ItemArtist = 4,
+    ItemAlbum = 2,
+    // TODO: complete options...
+    Unknown(u8),
+}
+
+impl From<u8> for DLPlusContentType {
+    fn from(value: u8) -> Self {
+        match value {
+            1 => DLPlusContentType::ItemTitle,
+            2 => DLPlusContentType::ItemAlbum,
+            4 => DLPlusContentType::ItemArtist,
+            _ => DLPlusContentType::Unknown(value),
+        }
+    }
+}
+
+impl fmt::Display for DLPlusContentType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DLPlusContentType::ItemTitle => write!(f, "ITEM_TITLE"),
+            DLPlusContentType::ItemArtist => write!(f, "ITEM_ARTIST"),
+            DLPlusContentType::ItemAlbum => write!(f, "ITEM_ALBUM"),
+            DLPlusContentType::Unknown(v) => write!(f, "UNKNOWN_{}", v),
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct DLDecoder {
-    current: DLObject,
+    scid: u8,
+    current: Option<DLObject>,
     last_toggle: Option<u8>,
 }
 
 impl DLDecoder {
-    pub fn new() -> Self {
+    pub fn new(scid: u8) -> Self {
         Self {
-            current: DLObject::new(),
+            scid,
+            current: None,
             last_toggle: None,
         }
     }
@@ -104,25 +167,10 @@ impl DLDecoder {
         let is_last = flags & 0x20 != 0;
         let toggle = (flags & 0x80) >> 7;
 
-        // log::debug!("DL: toggle {} - last: {}", toggle, is_last);
-
-        // let seg_no = (data[1] >> 4) & 0x07;
-        // let charset = (data[1] >> 4) & 0x0F;
-
-        // log::debug!(
-        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
-        //     toggle,
-        //     is_first,
-        //     is_last,
-        //     num_chars,
-        //     data.len(),
-        //     data,
-        // );
-
         match (data[0] & 0x10 != 0, data[0] & 0x0F) {
             (true, 0b0001) => {
                 log::debug!("Clear display command");
-                // reset display here
+                // TODO: implement reset
             }
             (true, 0b0010) => {
 
@@ -138,7 +186,7 @@ impl DLDecoder {
 
                 self.parse_dl_plus(&data[2..]);
 
-                // handle DL+ command
+                // do not continue on DL+ command
                 return None
             }
             (true, _) => {
@@ -160,14 +208,18 @@ impl DLDecoder {
 
         if is_first {
             self.flush();
-            self.current.toggle = toggle;
-            self.current.charset = charset.unwrap_or(0);
+
+            self.current = Some(DLObject::new(self.scid, toggle, charset.unwrap_or(0)));
+
         }
 
         let start = 2;
         let end = start + num_chars as usize;
         if data.len() >= end {
-            self.current.chars.extend_from_slice(&data[start..end]);
+            // self.current.chars.extend_from_slice(&data[start..end]);
+            if let Some(current) = self.current.as_mut() {
+                current.chars.extend_from_slice(&data[start..end]);
+            }
         } else {
             log::warn!("DL: segment too short: expected {} bytes, got {}", end, data.len());
             return None;
@@ -230,8 +282,9 @@ impl DLDecoder {
         let it_running = (data[0] >> 2) & 0x01;
         let num_tags = (data[0] & 0x03) + 1;
 
-        // log::debug!("DL+: CID = {}, CB = {}, tags = {}", cid, cb, num_tags);
+        // log::debug!("DL+: CID = {}, CB = {}, tags = {} # {} bytes", cid, cb, num_tags, data.len());
 
+        // if data.len() < 0 + num_tags as usize * 3 {
         if data.len() < 1 + num_tags as usize * 3 {
             log::warn!("DL+: unexpected length, expected at least {}", 1 + num_tags * 3);
             return;
@@ -253,7 +306,9 @@ impl DLDecoder {
             //     "DL+ tag: {:?}", tag
             // );
 
-            self.current.dl_plus_tags.push(tag);
+            if let Some(current) = self.current.as_mut() {
+                current.dl_plus_tags.push(tag);
+            }
 
         }
 
@@ -261,6 +316,23 @@ impl DLDecoder {
 
     }
 
+    pub fn flush(&mut self) {
+        if let Some(current) = self.current.take() {
+            if !current.chars.is_empty() && self.last_toggle != Some(current.toggle) {
+                log::debug!("DL: {} - {:?}", current.decode_label(), current);
+
+                // log::debug!("{:?}", current.get_dl_plus());
+
+                // let json = serde_json::to_string_pretty(&current).unwrap();
+                // println!("{}", json);
+
+                emit_event(EDIEvent::DLObjectReceived(current.clone()));
+                self.last_toggle = Some(current.toggle);
+            }
+        }
+    }
+
+    /*
     pub fn flush(&mut self) {
 
         if !self.current.chars.is_empty() {
@@ -277,8 +349,9 @@ impl DLDecoder {
 
         }
 
-        self.current = DLObject::new();
+        self.current = None;
     }
+    */
 
     /*
     pub fn feed(&mut self, dg: &MSCDataGroup) {
