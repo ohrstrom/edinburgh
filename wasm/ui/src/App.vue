@@ -116,6 +116,10 @@ const connect = async () => {
     imgSrc.value = `data:${motImage.mimetype};base64,${motImage.data}`
   })
 
+  edi.on_dl_object_received(async (dlObj) => {
+    console.log('DL OBJ:', dlObj)
+  })
+
 }
 
 

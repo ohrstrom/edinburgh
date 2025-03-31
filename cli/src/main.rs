@@ -2,6 +2,7 @@ mod edi_frame_extractor;
 
 use shared::utils;
 
+
 use colog;
 use log;
 use std::io;
@@ -97,7 +98,10 @@ impl EDIHandler {
                     }
                 }
                 EDIEvent::MOTImageReceived(m) => {
-                    log::debug!("MOT image received: {:?}", m.md5);
+                    // log::debug!("MOT image received: {:?}", m.md5);
+                }
+                EDIEvent::DLObjectReceived(d) => {
+                    // log::debug!("DL obj received: {:?}", d);
                 }
             }
         }

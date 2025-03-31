@@ -203,7 +203,8 @@ impl DETITag {
     }
 }
 
-#[derive(Derivative, Debug, Serialize)]
+#[derive(Derivative, Serialize)]
+#[derivative(Debug)]
 pub struct ESTTag {
     pub len: usize,
     pub header: Vec<u8>,

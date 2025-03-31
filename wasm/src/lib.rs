@@ -30,6 +30,7 @@ pub struct EDI {
     on_ensemble_update_cb: Rc<RefCell<Option<js_sys::Function>>>,
     on_aac_segment_cb: Rc<RefCell<Option<js_sys::Function>>>,
     on_mot_image_received_cb: Rc<RefCell<Option<js_sys::Function>>>,
+    on_dl_object_received_cb: Rc<RefCell<Option<js_sys::Function>>>,
 }
 
 #[wasm_bindgen]
@@ -48,6 +49,7 @@ impl EDI {
         let on_ensemble_update_cb = Rc::new(RefCell::new(None));
         let on_aac_segment_cb = Rc::new(RefCell::new(None));
         let on_mot_image_received_cb = Rc::new(RefCell::new(None));
+        let on_dl_object_received_cb = Rc::new(RefCell::new(None));
 
         let edi = EDI {
             inner: edi_source,
@@ -55,6 +57,7 @@ impl EDI {
             on_ensemble_update_cb: Rc::clone(&on_ensemble_update_cb),
             on_aac_segment_cb: Rc::clone(&on_aac_segment_cb),
             on_mot_image_received_cb: Rc::clone(&on_mot_image_received_cb),
+            on_dl_object_received_cb: Rc::clone(&on_dl_object_received_cb),
         };
 
         // Clone the edi instance for the async task.
@@ -82,6 +85,14 @@ impl EDI {
                         if let Some(cb) = edi_clone.on_mot_image_received_cb.borrow().as_ref() {
                             let this = JsValue::NULL;
                             let event_data = to_value(&m).unwrap();
+                            cb.call1(&this, &event_data).unwrap();
+                        }
+                    }
+                    EDIEvent::DLObjectReceived(d) => {
+                        log::debug!("DL obj received: {:?}", d);
+                        if let Some(cb) = edi_clone.on_dl_object_received_cb.borrow().as_ref() {
+                            let this = JsValue::NULL;
+                            let event_data = to_value(&d).unwrap();
                             cb.call1(&this, &event_data).unwrap();
                         }
                     }
@@ -124,5 +135,10 @@ impl EDI {
     #[wasm_bindgen]
     pub fn on_mot_image_received(&self, callback: js_sys::Function) {
         *self.on_mot_image_received_cb.borrow_mut() = Some(callback);
+    }
+
+    #[wasm_bindgen]
+    pub fn on_dl_object_received(&self, callback: js_sys::Function) {
+        *self.on_dl_object_received_cb.borrow_mut() = Some(callback);
     }
 }

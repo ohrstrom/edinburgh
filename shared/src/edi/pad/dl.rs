@@ -1,18 +1,39 @@
 use super::MSCDataGroup;
+use crate::edi::bus::{EDIEvent, emit_event};
+use derivative::Derivative;
+use serde::{Serialize, Serializer, ser::SerializeStruct};
 
 const DL_LEN_MAX: usize = 8 * 16;
 
-#[derive(Debug)]
+
+fn decode_chars(chars: &[u8], charset: u8) -> String {
+    match charset {
+        0xF => String::from_utf8_lossy(chars).to_string(),
+        0x4 => chars.iter().map(|&b| b as char).collect(),
+        0x0 => chars
+            .iter()
+            .map(|&b| char::from_u32(EBU_LATIN_TO_UNICODE[b as usize] as u32).unwrap_or('?'))
+            .collect(),
+        _ => "[unsupported charset]".into(),
+    }
+}
+
+
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub struct DLObject {
-    pub chars: Vec<u8>,
-    pub charset: u8,
-    pub dl_plus_tags: Vec<DLPlusTag>,
+    toggle: u8,
+    #[derivative(Debug = "ignore")]
+    chars: Vec<u8>,
+    charset: u8,
+    dl_plus_tags: Vec<DLPlusTag>,
     seg_count: u8,
 }
 
 impl DLObject {
     pub fn new() -> Self {
         Self {
+            toggle: 2,
             chars: Vec::new(),
             charset: 0,
             dl_plus_tags: Vec::new(),
@@ -20,21 +41,26 @@ impl DLObject {
         }
     }
     pub fn decode_label(&self) -> String {
-        let label = &self.chars;
-        match self.charset {
-            0xF => String::from_utf8_lossy(label).to_string(),
-            0x4 => label.iter().map(|&b| b as char).collect(),
-            0x0 => label
-                .iter()
-                .map(|&b| char::from_u32(EBU_LATIN_TO_UNICODE[b as usize] as u32).unwrap_or('?'))
-                .collect(),
-            _ => "[unsupported charset]".into(),
-        }
+        decode_chars(&self.chars, self.charset)
+    }
+}
+
+impl Serialize for DLObject {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("DLObject", 5)?;
+        s.serialize_field("charset", &self.charset)?;
+        s.serialize_field("dl_plus_tags", &self.dl_plus_tags)?;
+        // derived fields
+        s.serialize_field("label", &self.decode_label())?;
+        s.end()
     }
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Clone)]
 pub struct DLPlusTag {
     pub kind: u8,
     pub start: u8,
@@ -55,22 +81,15 @@ impl DLPlusTag {
 #[derive(Debug)]
 pub struct DLDecoder {
     current: DLObject,
+    last_toggle: Option<u8>,
 }
 
 impl DLDecoder {
     pub fn new() -> Self {
-        Self { current: DLObject::new() }
-    }
-
-    pub fn __feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
-
-        log::debug!(
-            "RAW: {:?}",
-            String::from_utf8_lossy(&data[2..]),
-        );
-
-
-        None
+        Self {
+            current: DLObject::new(),
+            last_toggle: None,
+        }
     }
 
     pub fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
@@ -78,7 +97,6 @@ impl DLDecoder {
         if data.len() < 2 {
             return None;
         }
-
 
         let flags = data[0];
         let num_chars = (flags & 0x0F) + 1;
@@ -138,8 +156,11 @@ impl DLDecoder {
             (nibble & 0x07, None) // charset not in data
         };
 
+        // log::debug!("DL: seg = {}", seg_no);
+
         if is_first {
             self.flush();
+            self.current.toggle = toggle;
             self.current.charset = charset.unwrap_or(0);
         }
 
@@ -148,7 +169,7 @@ impl DLDecoder {
         if data.len() >= end {
             self.current.chars.extend_from_slice(&data[start..end]);
         } else {
-            // log::warn!("DL: segment too short: expected {} bytes, got {}", end, data.len());
+            log::warn!("DL: segment too short: expected {} bytes, got {}", end, data.len());
             return None;
         }
 
@@ -243,7 +264,17 @@ impl DLDecoder {
     pub fn flush(&mut self) {
 
         if !self.current.chars.is_empty() {
-            log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current.dl_plus_tags);
+
+            // log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current);
+            // emit_event(EDIEvent::DLObjectReceived(self.current.clone()));
+
+            if self.last_toggle != Some(self.current.toggle) {
+                log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current);
+                emit_event(EDIEvent::DLObjectReceived(self.current.clone()));
+                self.last_toggle = Some(self.current.toggle);
+            }
+
+
         }
 
         self.current = DLObject::new();

@@ -246,14 +246,14 @@ impl AACPExctractor {
             self.au_frames.push(au_data[..au_len - 2].to_vec());
 
             // check for PAD data. locked to SCID 6 (edi-ch.digris.net:8855 0x4DA4 open broadcast)
-            /*
-            if self.scid == 6 {
-                let pad = Self::extract_pad(&au_data[..au_len - 2]);
-                if let Some(pad) = pad {
-                    self.pad_decoder.feed(&pad.fpad, &pad.xpad);
-                }
-            }
-            */
+            /**/
+            // if self.scid == 10 {
+            //     let pad = Self::extract_pad(&au_data[..au_len - 2]);
+            //     if let Some(pad) = pad {
+            //         self.pad_decoder.feed(&pad.fpad, &pad.xpad);
+            //     }
+            // }
+
 
             if self.extract_pad {
                 let pad = Self::extract_pad(&au_data[..au_len - 2]);

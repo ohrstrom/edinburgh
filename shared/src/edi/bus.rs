@@ -3,12 +3,15 @@ use serde::Serialize;
 use super::ensemble::Ensemble;
 use super::msc::AACPResult;
 use super::pad::mot::MOTImage;
+use super::pad::dl::DLObject;
 
 #[derive(Debug, Serialize)]
 pub enum EDIEvent {
     EnsembleUpdated(Ensemble),
     AACPFramesExtracted(AACPResult),
+    //
     MOTImageReceived(MOTImage),
+    DLObjectReceived(DLObject),
 }
 
 #[cfg(target_arch = "wasm32")]
