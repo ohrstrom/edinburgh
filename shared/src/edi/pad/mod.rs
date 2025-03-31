@@ -247,7 +247,7 @@ impl DLDataGroup {
     pub fn feed(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
         self.data.extend_from_slice(payload);
 
-        // let last = payload[0] & 0x20 != 0;
+        // let last = payload[0] & 0x20 != 0;  // THIS DOES NOT WORK..
         //
         // // log::debug!("DLDataGroup: last = {}", last);
         //
@@ -262,7 +262,7 @@ impl DLDataGroup {
         let field_len = (self.data[0] & 0x0F) + 1;
         self.size_needed = 2 + field_len as usize + 2;
 
-        log::debug!("len = {} - needed {}", self.data.len(), self.size_needed);
+        // log::debug!("len = {} - needed {}", self.data.len(), self.size_needed);
 
         if self.data.len() >= self.size_needed {
             let mut complete = Vec::new();
@@ -271,49 +271,7 @@ impl DLDataGroup {
         } else {
             None
         }
-
-
-        // if self.data.len() >= self.size_needed {
-        //     let mut complete = Vec::new();
-        //     std::mem::swap(&mut complete, &mut self.data);
-        //     Some(complete)
-        // } else {
-        //     None
-        // }
-
-        // None
     }
-
-    /*
-    pub fn feed(&mut self, input: &[u8]) -> Option<MSCDataGroup> {
-        let remaining = self.size_needed.saturating_sub(self.data.len());
-        self.data
-            .extend_from_slice(&input[..input.len().min(remaining)]);
-
-        // once we have the 2-byte header, compute actual size
-        if self.data.len() >= 2 && self.size_needed == 4 {
-            let is_command = self.data[0] & 0x10 != 0;
-            let field_len = if is_command {
-                match self.data[0] & 0x0F {
-                    0x01 => 0,                                                   // Remove label
-                    0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
-                    _ => 0,
-                }
-            } else {
-                (self.data[0] & 0x0F) + 1
-            };
-            self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
-        }
-
-        if self.data.len() == self.size_needed {
-            let dg = MSCDataGroup::from_bytes(&self.data);
-            self.data.clear();
-            Some(dg)
-        } else {
-            None
-        }
-    }
-    */
 }
 
 #[derive(Debug)]
@@ -555,7 +513,7 @@ impl PADDecoder {
                 }
 
                 if let Some(dg) = self.mot_dg.feed(&payload) {
-                    // self.mot_decoder.feed(&dg);
+                    self.mot_decoder.feed(&dg);
                 }
             }
             _ => log::warn!("Unhandled CI type: {}", ci.kind),

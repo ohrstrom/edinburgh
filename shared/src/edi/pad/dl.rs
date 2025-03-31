@@ -6,6 +6,7 @@ const DL_LEN_MAX: usize = 8 * 16;
 pub struct DLObject {
     pub chars: Vec<u8>,
     pub charset: u8,
+    pub dl_plus_tags: Vec<DLPlusTag>,
     seg_count: u8,
 }
 
@@ -14,6 +15,7 @@ impl DLObject {
         Self {
             chars: Vec::new(),
             charset: 0,
+            dl_plus_tags: Vec::new(),
             seg_count: 0,
         }
     }
@@ -26,25 +28,28 @@ impl DLObject {
                 .iter()
                 .map(|&b| char::from_u32(EBU_LATIN_TO_UNICODE[b as usize] as u32).unwrap_or('?'))
                 .collect(),
-            0x6 => {
-                let mut chars = String::new();
-                for chunk in label.chunks(2) {
-                    if chunk.len() == 2 {
-                        let code = u16::from_be_bytes([chunk[0], chunk[1]]);
-                        if let Some(ch) = char::from_u32(code as u32) {
-                            chars.push(ch);
-                        } else {
-                            chars.push('�');
-                        }
-                    }
-                }
-                chars
-            }
             _ => "[unsupported charset]".into(),
         }
     }
 }
 
+
+#[derive(Debug)]
+pub struct DLPlusTag {
+    pub kind: u8,
+    pub start: u8,
+    pub len: u8,
+}
+
+impl DLPlusTag {
+    pub fn new(kind: u8, start: u8, len: u8) -> Self {
+        Self {
+            kind,
+            start,
+            len,
+        }
+    }
+}
 
 
 #[derive(Debug)]
@@ -81,6 +86,8 @@ impl DLDecoder {
         let is_last = flags & 0x20 != 0;
         let toggle = (flags & 0x80) >> 7;
 
+        // log::debug!("DL: toggle {} - last: {}", toggle, is_last);
+
         // let seg_no = (data[1] >> 4) & 0x07;
         // let charset = (data[1] >> 4) & 0x0F;
 
@@ -94,6 +101,36 @@ impl DLDecoder {
         //     data,
         // );
 
+        match (data[0] & 0x10 != 0, data[0] & 0x0F) {
+            (true, 0b0001) => {
+                log::debug!("Clear display command");
+                // reset display here
+            }
+            (true, 0b0010) => {
+
+                // TODO: abort if t != toggle
+                let t = (data[0] & 0x80);
+
+                // log::debug!("DL Plus: toggle: {} t: {}", toggle, t);
+
+                if data.len() < 3 {
+                    log::warn!("DL+: too short: expected min 3 bytes, got {}", data.len());
+                    return None;
+                }
+
+                self.parse_dl_plus(&data[2..]);
+
+                // handle DL+ command
+                return None
+            }
+            (true, _) => {
+                log::warn!("Unexpected DL command");
+            }
+            _ => {
+                // not a DL+ or display-clear command
+            }
+        }
+
         let nibble = (data[1] >> 4) & 0x0F;
         let (seg_no, charset) = if is_first {
             (0, Some(nibble)) // charset = full 4 bits
@@ -102,7 +139,7 @@ impl DLDecoder {
         };
 
         if is_first {
-            self.reset();
+            self.flush();
             self.current.charset = charset.unwrap_or(0);
         }
 
@@ -115,15 +152,15 @@ impl DLDecoder {
             return None;
         }
 
-        log::debug!(
-            "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
-            toggle,
-            is_first,
-            is_last,
-            num_chars,
-            data.len(),
-            String::from_utf8_lossy(&data[start..end]),
-        );
+        // log::debug!(
+        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
+        //     toggle,
+        //     is_first,
+        //     is_last,
+        //     num_chars,
+        //     data.len(),
+        //     String::from_utf8_lossy(&data[start..end]),
+        // );
 
 
         // log::debug!("DL current chars: {:?}", self.current.chars.len());
@@ -132,8 +169,8 @@ impl DLDecoder {
 
 
         if is_last {
-            log::debug!("DL: {}", self.current.decode_label());
-            self.reset();
+            // log::debug!("DL: {}", self.current.decode_label());
+            // self.reset();
         }
 
         // log::debug!("DL: {}", self.current.decode_label());
@@ -151,7 +188,64 @@ impl DLDecoder {
 
     }
 
-    pub fn reset(&mut self) {
+    pub fn parse_dl_plus(&mut self, data: &[u8]) {
+
+        if data.is_empty() {
+            log::warn!("DL+: empty command");
+            return;
+        }
+
+        let cid = (data[0] >> 4) & 0x0F;
+
+        if cid != 0 {
+            log::warn!("DL+: unsupported command ID = {}", cid);
+            return;
+        }
+
+        // log::debug!("DL Plus: {:?}", cid);
+
+        let cb = data[0] & 0x0F;
+        let it_toggle = (data[0] >> 3) & 0x01;
+        let it_running = (data[0] >> 2) & 0x01;
+        let num_tags = (data[0] & 0x03) + 1;
+
+        // log::debug!("DL+: CID = {}, CB = {}, tags = {}", cid, cb, num_tags);
+
+        if data.len() < 1 + num_tags as usize * 3 {
+            log::warn!("DL+: unexpected length, expected at least {}", 1 + num_tags * 3);
+            return;
+        }
+
+        for i in 0..num_tags {
+            let base = 1 + (i * 3) as usize;
+            let content_type = data[base] & 0x7F;
+            let start = data[base + 1] & 0x7F;
+            let len = (data[base + 2] & 0x7F) + 1;
+
+            let tag = DLPlusTag::new(
+                content_type,
+                start,
+                len,
+            );
+
+            // log::debug!(
+            //     "DL+ tag: {:?}", tag
+            // );
+
+            self.current.dl_plus_tags.push(tag);
+
+        }
+
+        // log::debug!("DL+ it_toggle={}, it_running={}", it_toggle, it_running);
+
+    }
+
+    pub fn flush(&mut self) {
+
+        if !self.current.chars.is_empty() {
+            log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current.dl_plus_tags);
+        }
+
         self.current = DLObject::new();
     }
 
