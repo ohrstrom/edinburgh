@@ -57,6 +57,17 @@ impl DLDecoder {
         Self { current: DLObject::new() }
     }
 
+    pub fn __feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
+
+        log::debug!(
+            "RAW: {:?}",
+            String::from_utf8_lossy(&data[2..]),
+        );
+
+
+        None
+    }
+
     pub fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
 
         if data.len() < 2 {

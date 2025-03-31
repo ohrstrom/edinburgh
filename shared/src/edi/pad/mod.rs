@@ -247,11 +247,24 @@ impl DLDataGroup {
     pub fn feed(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
         self.data.extend_from_slice(payload);
 
-        let last = payload[0] & 0x20 != 0;
+        // let last = payload[0] & 0x20 != 0;
+        //
+        // // log::debug!("DLDataGroup: last = {}", last);
+        //
+        // if last {
+        //     let mut complete = Vec::new();
+        //     std::mem::swap(&mut complete, &mut self.data);
+        //     Some(complete)
+        // } else {
+        //     None
+        // }
 
-        // log::debug!("DLDataGroup: last = {}", last);
+        let field_len = (self.data[0] & 0x0F) + 1;
+        self.size_needed = 2 + field_len as usize + 2;
 
-        if last {
+        log::debug!("len = {} - needed {}", self.data.len(), self.size_needed);
+
+        if self.data.len() >= self.size_needed {
             let mut complete = Vec::new();
             std::mem::swap(&mut complete, &mut self.data);
             Some(complete)
@@ -259,30 +272,16 @@ impl DLDataGroup {
             None
         }
 
-        // once we have the 2-byte header, compute actual size
-        // if self.data.len() >= 2 && self.size_needed == 4 {
-        //     let is_command = self.data[0] & 0x10 != 0;
-        //     let field_len = if is_command {
-        //         match self.data[0] & 0x0F {
-        //             0x01 => 0,                                                   // Remove label
-        //             0x02 => (self.data.get(1).cloned().unwrap_or(0) & 0x0F) + 1, // DL+
-        //             _ => 0,
-        //         }
-        //     } else {
-        //         (self.data[0] & 0x0F) + 1
-        //     };
-        //     self.size_needed = 2 + field_len as usize + 2; // 2 header + data + 2 CRC
-        // }
 
-        // None
-
-        // if self.data.len() == self.size_needed {
+        // if self.data.len() >= self.size_needed {
         //     let mut complete = Vec::new();
         //     std::mem::swap(&mut complete, &mut self.data);
         //     Some(complete)
         // } else {
         //     None
         // }
+
+        // None
     }
 
     /*
@@ -530,15 +529,18 @@ impl PADDecoder {
                 // let is_start = ci.kind == 2 && !is_continuation;
                 let is_start = ci.kind == 2;
 
-                if is_start {
-                    // log::debug!("DG: init");
-                    self.dl_dg.init();
-                }
+                // if is_start {
+                //     // log::debug!("DG: init");
+                //     self.dl_dg.init();
+                // }
 
                 if let Some(data) = self.dl_dg.feed(&payload) {
-                    // log::debug!("DL DATA: {:#?}", data);
-                    // log::debug!("DG: parsed feed {} bytes - data: {:?}", data.len(), data);
-                    // log::debug!("🔤 DL UTF-8 (try): {:?}", String::from_utf8_lossy(&data));
+
+                    // log::debug!(
+                    //     "DL: DG: {:?}",
+                    //     String::from_utf8_lossy(&data[..]),
+                    // );
+
                     self.dl_decoder.feed(&data);
                 }
             }
