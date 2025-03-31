@@ -12,7 +12,7 @@ pub struct MOTImage {
     #[serde(serialize_with = "MOTImage::serialize_md5")]
     pub md5: [u8; 16],
     pub len: usize,
-    #[serde(serialize_with = "MOTImage::serialize_data")]
+    // #[serde(serialize_with = "MOTImage::serialize_data")]
     pub data: Vec<u8>,
 }
 

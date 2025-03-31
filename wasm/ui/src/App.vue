@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import {storeToRefs} from "pinia"
 
 import { EDI } from '../../pkg'
 
-import Ensemble from './components/Ensemble.vue'
-import Service from './components/Service.vue'
+import {useEDIStore} from "@/stores/edi";
+
+// store mappings
+const ediStore = useEDIStore()
+const { selectService, updateEnsemble, updateDL, updateSLS } = ediStore
+
+
+
+import Connection from '@/components/edi/connection/Connection.vue'
+import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
+import ServiceDetail from '@/components/edi/service-detail/Service.vue'
+import ServiceList from '@/components/edi/service-list/Services.vue'
 
 let edi = new EDI()
 let ws: WebSocket | null = null
@@ -14,14 +25,11 @@ let audioContext: AudioContext
 let workletNode: AudioWorkletNode
 let decoder: AudioDecoder
 
-const ediHost = ref('edi-ch.digris.net')
-const ediPort = ref(8855)
-
-const imgSrc = ref('')
-
-const numFramesReceived = ref(0)
 const selectedServiceSid = ref(0)
-const selectedScid = ref(0)
+const selectedScid = ref(10)
+
+// const {selectedScid} = storeToRefs(ediStore)
+
 
 const scids = ref([])
 
@@ -55,12 +63,18 @@ const service = computed(() => {
   return services.value.find((s) => s.sid === selectedServiceSid.value)
 })
 
-const connect = async () => {
+const connect = async (e) => {
+
+  console.debug("connect", e)
+
   await initializeAudioDecoder()
 
   if (!ws) {
 
-    const uri = `ws://localhost:9000/ws/${ediHost.value}/${ediPort.value}/`
+    const uri = `ws://localhost:9000/ws/${e.host}/${e.port}/`
+
+    console.debug(uri)
+
     // const uri = `ws://78.47.36.61:80/ws/${ediHost.value}/${ediPort.value}/`
 
     ws = new WebSocket(uri)
@@ -88,8 +102,9 @@ const connect = async () => {
   }
 
   edi.on_ensemble_update(async (ensembleData) => {
-    console.log('ENSEMBLE:', ensembleData)
-    Object.assign(ensemble, ensembleData)
+    // console.log('ENSEMBLE:', ensembleData)
+    // Object.assign(ensemble, ensembleData)
+    await updateEnsemble(ensembleData)
   })
 
   edi.on_aac_segment(async (aacSegment) => {
@@ -112,49 +127,17 @@ const connect = async () => {
   })
 
   edi.on_mot_image_received(async (motImage) => {
-    console.log('MOT IMAGE:', motImage)
-    imgSrc.value = `data:${motImage.mimetype};base64,${motImage.data}`
+    // console.log('MOT IMAGE:', motImage)
+    // imgSrc.value = `data:${motImage.mimetype};base64,${motImage.data}`
+    await updateSLS(motImage)
   })
 
   edi.on_dl_object_received(async (dlObj) => {
-    console.log('DL OBJ:', dlObj)
+    // console.log('DL OBJ:', dlObj)
+    await updateDL(dlObj)
   })
 
 }
-
-
-
-/*
-edi.on_edi_frame(async (frameData) => {
-  if (numFramesReceived.value < 1) {
-    console.log('EDI FRAME:', frameData)
-  }
-  numFramesReceived.value++
-})
-
-edi.on_ensemble_update(async (ensembleData) => {
-  console.log('ENSEMBLE:', ensembleData)
-  Object.assign(ensemble, ensembleData)
-})
-
-edi.on_aac_segment(async (aacSegment) => {
-  if (!scids.value.includes(aacSegment.scid)) {
-    scids.value = [...scids.value, aacSegment.scid]
-  }
-
-  if (aacSegment.scid !== selectedScid.value) {
-    return
-  }
-
-  await processAACSegment(new Uint8Array(aacSegment.data))
-})
-*/
-
-
-// onMounted(() => {
-//   // TODO: fix audio context initialization
-//   connect()
-// })
 
 const disconnect = async () => {
 
@@ -276,51 +259,76 @@ const setScid = async (scid) => {
   })
 }
 
-const selectService = async (sid: number) => {
-  selectedServiceSid.value = sid
-  console.log('SID:', sid)
+// const selectService = async (sid: number) => {
+//   selectedServiceSid.value = sid
+//   console.log('SID:', sid)
+//
+//   await setScid(service.value?.scid ?? 0);
+// }
 
-  await setScid(service.value?.scid ?? 0);
-}
 </script>
 
 <template>
   <main>
-    <div>
-      <div>
-        <label for="ediPort">EDI Port:</label>
-        <input id="ediPort" type="number" v-model="ediPort" />
-      </div>
-      <div>
-        <button @click="connect">Connect</button>
-        <button @click="disconnect">Disconnect</button>
-      </div>
 
-      <div>
-        <Ensemble :ensemble="ensemble" />
-      </div>
+    <h1>{{selectedScid}}</h1>
 
-      <div>
-        <pre v-text="service" />
-      </div>
+    <header>
+      <Ensemble />
+      <Connection @connect="connect" @reset="disconnect" />
+    </header>
 
-      <div v-if="imgSrc">
-        <img :src="imgSrc" alt="MOT Image" />
-      </div>
+    <section class="service-detail">
+      <ServiceDetail />
+    </section>
 
-      <div>
-        <div>
-          <h3>Services</h3>
-        </div>
-        <Service v-for="service in services" :key="service.scid" :service="service"
-          :is-current="service.scid === selectedScid" @select="selectService(service.sid)"
-          @play="setScid(service.scid === selectedScid ? 0 : service.scid)" />
-      </div>
-    </div>
+    <section class="service-list">
+      <ServiceList
+          @select="selectService"
+      />
+    </section>
+
   </main>
 </template>
 
 <style scoped>
+
+main {
+  width: 100%;
+  min-height: 100vh;
+  max-width: 1024px;
+  margin-inline: auto;
+
+  > header {
+    display: flex;
+    justify-content: space-between;
+    background: white;
+
+    margin-top: 16px;
+    margin-bottom: 16px;
+    padding: 8px;
+    border: 1px solid #000;
+    box-shadow: 4px 4px #000;
+
+  }
+
+  .service-detail {
+    margin-bottom: 16px;
+    padding: 8px;
+    border: 1px solid #000;
+    box-shadow: 4px 4px #000;
+  }
+
+  .service-list {
+    margin-bottom: 16px;
+    //padding: 8px;
+    border: 1px solid #000;
+    box-shadow: 4px 4px #000;
+  }
+
+}
+
+
 button {
   margin: 5px;
   padding: 8px 12px;
