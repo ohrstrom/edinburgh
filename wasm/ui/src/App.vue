@@ -4,6 +4,8 @@ import { storeToRefs } from 'pinia'
 
 import { EDI } from '../../pkg'
 
+import {initDecoder, decodeAAC} from './lib/decoder.js'
+
 import type * as Types from '@/types'
 
 import { useEDIStore } from '@/stores/edi'
@@ -26,6 +28,9 @@ class EDInburgh {
   decoder: AudioDecoder | null = null
   analyser: Analyser | null = null
   analyserReading = false
+
+  // faad decoder
+  faad: any = null
 
   // Store methods
   updateEnsemble: typeof useEDIStore.prototype.updateEnsemble
@@ -120,6 +125,14 @@ class EDInburgh {
         },
         { immediate: true }
     )
+
+    // initDecoder(new Uint8Array([0x12, 0x10]))  // Most standard
+
+    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
+    const dec = initDecoder(asc)
+
+    this.faad = dec
+
   }
 
   async connect(conn: { host: string; port: number }): Promise<void> {
@@ -191,6 +204,7 @@ class EDInburgh {
 
     const audioContext = new AudioContext({
       latencyHint: 'balanced',
+      // sampleRate: 48000,
       sampleRate: 24000,
     })
 
@@ -226,12 +240,17 @@ class EDInburgh {
     splitter.connect(analyserL, 0)
     splitter.connect(analyserR, 1)
 
-    analyserL.connect(audioContext.destination)
-    analyserR.connect(audioContext.destination)
+    // NOTE: this fuck's things up!!
+    // analyserL.connect(audioContext.destination)
+    // analyserR.connect(audioContext.destination)
+
+    // NOTE: just connect the context..
+    workletNode.connect(audioContext.destination)
 
 
     const decoder = new AudioDecoder({
       output: (audioData) => {
+        // console.debug("decoded", audioData)
         this.playDecodedAudio(audioData)
       },
       error: (e) => console.error('Decoder error:', e),
@@ -275,6 +294,25 @@ class EDInburgh {
 
   }
 
+  async __processAACSegment(aacSegment): Promise<void> {
+    if (!this.faad) {
+      console.info('FAAD not initialized')
+      return
+    }
+
+    // console.debug("buffer", aacSegment.buffer)
+
+    const pcmData = decodeAAC(new Uint8Array(aacSegment.buffer))
+
+    if (pcmData) {
+      this.workletNode?.port.postMessage({
+        type: 'audio',
+        samples: pcmData,
+      })
+    }
+  }
+
+
   async processAACSegment(aacSegment): Promise<void> {
 
     if (!this.decoder) {
@@ -300,6 +338,7 @@ class EDInburgh {
     }
   }
 
+
   async playDecodedAudio(audioData): Promise<void> {
 
     if (!this.workletNode) {
@@ -312,9 +351,13 @@ class EDInburgh {
 
     const pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
 
+
     for (let channel = 0; channel < numChannels; channel++) {
       audioData.copyTo(pcmData[channel], { planeIndex: channel })
     }
+
+
+    // console.debug("pcmData", pcmData)
 
     this.workletNode.port.postMessage({
       type: 'audio',
