@@ -46,6 +46,24 @@ impl DLObject {
     pub fn decode_label(&self) -> String {
         decode_chars(&self.chars, self.charset)
     }
+    pub fn get_dl_plus(&self) -> Vec<DLPlusTagDecoded> {
+        let label = self.decode_label();
+        let label_chars: Vec<char> = label.chars().collect();
+
+        self.dl_plus_tags
+            .iter()
+            .map(|tag| {
+                let start = tag.start as usize;
+                let end = (start + tag.len as usize).min(label_chars.len());
+                let value: String = label_chars[start..end].iter().collect();
+                DLPlusTagDecoded {
+                    kind: DLPlusContentType::from(tag.kind),
+                    value,
+                }
+            })
+            .collect()
+    }
+    /*
     pub fn get_dl_plus(&self) -> Vec<(DLPlusContentType, String)> {
         let label = self.decode_label();
         let label_chars: Vec<char> = label.chars().collect();
@@ -60,6 +78,7 @@ impl DLObject {
             })
             .collect()
     }
+    */
 }
 
 impl Serialize for DLObject {
@@ -70,18 +89,20 @@ impl Serialize for DLObject {
         let mut s = serializer.serialize_struct("DLObject", 5)?;
         s.serialize_field("scid", &self.scid)?;
         s.serialize_field("charset", &self.charset)?;
-        s.serialize_field("dl_plus_tags", &self.dl_plus_tags)?;
+        // s.serialize_field("dl_plus_tags", &self.dl_plus_tags)?;
 
         // derived fields
         s.serialize_field("label", &self.decode_label())?;
 
-        let dl_plus: std::collections::HashMap<_, _> = self
-            .get_dl_plus()
-            .into_iter()
-            .map(|(kind, text)| (format!("{:?}", kind), text))
-            .collect();
+        // let dl_plus: std::collections::HashMap<_, _> = self
+        //     .get_dl_plus()
+        //     .into_iter()
+        //     .map(|(kind, text)| (format!("{:?}", kind), text))
+        //     .collect();
 
-        s.serialize_field("dl_plus", &dl_plus)?;
+        // s.serialize_field("dl_plus", &dl_plus)?;
+
+        s.serialize_field("dl_plus", &self.get_dl_plus())?;
 
         s.end()
     }
@@ -103,6 +124,12 @@ impl DLPlusTag {
             len,
         }
     }
+}
+
+#[derive(Serialize)]
+pub struct DLPlusTagDecoded {
+    kind: DLPlusContentType,
+    value: String,
 }
 
 #[derive(Debug, Serialize, Clone, Copy)]

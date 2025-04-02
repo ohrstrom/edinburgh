@@ -50,6 +50,9 @@ impl AudioDecoder {
         }
     }
     fn feed(&mut self, au_data: &[u8]) {
+
+        // log::debug!("AU: {:?}", au_data);
+
         match self.decoder.decode(&au_data) {
             Ok(r) => {
                 self.sink.append(SamplesBuffer::new(
@@ -57,6 +60,12 @@ impl AudioDecoder {
                     r.sample_rate as u32,
                     r.samples,
                 ));
+                // log::debug!(
+                //     "Decoded: {} samples, {} ch @ {} Hz",
+                //     r.samples.len(),
+                //     r.channels,
+                //     r.sample_rate
+                // );
             }
             Err(e) => {
                 log::error!("DEC: {}", e);

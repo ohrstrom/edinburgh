@@ -17,10 +17,12 @@ use wasm_bindgen::JsValue;
 use futures::StreamExt;
 
 use console_log;
-
+use derivative::Derivative;
 use shared::utils;
 use shared::edi::bus::{EDIEvent, init_event_bus};
 use shared::edi::EDISource;
+
+
 
 #[derive(Clone)]
 #[wasm_bindgen]

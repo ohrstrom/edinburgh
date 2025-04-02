@@ -1,28 +1,62 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { useEDIStore } from '@/stores/edi'
 
-import {storeToRefs} from "pinia";
-import {useEDIStore} from "@/stores/edi";
-
-import HexValue from "@/components/ui/HexValue.vue";
+import HexValue from '@/components/ui/HexValue.vue'
 
 const ediStore = useEDIStore()
 const { ensemble } = storeToRefs(ediStore)
 </script>
 
 <template>
-  <div class="ensemble">
-    <!--
-    <pre v-text="{ensemble}" />
-    -->
-    <div>
-      <h2>{{ ensemble?.label ?? '-' }}</h2>
-      <small>{{ ensemble?.short_label ?? '-' }}</small>
+  <div v-if="ensemble.eid" class="ensemble">
+    <div class="info">
+      <div class="info-section ens">
+        <h2 class="label">{{ ensemble?.label ?? '-' }}</h2>
+        <div>
+          <span>{{ ensemble?.short_label ?? '-' }}</span>
+          <span v-if="ensemble?.short_label">&nbsp;•&nbsp;</span>
+          <HexValue :value="ensemble.eid" />
+        </div>
+      </div>
+      <div class="info-section services">
+        <span v-if="ensemble.services.length">Services: {{ ensemble.services.length }}</span>
+      </div>
     </div>
-    <div>
-      <span>EID: <HexValue :value="ensemble.eid" /></span>
-    </div>
-    <div>
-      <span>SVC: {{ ensemble.services.length }}</span>
+  </div>
+  <div v-else class="ensemble ensemble--skeleton">
+    <div class="info">
+      <span class="message">not connected</span>
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.ensemble {
+  > .info {
+    .ens {
+      margin-bottom: 16px;
+      > .label {
+        margin-bottom: 8px;
+        font-size: 1.25rem;
+      }
+    }
+    .services {
+      font-size: 0.75rem;
+      background: transparent;
+    }
+  }
+  &--skeleton {
+    min-height: 85px;
+    > .info {
+      .message {
+        display: inline-flex;
+        color: black;
+        padding: 2px 4px;
+        font-size: 0.75rem;
+      }
+    }
+  }
+}
+</style>
+

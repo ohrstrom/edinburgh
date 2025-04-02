@@ -1,30 +1,28 @@
 <script setup lang="ts">
 
-import HexValue from "@/components/ui/HexValue.vue";
-import IconPlay from "@/components/icons/IconPlay.vue";
-import IconStop from "@/components/icons/IconStop.vue";
+import type * as Types from '@/types'
 
-interface Service {
-  sid: number
-  scid?: number
-  label?: string
-  short_label?: string
-  isCurrent: boolean
-}
+import HexValue from '@/components/ui/HexValue.vue'
+import IconPlay from '@/components/icons/IconPlay.vue'
+import IconStop from '@/components/icons/IconStop.vue'
+import {computed} from "vue";
 
-defineProps<{ service: Service }>()
+
+const props = defineProps<{ service: Types.Service }>()
 defineEmits<{
-  // (event: 'select', payload: { sid: number }): void
-  // (event: 'play', payload: { scid?: number }): void
-  (event: 'select', payload: { sid: number, scid: number }): void
-  (event: 'play', payload: { scid?: number }): void
+  (event: 'select', sid: number): void
+  (event: 'play', sid: number): void
 }>()
+
+const hasDlPlus = computed(() => {
+  return (props.service?.dl?.dl_plus ?? []).length
+})
 </script>
 
 <template>
-  <div @click.prevent="$emit('select', { sid: service.sid, scid: service.scid })" class="service">
+  <div @click.prevent="$emit('select', service.sid)" class="service">
     <div class="controls">
-      <button @click.prevent="$emit('play', { scid: service.scid })">
+      <button @click.prevent.stop="$emit('play', service.sid)">
         <IconPlay v-if="!service.isCurrent" />
         <IconStop v-else />
       </button>
@@ -39,18 +37,18 @@ defineEmits<{
         <span class="label">{{ service?.label ?? '-' }}</span>
         <small class="sid">
           <HexValue :value="service.sid" />
-<!--          <span> / {{ service.sid }}</span>-->
+          <!--          <span> / {{ service.sid }}</span>-->
         </small>
       </div>
       <div class="dl">
-        <small v-if="service.dl">{{ service.dl.label }}</small>
-        <small v-else>&nbsp;</small>
+        <span v-if="hasDlPlus" class="has-dl-plus-flag">DL+</span>
+        <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
       </div>
     </div>
     <div class="sls">
       <div class="container">
         <figure v-if="service.sls?.url">
-          <img :src="service.sls.url" />
+          <img :src="service.sls.url" :alt="service.sls?.md5 ?? 'SLS'" />
         </figure>
       </div>
     </div>
@@ -86,16 +84,36 @@ defineEmits<{
     }
 
     > .dl {
+      display: flex;
       flex: 1 1 auto;
       max-width: 100%;
       overflow: hidden;
-      min-width: 0; /* 💥 important to allow text shrinking in flexbox */
+      min-width: 0; /* allow text shrinking in flexbox */
+      align-items: center;
 
-      > small {
+      > .__has-dl-plus-flag {
+        font-size: 0.75rem;
+        margin-right: 4px;
+        color: #fff;
+        background: #000;
+        padding: 2px;
+      }
+
+      > .has-dl-plus-flag {
+        font-size: 0.75rem;
+        margin-right: 6px;
+        color: #000;
+        background: #fff;
+        padding: 2px 4px;
+        border: 1px solid currentColor;
+      }
+
+      > .label {
         display: block;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        font-size: 0.75rem;
       }
     }
   }
