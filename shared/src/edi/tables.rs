@@ -182,7 +182,7 @@ impl fmt::Display for UserApplication {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             UserApplication::Reserved     => write!(f, "Reserved"),
-            UserApplication::SLS          => write!(f, "SlideShow"),
+            UserApplication::SLS          => write!(f, "SLS"),
             UserApplication::TPEG         => write!(f, "TPEG"),
             UserApplication::SPI          => write!(f, "SPI"),
             UserApplication::DMB          => write!(f, "DMB"),

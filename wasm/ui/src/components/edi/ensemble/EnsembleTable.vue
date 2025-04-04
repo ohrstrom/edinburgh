@@ -25,6 +25,7 @@ const services = computed(() => {
         short_label: svc.short_label,
         scid: comp.scid,
         language: comp.language,
+        user_apps: comp.user_apps,
         subchannel,
       }
     })
@@ -35,9 +36,7 @@ const services = computed(() => {
 
 <template>
   <div class="ensemble-table">
-    <!--
-    <pre v-text="ensemble" />
-    -->
+   
     
     <div class="table">
       <div class="service" v-for="(svc, index) in services ?? []" :key="`table-svc-${index}`" @click.prevent="$emit('select', svc.sid)">
@@ -46,15 +45,23 @@ const services = computed(() => {
         <span class="label">{{ svc?.label ?? '-' }}</span>
         <span class="short-label">{{ svc?.short_label ?? '-' }}</span>
         <span class="language">{{ svc?.language ?? '-' }}</span>
-        <span class="language">
+        <span class="user-apps">
+          <span v-if="svc?.user_apps">
+          {{ svc.user_apps.join(', ') }}
+          </span>
+        </span>
+        <span class="subchannel">
           <span v-if="svc?.subchannel">
             Start: {{ String(svc.subchannel.start).padStart(3, '0') }}
-            CU: {{ svc.subchannel.size }}
+            CU: <strong>{{ svc.subchannel.size }}</strong>
             PL: {{ svc.subchannel.pl }}
           </span>
         </span>
       </div>
     </div>
+    <!-- 
+    <pre v-text="ensemble" />
+    -->
   </div>
 </template>
 
@@ -63,10 +70,15 @@ const services = computed(() => {
   font-size: 0.75rem;
   .service {
     display: grid;
-    grid-template-columns: 32px 1fr 1fr 1fr 1fr 2fr;
+    grid-template-columns: 32px 1fr 1fr 1fr 1fr 1fr 2fr;
     gap: 8px;
     padding: 2px 8px;
     cursor: pointer;
+
+    strong {
+      font-weight: 600;
+    }
+
     &:hover {
       background: hsl(var(--c-muted));
     }

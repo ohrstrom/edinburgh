@@ -102,7 +102,7 @@ export const useEDIStore = defineStore('edi', () => {
         label: svc.label,
         short_label: svc.short_label,
         language: comp.language,
-        user_apps: comp.user_apps,
+        user_apps: comp.user_apps ?? [],
         subchannel: ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id),
         dl: dls.value.find((v) => v.scid === comp.scid),
         sls: sls.value.find((v) => v.scid === comp.scid),
