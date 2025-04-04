@@ -171,12 +171,12 @@ impl MOTObject {
                 _ => {}
             }
 
-            log::debug!(
-                "MOT header: param_id = {:#04x} (PLI = {}) - data_field_len = {} bytes",
-                param_id,
-                pli,
-                data_field_len,
-            );
+            // log::debug!(
+            //     "MOT header: param_id = {:#04x} (PLI = {}) - data_field_len = {} bytes",
+            //     param_id,
+            //     pli,
+            //     data_field_len,
+            // );
 
             if n + data_field_len > header_size {
                 log::warn!(
@@ -196,11 +196,11 @@ impl MOTObject {
                 let name = String::from_utf8_lossy(name_bytes).to_string();
                 self.content_name = Some(name.clone());
 
-                log::debug!(
-                    "MOT ContentName: {:?} (charset_id = {})",
-                    self.content_name,
-                    charset_id
-                );
+                // log::debug!(
+                //     "MOT ContentName: {:?} (charset_id = {})",
+                //     self.content_name,
+                //     charset_id
+                // );
             }
 
             if param_id == 0x23 {
@@ -219,13 +219,13 @@ impl MOTObject {
             n += data_field_len;
         }
 
-        log::debug!(
-            "MOT header: body_size={}, content_type={}, content_subtype={} - name: {:?}",
-            body_size,
-            content_type,
-            content_subtype,
-            self.content_name,
-        );
+        // log::debug!(
+        //     "MOT header: body_size={}, content_type={}, content_subtype={} - name: {:?}",
+        //     body_size,
+        //     content_type,
+        //     content_subtype,
+        //     self.content_name,
+        // );
 
         match content_type {
             2 => {}
@@ -267,7 +267,7 @@ impl MOTDecoder {
         match seg_type {
             3 => {
                 // Start new MOT object on header
-                log::debug!("MOT: header: {} bytes", data.len());
+                // log::debug!("MOT: header: {} bytes", data.len());
 
                 let mut obj = MOTObject::new(self.scid, transport_id);
                 obj.header.extend_from_slice(data);

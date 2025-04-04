@@ -6,8 +6,6 @@ use super::fic::FIG;
 use super::tables;
 use super::frame::DETITag;
 
-
-
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Subchannel {
     pub id: u8,
@@ -18,14 +16,19 @@ pub struct Subchannel {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ServiceComponent {
+    pub scid: u8,
+    pub language: Option<tables::Language>,
+    pub subchannel_id: Option<u8>,
+    pub user_apps: Vec<tables::UserApplication>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Service {
-    pub sid: Option<u16>,
-    pub scid: Option<u8>,
-    pub tmid: Option<u8>,
+    pub sid: u16,
     pub label: Option<String>,
     pub short_label: Option<String>,
-    pub subchannel: Option<Subchannel>,
-    pub language: Option<tables::Language>,
+    pub components: Vec<ServiceComponent>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,6 +40,7 @@ pub struct Ensemble {
     pub services: Vec<Service>,
     pub subchannels: Vec<Subchannel>,
 }
+
 impl Ensemble {
     pub fn new() -> Self {
         Ensemble {
@@ -48,37 +52,25 @@ impl Ensemble {
             subchannels: Vec::new(),
         }
     }
-    pub async fn feed(&mut self, tag: &DETITag) -> bool {
-        // log::debug!("Ensemble::feed: {:?}", tag);
 
+    pub async fn feed(&mut self, tag: &DETITag) -> bool {
         let mut updated = false;
 
         for fig in &tag.figs {
-
-            // log::debug!("FIG: {:?}", fig);
-
             match fig {
                 FIG::F0_0(fig) => {
                     updated |= self.eid.replace(fig.eid) != Some(fig.eid);
                     updated |= self.al_flag.replace(fig.al_flag) != Some(fig.al_flag);
                 }
                 FIG::F0_1(fig) => {
-                    // FIG 0/1 - Sub-channel organization (MCI)
                     for sc in &fig.subchannels {
-                        // log::debug!("SC: {:?}", sc);
-                        let existing_sc = self
-                            .subchannels
-                            .iter_mut()
-                            .find(|s| s.id == sc.id);
+                        let existing_sc = self.subchannels.iter_mut().find(|s| s.id == sc.id);
 
                         match existing_sc {
                             Some(existing_sc) => {
                                 updated |= existing_sc.start.replace(sc.start) != Some(sc.start);
                                 updated |= existing_sc.size.replace(sc.size.unwrap_or_default()) != sc.size;
-                                // updated |= existing_sc.pl.replace(sc.pl.clone()) != sc.pl.clone();
                                 updated |= existing_sc.bitrate.replace(sc.bitrate.unwrap_or_default()) != sc.bitrate;
-
-                                // NOTE: i think pl should not be string until here..
                                 if existing_sc.pl != sc.pl {
                                     existing_sc.pl = sc.pl.clone();
                                     updated = true;
@@ -98,45 +90,32 @@ impl Ensemble {
                     }
                 }
                 FIG::F0_2(fig) => {
-                    // FIG 0/2 - Service organization (MCI)
-                    for service in fig.services.iter() {
-                        let existing_service = self
-                            .services
-                            .iter_mut()
-                            .find(|s| s.sid == Some(service.sid));
+                    for entry in &fig.services {
+                        let service = self.services.iter_mut().find(|s| s.sid == entry.sid);
 
-                        // check if we already have a subchannel for the service
-                        let service_sc = self.subchannels
-                            .iter()
-                            .find(|s| s.id == service.scid);
-
-                        match existing_service {
+                        match service {
                             Some(existing_service) => {
-                                updated |=
-                                    existing_service.sid.replace(service.sid) != Some(service.sid);
-                                updated |= existing_service.scid.replace(service.scid)
-                                    != Some(service.scid);
-                                updated |= existing_service.tmid.replace(service.tmid)
-                                    != Some(service.tmid);
-
-                               // set or update subchannel
-                                if let Some(service_sc) = service_sc {
-                                    if existing_service.subchannel != Some(service_sc.clone()) {
-                                        existing_service.subchannel = Some(service_sc.clone());
-                                        updated = true;
-                                    }
+                                if !existing_service.components.iter().any(|c| c.scid == entry.scid) {
+                                    existing_service.components.push(ServiceComponent {
+                                        scid: entry.scid,
+                                        language: None,
+                                        subchannel_id: Some(entry.scid),
+                                        user_apps: Vec::new(),
+                                    });
+                                    updated = true;
                                 }
-
                             }
                             None => {
                                 self.services.push(Service {
-                                    sid: Some(service.sid),
-                                    scid: Some(service.scid),
-                                    tmid: Some(service.tmid),
+                                    sid: entry.sid,
                                     label: None,
                                     short_label: None,
-                                    subchannel: service_sc.cloned(),
-                                    language: None,
+                                    components: vec![ServiceComponent {
+                                        scid: entry.scid,
+                                        language: None,
+                                        subchannel_id: Some(entry.scid),
+                                        user_apps: Vec::new(),
+                                    }],
                                 });
                                 updated = true;
                             }
@@ -144,51 +123,59 @@ impl Ensemble {
                     }
                 }
                 FIG::F0_5(fig) => {
-                    // FIG 0/5 - Service component language (SI)
-                    for service in fig.services.iter() {
-                        if let Some(existing_service) = self.services.iter_mut().find(|s| s.scid == Some(service.scid)) {
-                            //
-                            // log::debug!("S: {:?}", existing_service);
-                            updated |= existing_service.language.replace(service.language)
-                            != Some(service.language);
+                    for lang in &fig.services {
+                        let mut matched = 0;
+                        for service in &mut self.services {
+                            if let Some(component) = service.components.iter_mut().find(|c| c.scid == lang.scid) {
+                                matched += 1;
+                                updated |= component.language.replace(lang.language) != Some(lang.language);
+                            }
+                        }
+                        if matched > 1 {
+                            log::warn!("FIG0/5: SCId {} matched multiple components across services!", lang.scid);
                         }
                     }
-
-                }
-                FIG::F0_9(fig) => {
-                    // FIG 0/9 - Country, LTO & International table (SI)
-                    // log::debug!("FIG 0/9: {:?}", fig);
-                }
-                FIG::F0_10(fig) => {
-                    // FIG 0/10 - Date & time (SI)
-                    // log::debug!("FIG 0/10: {:?}", fig);
                 }
                 FIG::F0_13(fig) => {
-                    // FIG 0/13 - User Application information (MCI)
-                    // log::debug!("FIG 0/13: {:?}", fig);
+                    for entry in &fig.services {
+                        if let Some(service) = self.services.iter_mut().find(|s| s.sid == entry.sid) {
+                            if entry.scids == 0 {
+                                // Apply to all components
+                                for component in &mut service.components {
+                                    if component.user_apps != entry.uas {
+                                        component.user_apps = entry.uas.clone();
+                                        updated = true;
+                                    }
+                                }
+                            } else {
+                                for i in 0..8 {
+                                    if (entry.scids & (1 << i)) != 0 {
+                                        if let Some(component) = service.components.iter_mut().find(|c| c.scid == i) {
+                                            if component.user_apps != entry.uas {
+                                                component.user_apps = entry.uas.clone();
+                                                updated = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 FIG::F1_0(fig) => {
-                    // Ensemble label
                     updated |= self.label.replace(fig.label.clone()) != Some(fig.label.clone());
-                    updated |= self.short_label.replace(fig.short_label.clone())
-                        != Some(fig.short_label.clone());
+                    updated |= self.short_label.replace(fig.short_label.clone()) != Some(fig.short_label.clone());
                 }
                 FIG::F1_1(fig) => {
-                    // Programme service label
-
-                    if let Some(service) = self.services.iter_mut().find(|s| s.sid == Some(fig.sid))
-                    {
-                        updated |=
-                            service.label.replace(fig.label.clone()) != Some(fig.label.clone());
-                        updated |= service.short_label.replace(fig.short_label.clone())
-                            != Some(fig.short_label.clone());
+                    if let Some(service) = self.services.iter_mut().find(|s| s.sid == fig.sid) {
+                        updated |= service.label.replace(fig.label.clone()) != Some(fig.label.clone());
+                        updated |= service.short_label.replace(fig.short_label.clone()) != Some(fig.short_label.clone());
                     }
                 }
                 _ => {}
             }
         }
 
-    
         if updated {
             log::info!("ENSEMBLE: {:#?}", self);
             emit_event(EDIEvent::EnsembleUpdated(self.clone()));
@@ -196,11 +183,13 @@ impl Ensemble {
 
         updated
     }
+
     pub fn reset(&mut self) {
         self.eid = None;
         self.al_flag = None;
         self.label = None;
         self.short_label = None;
         self.services.clear();
+        self.subchannels.clear();
     }
 }

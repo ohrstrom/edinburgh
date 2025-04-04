@@ -83,7 +83,7 @@ impl EDI {
                         }
                     }
                     EDIEvent::MOTImageReceived(m) => {
-                        log::debug!("MOT image received: {:?}", m.md5);
+                        // log::debug!("MOT image received: {:?}", m.md5);
                         if let Some(cb) = edi_clone.on_mot_image_received_cb.borrow().as_ref() {
                             let this = JsValue::NULL;
                             let event_data = to_value(&m).unwrap();
@@ -91,7 +91,7 @@ impl EDI {
                         }
                     }
                     EDIEvent::DLObjectReceived(d) => {
-                        log::debug!("DL obj received: {:?}", d);
+                        // log::debug!("DL obj received: {:?}", d);
                         if let Some(cb) = edi_clone.on_dl_object_received_cb.borrow().as_ref() {
                             let this = JsValue::NULL;
                             let event_data = to_value(&d).unwrap();

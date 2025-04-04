@@ -44,22 +44,71 @@ export const useEDIStore = defineStore('edi', () => {
 
   const selectedSid = ref(0)
 
+  /*
   const services = computed(() => {
     if (!ensemble.value) {
       return []
     }
+  
     return ensemble.value.services
       .filter((svc) => svc.label !== undefined)
       .map((svc) => {
-        // const dl = dls.value.find(dl => dl.scid === svc.scid)
+        const components = svc.components.map((comp) => ({
+          ...comp,
+          dl: dls.value.find((dl) => dl.scid === comp.scid),
+          sls: sls.value.find((slsItem) => slsItem.scid === comp.scid),
+        }))
+  
         return {
           ...svc,
-          dl: dls.value.find((v) => v.scid === svc.scid),
-          sls: sls.value.find((v) => v.scid === svc.scid),
+          components,
           isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
         }
       })
       .sort((a, b) => a.label!.localeCompare(b.label!))
+  })
+  */
+
+  const __services = computed(() => {
+    if (!ensemble.value) {
+      return []
+    }
+  
+    return ensemble.value.services
+      .flatMap((svc) => {
+        return svc.components.map((component) => {
+          const scid = component.scid
+          return {
+            ...svc,
+            ...component,
+            scid,
+            dl: dls.value.find((v) => v.scid === scid),
+            sls: sls.value.find((v) => v.scid === scid),
+            isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
+          }
+        })
+      })
+      .filter((entry) => entry.label !== undefined)
+      .sort((a, b) => a.label!.localeCompare(b.label!))
+  })
+
+  const services = computed(() => {
+    if (!ensemble.value) return []
+  
+    return ensemble.value.services.filter((svc) => svc.label !== undefined).flatMap((svc) =>
+      svc.components.map((comp) => ({
+        sid: svc.sid,
+        scid: comp.scid,
+        label: svc.label,
+        short_label: svc.short_label,
+        language: comp.language,
+        user_apps: comp.user_apps,
+        subchannel: ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id),
+        dl: dls.value.find((v) => v.scid === comp.scid),
+        sls: sls.value.find((v) => v.scid === comp.scid),
+        isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
+      }))
+    ).sort((a, b) => a.label!.localeCompare(b.label!))
   })
 
   const selectedService = computed(() => {
@@ -144,11 +193,11 @@ export const useEDIStore = defineStore('edi', () => {
     if (val.data && val.mimetype) {
 
       // store the blob in IndexedDB
-      await saveSLS(val)
+      // await saveSLS(val) // TODO: re-enable once fixed
 
-      saveSLS(val).then(() => {}).catch((err) => {
-        console.error('Failed to save SLS to IndexedDB', err)
-      })
+      // saveSLS(val).then(() => {}).catch((err) => {
+      //   console.error('Failed to save SLS to IndexedDB', err)
+      // })
 
       const blob = new Blob([new Uint8Array(val.data)], { type: val.mimetype })
       const { data, ...rest } = val

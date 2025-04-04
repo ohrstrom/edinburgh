@@ -3,6 +3,7 @@ export interface Ensemble {
   label?: string
   short_label?: string
   services: Service[]
+  subchannels: Subchannel[]
 }
 
 export interface Subchannel {
@@ -13,12 +14,19 @@ export interface Subchannel {
   pl: string
 }
 
+export interface ServiceComponent {
+  scid: number
+  subchannel_id?: number
+  language?: string
+  user_apps?: string[] // or Types.UserApplication if enum-based
+}
+
 export interface Service {
   sid: number
-  scid?: number
   label?: string
   short_label?: string
-  subchannel?: Subchannel
+  // subchannel?: Subchannel
+  components: ServiceComponent[]
   isPlayting: boolean
   dl?: DL
   sls?: SLS

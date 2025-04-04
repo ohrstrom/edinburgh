@@ -13,16 +13,32 @@ defineEmits<{
 }>()
 
 const services = computed(() => {
-  return (ensemble.value?.services ?? []).sort((a, b) => a.scid > b.scid ? 1 : -1)
+  if (!ensemble.value) return []
+
+  return ensemble.value.services.flatMap((svc) => {
+    return svc.components.map((comp) => {
+      const subchannel = ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id)
+
+      return {
+        sid: svc.sid,
+        label: svc.label,
+        short_label: svc.short_label,
+        scid: comp.scid,
+        language: comp.language,
+        subchannel,
+      }
+    })
+  }).sort((a, b) => a.scid - b.scid)
 })
 
 </script>
 
 <template>
   <div class="ensemble-table">
-    <!-- 
+    <!--
     <pre v-text="ensemble" />
     -->
+    
     <div class="table">
       <div class="service" v-for="(svc, index) in services ?? []" :key="`table-svc-${index}`" @click.prevent="$emit('select', svc.sid)">
         <span class="scid">{{ svc.scid }}</span>

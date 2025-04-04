@@ -5,15 +5,6 @@ use thiserror::Error;
 use super::tables;
 
 #[derive(Debug, Serialize)]
-pub struct Subchannel {
-    pub id: u8,
-    pub start: usize,
-    pub size: Option<usize>,
-    pub pl: Option<String>,
-    pub bitrate: Option<usize>,
-}
-
-#[derive(Debug, Serialize)]
 pub struct Fig0 {
     cn: bool,
     oe: bool,
@@ -59,6 +50,15 @@ impl Fig0_0 {
 pub struct Fig0_1 {
     base: Fig0,
     pub subchannels: Vec<Subchannel>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Subchannel {
+    pub id: u8,
+    pub start: usize,
+    pub size: Option<usize>,
+    pub pl: Option<String>,
+    pub bitrate: Option<usize>,
 }
 
 impl Fig0_1 {
@@ -486,17 +486,20 @@ pub struct ServiceUA {
 }
 
 impl Fig0_13 {
+    // FIG 0/13 - User Application information (MCI)
     pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
         let mut services = Vec::new();
         let mut offset = 0;
 
         while offset + 3 <= data.len() {
+            if offset + 3 > data.len() {
+                break;
+            }
+
             let sid = u16::from_be_bytes([data[offset], data[offset + 1]]);
-            offset += 2;
-            
-            let scids = data[offset] >> 4;
-            let num_uas = data[offset] & 0x0F;
-            offset += 1;
+            let scids = data[offset + 2] >> 4;
+            let num_uas = data[offset + 2] & 0x0F;
+            offset += 3;
 
             if num_uas == 0 {
                 break;
@@ -528,14 +531,21 @@ impl Fig0_13 {
                     break;
                 }
 
-                let _ua_data = &data[offset..offset + ua_data_length as usize];
+                let ua_data = data[offset..offset + ua_data_length as usize].to_vec();
                 offset += ua_data_length as usize;
+
 
                 uas.push(tables::UserApplication::from(ua_type));
             }
 
-            services.push(ServiceUA { sid, scids, uas });
+            services.push(ServiceUA {
+                sid,
+                scids,
+                uas,
+            });
         }
+
+        // log::debug!("FIG0/13: {:?} - SVC: {:?}", base, services);
 
         Ok(Self { base, services })
     }

@@ -344,7 +344,7 @@ impl DLDecoder {
     pub fn flush(&mut self) {
         if let Some(current) = self.current.take() {
             if !current.chars.is_empty() && self.last_toggle != Some(current.toggle) {
-                log::debug!("DL: {} - {:?}", current.decode_label(), current);
+                // log::debug!("DL: {} - {:?}", current.decode_label(), current);
 
                 // log::debug!("{:?}", current.get_dl_plus());
 
