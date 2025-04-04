@@ -51,7 +51,7 @@ impl AudioDecoder {
     }
     fn feed(&mut self, au_data: &[u8]) {
 
-        // log::debug!("AU: {:?}", au_data);
+        // log::debug!("AU: {} bytes - {:?} ...", au_data.len(), &au_data[0..8]);
 
         match self.decoder.decode(&au_data) {
             Ok(r) => {

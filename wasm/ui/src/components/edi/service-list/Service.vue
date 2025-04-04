@@ -1,18 +1,22 @@
 <script setup lang="ts">
-
 import type * as Types from '@/types'
 
 import HexValue from '@/components/ui/HexValue.vue'
 import IconPlay from '@/components/icons/IconPlay.vue'
 import IconStop from '@/components/icons/IconStop.vue'
-import {computed} from "vue";
-
+import IconPause from '@/components/icons/IconPause.vue'
+import { computed } from 'vue'
 
 const props = defineProps<{ service: Types.Service }>()
 defineEmits<{
   (event: 'select', sid: number): void
   (event: 'play', sid: number): void
+  (event: 'stop'): void
 }>()
+
+const isPlaying = computed(() => {
+  return props.service?.isPlaying
+})
 
 const hasDlPlus = computed(() => {
   return (props.service?.dl?.dl_plus ?? []).length
@@ -22,22 +26,19 @@ const hasDlPlus = computed(() => {
 <template>
   <div @click.prevent="$emit('select', service.sid)" class="service">
     <div class="controls">
-      <button @click.prevent.stop="$emit('play', service.sid)">
-        <IconPlay v-if="!service.isCurrent" />
-        <IconStop v-else />
+      <button v-if="!isPlaying" @click.prevent.stop="$emit('play', service.sid)">
+        <IconPlay />
       </button>
-      <!--
-      <button @click="$emit('play', { scid: service.scid })">
-        {{ service.isCurrent ? 'S' : 'P' }}
+      <button v-else @click.prevent.stop="$emit('stop')">
+        <IconPause />
       </button>
-      -->
     </div>
     <div class="info">
       <div class="svc">
         <span class="label">{{ service?.label ?? '-' }}</span>
         <small class="sid">
           <HexValue :value="service.sid" />
-          <!--          <span> / {{ service.sid }}</span>-->
+          <span> / {{ service.sid }}</span>
         </small>
       </div>
       <div class="dl">
@@ -119,7 +120,7 @@ const hasDlPlus = computed(() => {
   }
   > .sls {
     > .container {
-      background: #efefef;
+      background: hsl(var(--c-muted));
       width: 72px;
       height: 54px;
       aspect-ratio: 4/3;

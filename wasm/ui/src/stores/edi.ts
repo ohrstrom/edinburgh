@@ -1,12 +1,35 @@
-import { ref, computed } from 'vue'
+import { computed, shallowRef, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { defineStore } from 'pinia'
-
-//import type { DL, Ensemble, SLS } from '@/types'
+import { useIDBKeyval } from '@vueuse/integrations/useIDBKeyval'
+import { defineStore } from 'pinia'// adjust the path as needed
 
 import type * as Types from '@/types'
 
+import { usePlayerStore } from './player' 
+
+// SLS cache
+const keyFor = (sid: number) => `edi:sls:${sid}`
+
+export function useSLSCache(sid: number) {
+  const initial = shallowRef<Types.SLS | null>(null)
+
+  const { data, isFinished, set } = useIDBKeyval<Types.SLS | null>(keyFor(sid), initial)
+
+  const remove = async () => {
+    await set(null)
+  }
+
+  return {
+    data,
+    set,
+    isFinished,
+    delete: remove,
+  }
+}
+
 export const useEDIStore = defineStore('edi', () => {
+
+  const playerStore = usePlayerStore()
 
   const connected = ref(false)
 
@@ -20,10 +43,11 @@ export const useEDIStore = defineStore('edi', () => {
   const sls = ref<Types.SLS[]>([])
 
   const selectedSid = ref(0)
-  const selectedScid = ref(0)
 
   const services = computed(() => {
-    if (!ensemble.value) return []
+    if (!ensemble.value) {
+      return []
+    }
     return ensemble.value.services
       .filter((svc) => svc.label !== undefined)
       .map((svc) => {
@@ -32,6 +56,7 @@ export const useEDIStore = defineStore('edi', () => {
           ...svc,
           dl: dls.value.find((v) => v.scid === svc.scid),
           sls: sls.value.find((v) => v.scid === svc.scid),
+          isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
         }
       })
       .sort((a, b) => a.label!.localeCompare(b.label!))
@@ -48,10 +73,10 @@ export const useEDIStore = defineStore('edi', () => {
     },
   })
 
-  const ediPort = useStorage('edi/port', '8855', localStorage, {
+  const ediPort = useStorage('edi/port', 8855, localStorage, {
     serializer: {
-      read: (v) => Number(v),
-      write: (v) => v,
+      read: (v: string) => Number(v),
+      write: (v: number) => v.toString(),
     },
   })
 
@@ -64,45 +89,73 @@ export const useEDIStore = defineStore('edi', () => {
     dls.value = []
     sls.value = []
     selectedSid.value = 0
-    selectedScid.value = 0
   }
 
   const selectService = async (sid: number) => {
     console.debug('STORE: selectService', sid)
     selectedSid.value = sid
-    selectedScid.value = sid
   }
 
   const updateEnsemble = async (val: Types.Ensemble) => {
     console.debug('STORE: updateEnsemble', val)
     ensemble.value = val
+
+    // read SLS cache NOTE: not working... SIDs are messed up i think..
+    /*
+    ensemble.value.services.filter((svc) => svc.sid !== undefined).forEach((svc) => {
+      const { data, isFinished } = useSLSCache(svc.sid!)
+      watch(isFinished, () => {
+        if (isFinished.value && data.value) {
+          updateSLS(data.value)
+        }
+      }, { immediate: true })
+    })
+    */
   }
 
   const updateDL = async (val: Types.DL) => {
     const index = dls.value.findIndex((v) => v.scid === val.scid)
-    if (index !== -1) {
+    if (-1 !== index) {
       dls.value[index] = val
     } else {
       dls.value.push(val)
     }
   }
 
+  const saveSLS = async (val: Types.SLS) => {
+    const svc = services.value.find((s) => s.scid === val.scid)
+    if (!svc) {
+      console.debug('SLS: service not found', val.scid)
+      return
+    }
+    const { set } = useSLSCache(svc.sid)
+    await set(val)
+  }
+
   const updateSLS = async (val: Types.SLS) => {
     const index = sls.value.findIndex((v) => v.scid === val.scid)
 
     // revoke old object URL if it exists
-    if (index !== -1 && sls.value[index].url) {
+    if (-1 !== index && sls.value[index].url) {
       URL.revokeObjectURL(sls.value[index].url!)
     }
 
     // create a Blob URL
     if (val.data && val.mimetype) {
+
+      // store the blob in IndexedDB
+      await saveSLS(val)
+
+      saveSLS(val).then(() => {}).catch((err) => {
+        console.error('Failed to save SLS to IndexedDB', err)
+      })
+
       const blob = new Blob([new Uint8Array(val.data)], { type: val.mimetype })
       const { data, ...rest } = val
       val = { ...rest, url: URL.createObjectURL(blob) }
     }
 
-    if (index !== -1) {
+    if (-1 !== index) {
       sls.value[index] = val
     } else {
       sls.value.push(val)

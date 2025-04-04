@@ -6,17 +6,17 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.bufferR = new Float32Array(0);
 
         this.maxQueueSize = 32;
-        this.maxBufferSize = 48000 * 2;
+        this.maxBufferSize = 48_000 * 2;
 
         this.port.onmessage = (event) => {
-            if (event.data && event.data.type === "reset") {
+            if (event.data && "reset" === event.data.type) {
                 console.debug("PCMProcessor: reset");
                 this.audioQueue = [];
                 this.bufferL = new Float32Array(0);
                 this.bufferR = new Float32Array(0);
 
             }
-            if (event.data && event.data.type === "audio") {
+            if (event.data && "audio" === event.data.type) {
                 let left = event.data.samples[0];
                 let right = event.data.samples[1];
 
@@ -35,7 +35,7 @@ class PCMProcessor extends AudioWorkletProcessor {
         const outputR = outputs[0][1];
 
         // Ensure we have enough buffered audio before starting playback
-        if (this.audioQueue.length < 4) {
+        if (4 > this.audioQueue.length) {
             // console.debug(`PCMProcessor: filling buffer: ${16 - this.audioQueue.length} missing`);
             outputL.fill(0);
             outputR.fill(0);
@@ -62,7 +62,7 @@ class PCMProcessor extends AudioWorkletProcessor {
         // }
 
         // Fill bufferL and bufferR until we have enough data to output
-        while (this.bufferL.length < outputL.length && this.audioQueue.length > 0) {
+        while (this.bufferL.length < outputL.length && 0 < this.audioQueue.length) {
             const nextBuffer = this.audioQueue.shift();
             this.bufferL = new Float32Array([...this.bufferL, ...nextBuffer.left]);
             this.bufferR = new Float32Array([...this.bufferR, ...nextBuffer.right]);

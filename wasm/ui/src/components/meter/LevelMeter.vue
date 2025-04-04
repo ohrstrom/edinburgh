@@ -1,26 +1,12 @@
 <script setup lang="ts">
-import { computed, useTemplateRef, reactive, watchEffect, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, reactive, useTemplateRef } from 'vue'
 import { useElementSize } from '@vueuse/core'
 
 import type * as Types from '@/types'
 
-const props = defineProps<{ volume: Types.Volume }>();
+const props = defineProps<{ level: Types.Level }>()
 
-const scale = [
-    -48,
-    -44,
-    -40,
-    -36,
-    -32,
-    -28,
-    -24,
-    -20,
-    -16,
-    -12,
-    -8,
-    -4,
-    0,
-]
+const scale = [-48, -44, -40, -36, -32, -28, -24, -20, -16, -12, -8, -4, 0]
 
 const levelsEl = useTemplateRef('levelsEl')
 const { width: levelsWidth } = useElementSize(levelsEl)
@@ -31,8 +17,8 @@ const tickWidth = computed(() => {
 
 const dBFS = computed(() => {
   return {
-    l: 20 * Math.log10(Math.max(props.volume.l, 0.00001)),
-    r: 20 * Math.log10(Math.max(props.volume.r, 0.00001)),
+    l: 20 * Math.log10(Math.max(props.level.l, 0.000_01)),
+    r: 20 * Math.log10(Math.max(props.level.r, 0.000_01)),
   }
 })
 
@@ -84,8 +70,6 @@ onMounted(() => {
 onUnmounted(() => {
   cancelAnimationFrame(rafId)
 })
-
-
 </script>
 
 <template>
@@ -110,7 +94,12 @@ onUnmounted(() => {
         <div class="level" :style="{ width: levelWidthDecay.l + '%' }" />
       </div>
       <div class="scale">
-        <div v-for="(dB, i) in scale" :key="i" class="tick" :style="{ left: tickWidth * i - 14 + 'px' }">
+        <div
+          v-for="(dB, i) in scale"
+          :key="i"
+          class="tick"
+          :style="{ left: tickWidth * i - 14 + 'px' }"
+        >
           <span v-text="dB" class="tick-label" />
         </div>
       </div>
@@ -210,7 +199,6 @@ onUnmounted(() => {
             left: 13px;
           }
         }
-
       }
     }
     .bar {

@@ -1,5 +1,13 @@
 @import 'lib/_reset.css';
 
+:root {
+  --c-bg: 0 0% 100%;
+  --c-fg: 0 0% 3.9%;
+
+  --c-muted: 0 0% 96.1%;
+  --c-muted-fg: 0 0% 45.1%;
+}
+
 html,
 body {
   height: 100%;

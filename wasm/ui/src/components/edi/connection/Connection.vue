@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import {watch} from 'vue'
+import { watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEDIStore } from '@/stores/edi'
 
-import Button from "@/components/ui/Button.vue";
-import Input from "@/components/ui/Input.vue";
+import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
 
 const { connected, ediHost, ediPort } = storeToRefs(useEDIStore())
 
 const emit = defineEmits<{
-  (event: 'connect', payload: { host: host, port: number }): void
+  (event: 'connect', payload: { host: host; port: number }): void
   (event: 'reset'): void
 }>()
 
@@ -28,19 +28,18 @@ const reset = () => {
 }
 
 watch(
-    ediPort,
-    (newVal, oldVal) => {
-      if (connected.value && newVal !== oldVal) {
-        console.debug("port changed:", newVal)
-        reset()
-        setTimeout(() => {
-          connect()
-        }, 10)
-      }
-    },
-    { immediate: true }
+  ediPort,
+  (newVal, oldVal) => {
+    if (connected.value && newVal !== oldVal) {
+      console.debug('port changed:', newVal)
+      reset()
+      setTimeout(() => {
+        connect()
+      }, 10)
+    }
+  },
+  { immediate: true },
 )
-
 </script>
 
 <template>

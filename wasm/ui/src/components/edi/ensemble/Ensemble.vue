@@ -12,9 +12,9 @@ const { ensemble } = storeToRefs(ediStore)
   <div v-if="ensemble.eid" class="ensemble">
     <div class="info">
       <div class="info-section ens">
-        <h2 class="label">{{ ensemble?.label ?? '-' }}</h2>
+        <h2 class="label">{{ ensemble?.label ?? 'probing' }}</h2>
         <div>
-          <span>{{ ensemble?.short_label ?? '-' }}</span>
+          <span>{{ ensemble?.short_label ?? '' }}</span>
           <span v-if="ensemble?.short_label">&nbsp;•&nbsp;</span>
           <HexValue :value="ensemble.eid" />
         </div>
@@ -42,12 +42,12 @@ const { ensemble } = storeToRefs(ediStore)
       }
     }
     .services {
+      display: none;
       font-size: 0.75rem;
       background: transparent;
     }
   }
   &--skeleton {
-    min-height: 85px;
     > .info {
       .message {
         display: inline-flex;
@@ -59,4 +59,3 @@ const { ensemble } = storeToRefs(ediStore)
   }
 }
 </style>
-

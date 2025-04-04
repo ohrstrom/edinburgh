@@ -4,14 +4,18 @@ import { storeToRefs } from 'pinia'
 
 import { EDI } from '../../pkg'
 
-import {initDecoder, decodeAAC} from './lib/decoder.js'
+import { decodeAAC, initDecoder } from './lib/decoder.js'
 
 import type * as Types from '@/types'
 
 import { useEDIStore } from '@/stores/edi'
+import { usePlayerStore } from '@/stores/player'
 
+import Panel from '@/components/ui/Panel.vue'
 import Connection from '@/components/edi/connection/Connection.vue'
+import Settings from '@/components/edi/settings/Settings.vue'
 import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
+import EnsembleTable from '@/components/edi/ensemble/EnsembleTable.vue'
 import ServiceDetail from '@/components/edi/service-detail/Service.vue'
 import ServiceList from '@/components/edi/service-list/Services.vue'
 
@@ -25,41 +29,52 @@ class EDInburgh {
   ws: WebSocket | null = null
   audioContext: AudioContext | null = null
   workletNode: AudioWorkletNode | null = null
+  gainNode: GainNode | null = null
   decoder: AudioDecoder | null = null
   analyser: Analyser | null = null
   analyserReading = false
 
   // faad decoder
-  faad: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  faad: any = undefined
+
+  decodeAudio: boolean = false
+  volume: number = 0
 
   // Store methods
   updateEnsemble: typeof useEDIStore.prototype.updateEnsemble
   updateDL: typeof useEDIStore.prototype.updateDL
   updateSLS: typeof useEDIStore.prototype.updateSLS
   selectService: typeof useEDIStore.prototype.selectService
+  setPlayerState: typeof usePlayerStore.prototype.setState
 
   // Reactive store state
   connected: Ref<boolean>
   selectedService: ComputedRef<Types.Service | undefined>
+  playerVolume: ComputedRef<number>
 
-  volume: Ref<Types.Volume>
+  level: Ref<Types.Level>
 
   constructor({
     updateEnsemble,
     updateDL,
     updateSLS,
     selectService,
+    setPlayerState,
     //
     connected,
     selectedService,
+    playerVolume,
   }: {
     updateEnsemble: typeof useEDIStore.prototype.updateEnsemble
     updateDL: typeof useEDIStore.prototype.updateDL
     updateSLS: typeof useEDIStore.prototype.updateSLS
     selectService: typeof useEDIStore.prototype.selectService
+    setPlayerState: typeof usePlayerStore.prototype.setState
     //
     connected: Ref<boolean>
     selectedService: ComputedRef<Types.Service | undefined>
+    playerVolume: ComputedRef<number>
   }) {
     console.log('EDInburgh:init')
 
@@ -68,11 +83,13 @@ class EDInburgh {
     this.updateDL = updateDL
     this.updateSLS = updateSLS
     this.selectService = selectService
+    this.setPlayerState = setPlayerState
     //
     this.connected = connected
     this.selectedService = selectedService
+    this.playerVolume = playerVolume
 
-    this.volume = ref<Types.Volume>({
+    this.level = ref<Types.Level>({
       l: 0,
       r: 0,
     })
@@ -80,7 +97,6 @@ class EDInburgh {
     /******************************************************************
      EDI Events / Callbacks
      ******************************************************************/
-
 
     const edi = new EDI()
     edi.on_ensemble_update(async (data: Types.Ensemble) => {
@@ -96,8 +112,15 @@ class EDInburgh {
     })
 
     edi.on_aac_segment(async (aacSegment) => {
+
+      if (!this.decodeAudio) {
+        return
+      }
+
       const selected = this.selectedService.value
-      if (!selected) return
+      if (!selected) {
+        return
+      }
 
       if (aacSegment.scid !== selected.scid) {
         return
@@ -105,25 +128,53 @@ class EDInburgh {
 
       aacSegment.frames.forEach((frame) => {
         this.processAACSegment(new Uint8Array(frame))
-      });
-
+      })
     })
 
     this.edi = edi
 
     // Watch for selected service changes
+    /*
     watch(
-        this.selectedService,
-        (newVal, oldVal) => {
-          if (newVal?.scid !== oldVal?.scid) {
-            console.debug("Service selected:", newVal)
-            ;(async () => {
-              await this.resetAudioDecoder()
-              await this.startAnalyser()
-            })()
-          }
-        },
-        { immediate: true }
+      this.selectedService,
+      (newVal, oldVal) => {
+        if (newVal?.scid !== oldVal?.scid) {
+          console.debug('Service selected:', newVal)
+          ;(async () => {
+            await this.resetAudioDecoder()
+            await this.startAnalyser()
+          })()
+        }
+        console.debug("selectedService", oldVal, newVal)
+        this.decodeAudio = true
+      },
+      { immediate: true },
+    )
+    */
+
+    // Watch for selected SID changes
+    watch(
+    () => this.selectedService.value?.scid,
+      async (newScid, oldScid) => {
+        if (newScid !== oldScid) {
+          await this.resetAudioDecoder()
+          await this.startAnalyser()
+        }
+        this.decodeAudio = true
+      },
+      { immediate: true }
+    )
+
+    // Watch settings
+    watch(
+    () => this.playerVolume.value,
+      async (val) => {
+        this.volume = val
+        if (this.gainNode) {
+          this.gainNode.gain.value = val
+        }
+      },
+      { immediate: true }
     )
 
     // initDecoder(new Uint8Array([0x12, 0x10]))  // Most standard
@@ -132,7 +183,6 @@ class EDInburgh {
     const dec = initDecoder(asc)
 
     this.faad = dec
-
   }
 
   async connect(conn: { host: string; port: number }): Promise<void> {
@@ -153,7 +203,7 @@ class EDInburgh {
     ws.onclose = () => {
       console.info('WebSocket closed')
       this.connected.value = false
-      this.ws = null
+      this.ws = undefined
     }
 
     ws.onerror = (e) => {
@@ -166,14 +216,13 @@ class EDInburgh {
     if (!this.decoder) {
       await this.initializeAudioDecoder()
     }
-
   }
 
   async reset(): Promise<void> {
     console.log('EDInburgh:reset')
 
     if (this.ws) {
-      this.ws.onopen = this.ws.onmessage = this.ws.onerror = null
+      this.ws.onopen = this.ws.onmessage = this.ws.onerror = undefined
 
       try {
         this.ws.close(1000, 'Client disconnecting')
@@ -183,15 +232,15 @@ class EDInburgh {
             resolve()
           }
         })
-      } catch (e) {
-        console.warn('WebSocket close error:', e)
+      } catch (err) {
+        console.warn('WebSocket close error:', err)
       }
 
-      this.ws = null
+      this.ws = undefined
     }
 
     await this.edi.reset()
-
+  
     this.connected.value = false
   }
 
@@ -204,8 +253,8 @@ class EDInburgh {
 
     const audioContext = new AudioContext({
       latencyHint: 'balanced',
-      // sampleRate: 48000,
-      sampleRate: 24000,
+      // sampleRate: 48_000,
+      sampleRate: 24_000,
     })
 
     await audioContext.audioWorklet.addModule('pcm-processor.js')
@@ -244,9 +293,14 @@ class EDInburgh {
     // analyserL.connect(audioContext.destination)
     // analyserR.connect(audioContext.destination)
 
-    // NOTE: just connect the context..
-    workletNode.connect(audioContext.destination)
+    const gainNode = audioContext.createGain()
+    gainNode.gain.value = this.volume
 
+    // NOTE: just connect the context..
+    // workletNode.connect(audioContext.destination)
+
+    workletNode.connect(gainNode)
+    gainNode.connect(audioContext.destination)
 
     const decoder = new AudioDecoder({
       output: (audioData) => {
@@ -258,6 +312,7 @@ class EDInburgh {
 
     this.audioContext = audioContext
     this.workletNode = workletNode
+    this.gainNode = gainNode
     this.decoder = decoder
     this.analyser = {
       l: analyserL,
@@ -277,21 +332,24 @@ class EDInburgh {
       return
     }
 
+    this.setPlayerState('stopped')
+
     this.decoder.reset()
 
     const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
     // const asc = new Uint8Array([0x13, 0x14])
     this.decoder.configure({
       codec: 'mp4a.40.5',
-      sampleRate: 48000,
+      sampleRate: 48_000,
       numberOfChannels: 2,
       description: asc.buffer,
     })
 
-    this.workletNode.port.postMessage({
-      type: 'reset',
-    })
-
+    this.workletNode.port.postMessage(
+      {
+        type: 'reset',
+      }
+    )
   }
 
   async __processAACSegment(aacSegment): Promise<void> {
@@ -305,16 +363,16 @@ class EDInburgh {
     const pcmData = decodeAAC(new Uint8Array(aacSegment.buffer))
 
     if (pcmData) {
-      this.workletNode?.port.postMessage({
-        type: 'audio',
-        samples: pcmData,
-      })
+      this.workletNode?.port.postMessage(
+        {
+          type: 'audio',
+          samples: pcmData,
+        }
+      )
     }
   }
 
-
   async processAACSegment(aacSegment): Promise<void> {
-
     if (!this.decoder) {
       console.info('decoder not initialized')
       return
@@ -333,36 +391,48 @@ class EDInburgh {
 
     try {
       this.decoder.decode(chunk)
-    } catch (e) {
-      console.error('Decoder error:', e)
+    } catch (err) {
+      console.error('Decoder error:', err)
     }
   }
 
-
   async playDecodedAudio(audioData): Promise<void> {
-
     if (!this.workletNode) {
       console.info('worklet not initialized')
       return
     }
+
 
     const numChannels = 2
     const numFrames = audioData.numberOfFrames
 
     const pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
 
-
     for (let channel = 0; channel < numChannels; channel++) {
       audioData.copyTo(pcmData[channel], { planeIndex: channel })
     }
 
-
     // console.debug("pcmData", pcmData)
 
-    this.workletNode.port.postMessage({
-      type: 'audio',
-      samples: pcmData,
-    })
+    this.setPlayerState('playing')
+
+    this.workletNode.port.postMessage(
+      {
+        type: 'audio',
+        samples: pcmData,
+      }
+    )
+  }
+
+  async playService(sid: number): Promise<void> {
+    this.selectService(sid)
+    this.decodeAudio = true
+  }
+
+  async stopService(): Promise<void> {
+    console.debug('stopService')
+    this.decodeAudio = false
+    this.setPlayerState('stopped')
   }
 
   async startAnalyser(): Promise<void> {
@@ -381,7 +451,9 @@ class EDInburgh {
   }
 
   analyserLoop = () => {
-    if (!this.analyser || !this.analyserReading) return
+    if (!this.analyser || !this.analyserReading) {
+      return
+    }
 
     const { l, r } = this.analyser
 
@@ -402,7 +474,7 @@ class EDInburgh {
 
     // console.debug("L:", dBFSL, "R:", dBFSR)
 
-    this.volume.value = {
+    this.level.value = {
       l: volumeL,
       r: volumeR,
     }
@@ -413,9 +485,15 @@ class EDInburgh {
 
 const ediStore = useEDIStore()
 
+const playerStore = usePlayerStore()
+
 const { updateEnsemble, updateDL, updateSLS, selectService, reset: resetStore } = ediStore
 
+const { setState: setPlayerState } = playerStore
+
 const { connected, selectedService } = storeToRefs(ediStore)
+
+const { volume: playerVolume } = storeToRefs(playerStore)
 
 const edinburgh = new EDInburgh({
   updateEnsemble,
@@ -423,8 +501,12 @@ const edinburgh = new EDInburgh({
   updateSLS,
   selectService,
   //
+  setPlayerState,
+  //
   connected,
   selectedService,
+  //
+  playerVolume,
 })
 
 /*
@@ -441,7 +523,6 @@ const reset = async () => {
   await edinburgh.reset()
   await resetStore()
 }
-
 </script>
 
 <template>
@@ -449,52 +530,71 @@ const reset = async () => {
   <pre v-text="edinburgh" />
   -->
   <main>
-    <header>
+    <Panel class="header">
+      <template #header>
+        <Settings />
+      </template>
       <Ensemble />
       <Connection @connect="connect" @reset="reset" />
-    </header>
+      <template #footer>
+        <EnsembleTable @select="(sid) => edinburgh.playService(sid)" />
+      </template>
+    </Panel>
 
-    <section class="service-detail">
-      <ServiceDetail :volume="edinburgh.volume.value" />
-    </section>
+    <Panel class="service-detail">
+      <ServiceDetail :level="edinburgh.level.value" />
+    </Panel>
 
-    <section class="service-list">
-      <ServiceList @play="edinburgh.selectService" @select="edinburgh.selectService" />
-    </section>
+    <Panel class="service-list">
+      <ServiceList @play="(sid) => edinburgh.playService(sid)" @select="(sid) => edinburgh.playService(sid)" @stop="() => edinburgh.stopService()" />
+    </Panel>
   </main>
 </template>
 
 <style scoped>
 main {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   max-width: 1024px;
   margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--c-bg-muted));
 
-  > header {
-    display: flex;
-    justify-content: space-between;
-    background: white;
+  > .header {
+    display: grid;
+    grid-template-columns: 1fr 324px;
+    gap: 12px;
 
-    margin-top: 16px;
-    margin-bottom: 16px;
+    margin-top: 20px;
+    margin-bottom: 20px;
     padding: 8px;
-    border: 1px solid #000;
-    box-shadow: 4px 4px #000;
+
+    .settings {
+      border-bottom: 1px solid black;
+    }
   }
 
   .service-detail {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     padding: 8px;
-    border: 1px solid #000;
-    box-shadow: 4px 4px #000;
   }
 
   .service-list {
-    margin-bottom: 16px;
-    //padding: 8px;
-    border: 1px solid #000;
-    box-shadow: 4px 4px #000;
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+
+    /* scrollbar */
+    &::-webkit-scrollbar {
+      width: 4px;
+      background: hsl(var(--c-muted));
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: hsl(var(--c-fg));
+      border-radius: 0;
+    }
   }
 }
 

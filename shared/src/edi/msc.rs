@@ -23,6 +23,7 @@ pub struct AudioFormat {
     samplerate: u8,
     bitrate: usize,
     au_count: usize,
+    channels: u8,
 }
 
 impl AudioFormat {
@@ -36,6 +37,10 @@ impl AudioFormat {
         let dac_rate = (h & 0x40) != 0;
         let is_sbr = (h & 0x20) != 0;
         let is_ps = (h & 0x08) != 0;
+        let channel_mode = (h & 0x10) != 0;
+        // let channel_mode_x = h & 0x10;
+
+        // log::debug!("channel mode: {:?} - {}", channel_mode_x, channel_mode);
 
         let codec = match (is_sbr, is_ps) {
             (true, true) => "HE-AAC v2",
@@ -54,6 +59,9 @@ impl AudioFormat {
             (_, false) => 4,
         };
 
+        let channels = if channel_mode || is_ps { 2 } else { 1 };
+
+
         Ok(Self {
             is_sbr,
             is_ps,
@@ -61,6 +69,7 @@ impl AudioFormat {
             samplerate,
             bitrate,
             au_count,
+            channels,
         })
     }
 }

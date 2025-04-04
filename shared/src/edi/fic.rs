@@ -2,6 +2,8 @@ use crate::utils;
 use serde::Serialize;
 use thiserror::Error;
 
+use super::tables;
+
 #[derive(Debug, Serialize)]
 pub struct Fig0 {
     cn: bool,
@@ -210,6 +212,7 @@ pub struct Fig0_3 {
     pub scids: u8,
     pub scid: u8,
 }
+
 impl Fig0_3 {
     // FIG 0/3 - Service component in packet mode (MCI)
     pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
@@ -232,6 +235,315 @@ impl Fig0_3 {
             scids,
             scid,
         })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Fig0_5 {
+    base: Fig0,
+    pub services: Vec<ServiceLanguage>,
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct ServiceLanguage {
+    pub scid: u8,
+    pub language: tables::Language,
+}
+
+impl Fig0_5 {
+    // FIG 0/5 - Service component language (SI)
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+        if data.len() < 3 {
+            return Err(FIGError::InvalidSize { l: data.len() });
+        }
+
+        let mut services = Vec::new();
+        let mut offset = 0;
+
+        while offset + 1 < data.len() {
+            let byte = data[offset];
+            let ls_flag = (byte & 0x80) != 0;
+
+            if ls_flag {
+                // Long form — skip 3 bytes
+                offset += 3;
+                continue;
+            }
+
+            let msc_fic_flag = (byte & 0x40) != 0;
+            if !msc_fic_flag {
+                let scid = byte & 0x3F;
+                let language = data[offset + 1];
+
+                services.push(ServiceLanguage {
+                    scid,
+                    language: tables::Language::from(language),
+                });
+            }
+
+            offset += 2;
+        }
+
+        // log::debug!("FIG0/5: {:?} - SVC: {:?}", base, services);
+
+        Ok(Self {
+            base,
+            services,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Fig0_9 {
+    base: Fig0,
+    lto: i32,
+    ecc: u8,
+    int_table_id: u8,
+}
+
+impl Fig0_9 {
+    // FIG 0/9 - Country, LTO & International table (SI)
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+        if data.len() < 3 {
+            return Err(FIGError::InvalidSize { l: data.len() });
+        }
+
+        // log::debug!("FIG0/9: {:?} - SVC: {:?} - {} bytes", base, data, data.len());
+
+        let ext_flag = (data[0] & 0x80) != 0;
+        let lto_raw = data[0] & 0x3F;
+        let lto_sign = if (lto_raw & 0x20) == 0 { 1 } else { -1 };
+
+        let lto_half_hours = lto_raw & 0x1F;
+
+        let lto = lto_sign * (lto_half_hours as i32) / 2;
+        let ecc = data[1];
+        let int_table_id = data[2];
+
+        log::debug!("ECC: {} int_table_id: {}", ecc, int_table_id);
+
+        /*
+        Extended field: this n × 8-bit field shall contain one or more sub-fields, which define those services for which their
+        ECC differs from that of the ensemble.
+        */
+        if ext_flag {
+            let mut idx = 3;
+            while idx + 3 <= data.len() {
+                let byte = data[idx];
+                let num_services = byte >> 6;
+                let ecc = data.get(idx + 1).copied().ok_or(FIGError::InvalidSize { l: data.len() })?;
+
+                let mut sids = Vec::new();
+                for i in 0..num_services {
+                    let sid_offset = idx + 2 + (i as usize) * 2;
+                    if sid_offset + 1 >= data.len() {
+                        return Err(FIGError::InvalidSize { l: data.len() });
+                    }
+                    let sid = u16::from_be_bytes([data[sid_offset], data[sid_offset + 1]]);
+                    sids.push(sid);
+                }
+
+                let size = 2 + (num_services as usize) * 2;
+                idx += size;
+
+                // log::debug!("FIG0/9: Extended subfield: ecc: {} sids: {:?}", ecc, sids);
+
+                // TODO: we somehow want to store this ;)
+            }
+        }
+
+        // log::debug!("FIG0/9 ext: {} lto: {} ecc: {} int_table_id: {}", ext_flag, lto, ecc, int_table_id);
+
+        Ok(Self {
+            base,
+            lto,
+            ecc,
+            int_table_id,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Fig0_10 {
+    base: Fig0,
+    pub mjd: u32,
+    pub lsi: bool,
+    pub utc_flag: bool,
+    pub utc: DateTimeUTC,
+}
+
+#[derive(Debug, Serialize)]
+pub enum DateTimeUTC {
+    Short {
+        year: i32,
+        month: u8,
+        day: u8,
+        hours: u8,
+        minutes: u8,
+    },
+    Long {
+        year: i32,
+        month: u8,
+        day: u8,
+        hours: u8,
+        minutes: u8,
+        seconds: u8,
+        milliseconds: u16,
+    },
+}
+
+impl Fig0_10 {
+    // FIG 0/10 - Date & time (SI)
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+        if data.len() < 4 {
+            return Err(FIGError::InvalidSize { l: data.len() });
+        }
+    
+        // log::debug!("FIG0/10: {:?} - SVC: {:?}", base, data);
+    
+        // Correct MJD extraction: 17 bits from data[0], data[1], and top 2 bits of data[2]
+        let mjd = (((data[0] & 0x7F) as u32) << 10)
+            | ((data[1] as u32) << 2)
+            | ((data[2] as u32) >> 6);
+    
+        // Inline MJD → Gregorian date conversion
+        let mjd_f = mjd as f64;
+        let y0 = ((mjd_f - 15078.2) / 365.25).floor();
+        let m0 = ((mjd_f - 14956.1 - (y0 * 365.25).floor()) / 30.6001).floor();
+        let d = (mjd_f - 14956.0 - (y0 * 365.25).floor() - (m0 * 30.6001).floor()) as u8;
+        let k = if m0 == 14.0 || m0 == 15.0 { 1.0 } else { 0.0 };
+        let year = (y0 + k) as i32 + 1900;
+        let month = (m0 - 1.0 - k * 12.0) as u8;
+        let day = d;
+    
+        let lsi = ((data[2] >> 5) & 0x01) != 0;
+        let utc_flag = ((data[2] >> 3) & 0x01) != 0;
+    
+        let utc = if utc_flag {
+            if data.len() < 6 {
+                log::warn!("FIG0/10: Invalid size for long form UTC: {} bytes", data.len());
+                return Err(FIGError::InvalidSize { l: data.len() });
+            }
+    
+            let hour = ((data[2] & 0x07) << 2) | (data[3] >> 6);
+            let minute = data[3] & 0x3F;
+            let second = data[4] >> 2;
+            let millisecond = ((data[4] & 0x03) as u16) << 8 | data[5] as u16;
+    
+            DateTimeUTC::Long {
+                year,
+                month,
+                day,
+                hours: hour,
+                minutes: minute,
+                seconds: second,
+                milliseconds: millisecond,
+            }
+        } else {
+            if data.len() < 6 {
+                log::warn!("FIG0/10: Invalid size for short form UTC: {} bytes", data.len());
+                return Err(FIGError::InvalidSize { l: data.len() });
+            }
+    
+            let b4 = data[4];
+            let b5 = data[5];
+    
+            let hour = (b4 >> 3) & 0x1F;
+            let minute = ((b4 & 0x07) << 3) | (b5 >> 5);
+    
+            DateTimeUTC::Short {
+                year,
+                month,
+                day,
+                hours: hour,
+                minutes: minute,
+            }
+        };
+    
+        Ok(Self {
+            base,
+            mjd,
+            lsi,
+            utc_flag,
+            utc,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Fig0_13 {
+    base: Fig0,
+    pub services: Vec<ServiceUA>,
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct ServiceUA {
+    pub sid: u16,
+    pub scids: u8,
+    pub uas: Vec<tables::UserApplication>,
+}
+
+impl Fig0_13 {
+    // FIG 0/13 - User Application information (MCI)
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+        let mut services = Vec::new();
+        let mut offset = 0;
+
+        while offset + 3 <= data.len() {
+            if offset + 3 > data.len() {
+                break;
+            }
+
+            let sid = u16::from_be_bytes([data[offset], data[offset + 1]]);
+            let scids = data[offset + 2] >> 4;
+            let num_uas = data[offset + 2] & 0x0F;
+            offset += 3;
+
+            if num_uas == 0 || num_uas > 6 {
+                log::warn!("FIG0/13: Invalid number of User Applications: {num_uas}");
+                break;
+            }
+
+            let mut uas = Vec::new();
+
+            for _ in 0..num_uas {
+                if offset + 2 > data.len() {
+                    log::warn!("FIG0/13: Unexpected end of buffer before UA entry");
+                    break;
+                }
+
+                let ua_type = ((data[offset] as u16) << 3) | ((data[offset + 1] >> 5) as u16);
+                let ua_data_length = data[offset + 1] & 0x1F;
+                offset += 2;
+
+                if offset + ua_data_length as usize > data.len() {
+                    log::warn!(
+                        "FIG0/13: UA data ({} bytes) exceeds buffer (remaining: {})",
+                        ua_data_length,
+                        data.len() - offset
+                    );
+                    break;
+                }
+
+                let ua_data = data[offset..offset + ua_data_length as usize].to_vec();
+                offset += ua_data_length as usize;
+
+
+                uas.push(tables::UserApplication::from(ua_type));
+            }
+
+            services.push(ServiceUA {
+                sid,
+                scids,
+                uas,
+            });
+        }
+
+        log::debug!("FIG0/13: {:?} - SVC: {:?}", base, services);
+
+        Ok(Self { base, services })
     }
 }
 
@@ -356,6 +668,10 @@ pub enum FIG {
     F0_1(Fig0_1),
     F0_2(Fig0_2),
     F0_3(Fig0_3),
+    F0_5(Fig0_5),
+    F0_9(Fig0_9),
+    F0_10(Fig0_10),
+    F0_13(Fig0_13),
     //
     F1_0(Fig1_0),
     F1_1(Fig1_1),
@@ -469,6 +785,10 @@ impl FICDecoder {
             1 => Ok(FIG::F0_1(Fig0_1::from_bytes(base, &data[1..])?)),
             2 => Ok(FIG::F0_2(Fig0_2::from_bytes(base, &data[1..])?)),
             3 => Ok(FIG::F0_3(Fig0_3::from_bytes(base, &data[1..])?)),
+            5 => Ok(FIG::F0_5(Fig0_5::from_bytes(base, &data[1..])?)),
+            9 => Ok(FIG::F0_9(Fig0_9::from_bytes(base, &data[1..])?)),
+            10 => Ok(FIG::F0_10(Fig0_10::from_bytes(base, &data[1..])?)),
+            13 => Ok(FIG::F0_13(Fig0_13::from_bytes(base, &data[1..])?)),
             _ => Err(FIGError::Unsupported { kind: ext }),
         }
     }

@@ -1,30 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 
-import {computed} from "vue";
-
-
-import type * as Types from "@/types";
+import type * as Types from '@/types'
 
 import { storeToRefs } from 'pinia'
 import { useEDIStore } from '@/stores/edi'
 
 import HexValue from '@/components/ui/HexValue.vue'
-import LevelMeter from "@/components/meter/LevelMeter.vue"
+import LevelMeter from '@/components/meter/LevelMeter.vue'
+
+import Subchannel from './Subchannel.vue'
 
 const ediStore = useEDIStore()
 const { selectedService: service } = storeToRefs(ediStore)
 
-
-const af = { is_sbr: true, is_ps: true, codec: "HE-AAC", samplerate: 48, bitrate: 48, au_count: 3 }
+const af = { is_sbr: true, is_ps: true, codec: 'HE-AAC', samplerate: 48, bitrate: 48, au_count: 3 }
 
 const hasDlPlus = computed(() => {
   return (service.value?.dl?.dl_plus ?? []).length
 })
 
-defineProps<{ volume: Types.Volume }>();
+defineProps<{ level: Types.Level }>()
 
 // const dummyLabel =  "ARTBAT - Love is Gonna Save And Some More Text we should scroll Us (with Benny Benassi) - radio4tng.ch"
-
 </script>
 
 <template>
@@ -39,9 +37,14 @@ defineProps<{ volume: Types.Volume }>();
           <span>{{ service?.short_label ?? '-' }}</span>
           <span v-if="service?.short_label">&nbsp;•&nbsp;</span>
           <HexValue :value="service.sid" />
+
+          <span v-if="service?.language">
+            • {{ service.language }}
+          </span>
         </div>
       </div>
       <div class="info-section format">
+        <Subchannel v-if="service?.subchannel" :subchannel="service.subchannel" />
         <div v-if="af" class="audio-format">
           <span>{{ af.codec }}</span>
           <span>{{ af.samplerate }} kHz</span>
@@ -54,7 +57,7 @@ defineProps<{ volume: Types.Volume }>();
           </span>
         </div>
       </div>
-      <div class="info-section dl-container" :class="{'has-dl-plus': hasDlPlus}">
+      <div class="info-section dl-container" :class="{ 'has-dl-plus': hasDlPlus }">
         <div class="dl">
           <span v-if="hasDlPlus" class="has-dl-plus-flag">DL+</span>
           <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
@@ -70,7 +73,7 @@ defineProps<{ volume: Types.Volume }>();
         </div>
       </div>
       <div class="info-section meter">
-        <LevelMeter :volume="volume" />
+        <LevelMeter :level="level" />
       </div>
     </div>
     <div class="sls">
@@ -108,6 +111,9 @@ defineProps<{ volume: Types.Volume }>();
       }
     }
     > .format {
+      .subchannel {
+        font-size: 0.75rem;
+      }
       .audio-format {
         display: flex;
         gap: 8px;
@@ -189,12 +195,10 @@ defineProps<{ volume: Types.Volume }>();
     > .meter {
       margin-top: auto;
     }
-
-
   }
   > .sls {
     > .container {
-      background: #efefef;
+      background: hsl(var(--c-muted));
       width: 324px;
       height: 244px;
       aspect-ratio: 4/3;

@@ -10,6 +10,7 @@ const { services } = storeToRefs(ediStore)
 defineEmits<{
   (event: 'select', sid: number): void
   (event: 'play', sid: number): void
+  (event: 'stop'): void
 }>()
 </script>
 
@@ -21,15 +22,14 @@ defineEmits<{
       :service="service"
       @select="$emit('select', $event)"
       @play="$emit('play', $event)"
+      @stop="$emit('stop', $event)"
     />
   </div>
 </template>
 
 <style lang="scss" scoped>
 .services {
-  min-height: 80px;
-  max-height: 600px;
-  overflow-y: scroll;
+  min-height: 100%;
 }
 .service {
   padding: 8px;

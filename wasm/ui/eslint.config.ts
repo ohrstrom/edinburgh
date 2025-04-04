@@ -16,11 +16,24 @@ export default defineConfigWithVueTs(
 
   {
     name: 'app/files-to-ignore',
-    ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**'],
+    ignores: [
+      '**/dist/**',
+      '**/dist-ssr/**',
+      '**/coverage/**',
+      '**/tmp/**',
+      'src/lib/**'
+    ],
   },
 
   pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
   ...oxlint.configs['flat/recommended'],
   skipFormatting,
+
+  {
+    name: 'app/custom-rules',
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
+  }
 )

@@ -1,12 +1,15 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
-  type?: 'button' | 'submit' | 'reset'
-  disabled?: boolean
-  variant?: 'default' | 'primary' | 'danger'
-}>(), {
-  type: 'button',
-  variant: 'default',
-})
+withDefaults(
+  defineProps<{
+    type?: 'button' | 'submit' | 'reset'
+    disabled?: boolean
+    variant?: 'default' | 'primary' | 'danger'
+  }>(),
+  {
+    type: 'button',
+    variant: 'default',
+  },
+)
 
 defineEmits<{
   (e: 'click', event: MouseEvent): void
@@ -15,10 +18,10 @@ defineEmits<{
 
 <template>
   <button
-      :type="type ?? 'button'"
-      :disabled="disabled"
-      :class="['button', variant]"
-      @click="$emit('click', $event)"
+    :type="type ?? 'button'"
+    :disabled="disabled"
+    :class="['button', variant]"
+    @click="$emit('click', $event)"
   >
     <slot />
   </button>

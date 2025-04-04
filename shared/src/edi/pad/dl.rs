@@ -253,15 +253,13 @@ impl DLDecoder {
         }
 
         // log::debug!(
-        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {} bytes # {:?}",
+        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {}",
         //     toggle,
         //     is_first,
         //     is_last,
         //     num_chars,
         //     data.len(),
-        //     String::from_utf8_lossy(&data[start..end]),
         // );
-
 
         // log::debug!("DL current chars: {:?}", self.current.chars.len());
 

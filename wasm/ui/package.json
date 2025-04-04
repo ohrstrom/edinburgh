@@ -9,13 +9,15 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore",
+    "lint:oxlint": "oxlint . --fix -D correctness -W suspicious --ignore-path .oxlintignore",
     "lint:eslint": "eslint . --fix",
     "lint": "run-s lint:*",
     "format": "prettier --write src/"
   },
   "dependencies": {
     "@vueuse/core": "^13.0.0",
+    "@vueuse/integrations": "^13.0.0",
+    "idb-keyval": "^6",
     "lodash.debounce": "^4.0.8",
     "pinia": "^3.0.1",
     "vite-plugin-wasm": "^3.4.1",
