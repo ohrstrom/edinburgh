@@ -62,6 +62,7 @@ pub struct Fig0_1 {
 }
 
 impl Fig0_1 {
+    // FIG 0/1 - Sub-channel organization (MCI)
     pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
         let mut offset = 0;
         let mut subchannels = Vec::new();
@@ -267,10 +268,10 @@ impl Fig0_5 {
 
             if ls_flag {
                 // Long form — skip 3 bytes
+                log::debug!("FIG0/5: Long form detected, skipping 3 bytes");
                 offset += 3;
                 continue;
             }
-
             let msc_fic_flag = (byte & 0x40) != 0;
             if !msc_fic_flag {
                 let scid = byte & 0x3F;
@@ -286,6 +287,7 @@ impl Fig0_5 {
         }
 
         // log::debug!("FIG0/5: {:?} - SVC: {:?}", base, services);
+        log::debug!("FIG0/5: SVC: {:?}", services);
 
         Ok(Self {
             base,

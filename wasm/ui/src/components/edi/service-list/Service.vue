@@ -38,7 +38,9 @@ const hasDlPlus = computed(() => {
         <span class="label">{{ service?.label ?? '-' }}</span>
         <small class="sid">
           <HexValue :value="service.sid" />
+          <!--
           <span> / {{ service.sid }}</span>
+          -->
         </small>
       </div>
       <div class="dl">
@@ -79,6 +81,11 @@ const hasDlPlus = computed(() => {
       flex-grow: 1;
       > .label {
         flex-grow: 1;
+        display: flex;
+        align-items: center;
+      }
+      > .sid {
+        font-size: 0.75rem;
         display: flex;
         align-items: center;
       }

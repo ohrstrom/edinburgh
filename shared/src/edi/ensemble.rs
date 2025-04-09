@@ -132,7 +132,7 @@ impl Ensemble {
                             }
                         }
                         if matched > 1 {
-                            log::warn!("FIG0/5: SCId {} matched multiple components across services!", lang.scid);
+                            // log::warn!("FIG0/5: SCId {} matched multiple components across services!", lang.scid);
                         }
                     }
                 }
@@ -177,7 +177,7 @@ impl Ensemble {
         }
 
         if updated {
-            log::info!("ENSEMBLE: {:#?}", self);
+            // log::info!("ENSEMBLE: {:#?}", self);
             emit_event(EDIEvent::EnsembleUpdated(self.clone()));
         }
 

@@ -27,6 +27,7 @@ export interface Service {
   short_label?: string
   // subchannel?: Subchannel
   components: ServiceComponent[]
+  audioFormat?: AudioFormat
   isPlayting: boolean
   dl?: DL
   sls?: SLS
@@ -49,6 +50,16 @@ export interface SLS {
   data?: Byte[]
   md5?: string
   url?: string
+}
+
+export interface AudioFormat {
+  sbr: boolean
+  ps: boolean
+  codec: string
+  au_count: number
+  samplerate: number
+  bitrate: number
+  channels: number
 }
 
 //

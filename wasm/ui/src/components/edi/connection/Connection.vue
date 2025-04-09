@@ -35,7 +35,7 @@ watch(
       reset()
       setTimeout(() => {
         connect()
-      }, 10)
+      }, 500)
     }
   },
   { immediate: true },

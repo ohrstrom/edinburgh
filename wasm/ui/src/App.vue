@@ -13,6 +13,7 @@ import { usePlayerStore } from '@/stores/player'
 
 import Panel from '@/components/ui/Panel.vue'
 import Connection from '@/components/edi/connection/Connection.vue'
+import Scanner from '@/components/edi/connection/Scanner.vue'
 import Settings from '@/components/edi/settings/Settings.vue'
 import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
 import EnsembleTable from '@/components/edi/ensemble/EnsembleTable.vue'
@@ -41,11 +42,16 @@ class EDInburgh {
   decodeAudio: boolean = false
   volume: number = 0
 
+  // "local" subchannel state
+  // not used: at the moment directly calls ediStore - check performance...
+  // subchannels: Map<number, Types.Subchannel> = new Map()
+
   // Store methods
   updateEnsemble: typeof useEDIStore.prototype.updateEnsemble
   updateDL: typeof useEDIStore.prototype.updateDL
   updateSLS: typeof useEDIStore.prototype.updateSLS
   selectService: typeof useEDIStore.prototype.selectService
+  setAudioFormat: typeof useEDIStore.prototype.setAudioFormat
   setPlayerState: typeof usePlayerStore.prototype.setState
 
   // Reactive store state
@@ -60,6 +66,7 @@ class EDInburgh {
     updateDL,
     updateSLS,
     selectService,
+    setAudioFormat,
     setPlayerState,
     //
     connected,
@@ -70,6 +77,7 @@ class EDInburgh {
     updateDL: typeof useEDIStore.prototype.updateDL
     updateSLS: typeof useEDIStore.prototype.updateSLS
     selectService: typeof useEDIStore.prototype.selectService
+    setAudioFormat: typeof useEDIStore.prototype.setAudioFormat
     setPlayerState: typeof usePlayerStore.prototype.setState
     //
     connected: Ref<boolean>
@@ -83,6 +91,7 @@ class EDInburgh {
     this.updateDL = updateDL
     this.updateSLS = updateSLS
     this.selectService = selectService
+    this.setAudioFormat = setAudioFormat
     this.setPlayerState = setPlayerState
     //
     this.connected = connected
@@ -113,6 +122,11 @@ class EDInburgh {
 
     edi.on_aac_segment(async (aacSegment) => {
 
+
+      // console.debug('AAC segment:', aacSegment)
+
+      this.setAudioFormat(aacSegment.scid, aacSegment.audio_format)
+
       if (!this.decodeAudio) {
         return
       }
@@ -125,6 +139,8 @@ class EDInburgh {
       if (aacSegment.scid !== selected.scid) {
         return
       }
+
+      // console.debug('AAC segment:', aacSegment)
 
       aacSegment.frames.forEach((frame) => {
         this.processAACSegment(new Uint8Array(frame))
@@ -487,7 +503,7 @@ const ediStore = useEDIStore()
 
 const playerStore = usePlayerStore()
 
-const { updateEnsemble, updateDL, updateSLS, selectService, reset: resetStore } = ediStore
+const { updateEnsemble, updateDL, updateSLS, selectService, setAudioFormat, reset: resetStore } = ediStore
 
 const { setState: setPlayerState } = playerStore
 
@@ -500,12 +516,11 @@ const edinburgh = new EDInburgh({
   updateDL,
   updateSLS,
   selectService,
-  //
+  setAudioFormat,
   setPlayerState,
   //
   connected,
   selectedService,
-  //
   playerVolume,
 })
 
@@ -535,7 +550,10 @@ const reset = async () => {
         <Settings />
       </template>
       <Ensemble />
-      <Connection @connect="connect" @reset="reset" />
+      <div>
+        <Connection @connect="connect" @reset="reset" />
+        <Scanner :edi="edinburgh.edi" />
+      </div>
       <template #footer>
         <EnsembleTable @select="(sid) => edinburgh.playService(sid)" />
       </template>
@@ -569,6 +587,7 @@ main {
     margin-top: 20px;
     margin-bottom: 20px;
     padding: 8px;
+    padding-bottom: 0;
 
     .settings {
       border-bottom: 1px solid black;

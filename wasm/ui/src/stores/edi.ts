@@ -37,7 +37,10 @@ export const useEDIStore = defineStore('edi', () => {
   const ensemble = ref<Types.Ensemble>({
     eid: 0,
     services: [],
+    subchannels: [],
   })
+
+  const audioFormats = ref<Map<number, Types.AudioFormat>>(new Map())
 
   const dls = ref<Types.DL[]>([])
   const sls = ref<Types.SLS[]>([])
@@ -85,6 +88,7 @@ export const useEDIStore = defineStore('edi', () => {
             dl: dls.value.find((v) => v.scid === scid),
             sls: sls.value.find((v) => v.scid === scid),
             isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
+            // isPlaying: playerStore.state === 'playing',
           }
         })
       })
@@ -104,9 +108,11 @@ export const useEDIStore = defineStore('edi', () => {
         language: comp.language,
         user_apps: comp.user_apps ?? [],
         subchannel: ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id),
+        audioFormat: audioFormats.value.get(comp.scid),
         dl: dls.value.find((v) => v.scid === comp.scid),
         sls: sls.value.find((v) => v.scid === comp.scid),
         isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
+        // isPlaying: playerStore.state === 'playing',
       }))
     ).sort((a, b) => a.label!.localeCompare(b.label!))
   })
@@ -134,7 +140,9 @@ export const useEDIStore = defineStore('edi', () => {
     ensemble.value = {
       eid: 0,
       services: [],
+      subchannels: [],
     }
+    audioFormats.value.clear()
     dls.value = []
     sls.value = []
     selectedSid.value = 0
@@ -160,6 +168,14 @@ export const useEDIStore = defineStore('edi', () => {
       }, { immediate: true })
     })
     */
+  }
+
+  const setAudioFormat = async (scid: number, val: Types.AudioFormat) => {
+    // console.debug('STORE: setAudioFormat', scid, val)
+    // NOTE: i assume this does not change (at least not in the same session)
+    if (!audioFormats.value.has(scid)) {
+      audioFormats.value.set(scid, val)
+    }
   }
 
   const updateDL = async (val: Types.DL) => {
@@ -218,6 +234,7 @@ export const useEDIStore = defineStore('edi', () => {
     services,
     selectedService,
     selectedSid,
+    audioFormats,
     // settings
     ediHost,
     ediPort,
@@ -226,6 +243,7 @@ export const useEDIStore = defineStore('edi', () => {
     selectService,
     // state updates
     updateEnsemble,
+    setAudioFormat,
     updateDL,
     updateSLS,
   }

@@ -4,7 +4,7 @@ use serde::{Serialize, Serializer};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Language {
-    ALB = 0x01, BRE = 0x02, CAT = 0x03, HRV = 0x04, CYM = 0x05,
+    NA = 0x00, ALB = 0x01, BRE = 0x02, CAT = 0x03, HRV = 0x04, CYM = 0x05,
     CES = 0x06, DAN = 0x07, DEU = 0x08, ENG = 0x09, SPA = 0x0A,
     EPO = 0x0B, EST = 0x0C, EUS = 0x0D, FAE = 0x0E, FRA = 0x0F,
     FRY = 0x10, GLE = 0x11, GLG = 0x13, ISL = 0x14, ITA = 0x15,
@@ -25,7 +25,7 @@ pub enum Language {
 impl From<u8> for Language {
     fn from(value: u8) -> Self {
         match value {
-            0x01 => Language::ALB, 0x02 => Language::BRE, 0x03 => Language::CAT, 0x04 => Language::HRV,
+            0x00 => Language::NA, 0x01 => Language::ALB, 0x02 => Language::BRE, 0x03 => Language::CAT, 0x04 => Language::HRV,
             0x05 => Language::CYM, 0x06 => Language::CES, 0x07 => Language::DAN, 0x08 => Language::DEU,
             0x09 => Language::ENG, 0x0A => Language::SPA, 0x0B => Language::EPO, 0x0C => Language::EST,
             0x0D => Language::EUS, 0x0E => Language::FAE, 0x0F => Language::FRA, 0x10 => Language::FRY,
@@ -61,6 +61,7 @@ impl Serialize for Language {
 impl fmt::Display for Language {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Language::NA => write!(f, "Unknown/NA"),
             Language::ALB => write!(f, "Albanian"),
             Language::AMH => write!(f, "Amharic"),
             Language::ARA => write!(f, "Arabic"),

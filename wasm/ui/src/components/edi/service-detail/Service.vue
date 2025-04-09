@@ -14,7 +14,12 @@ import Subchannel from './Subchannel.vue'
 const ediStore = useEDIStore()
 const { selectedService: service } = storeToRefs(ediStore)
 
-const af = { is_sbr: true, is_ps: true, codec: 'HE-AAC', samplerate: 48, bitrate: 48, au_count: 3 }
+
+const af = computed(() => {
+  if (!service.value) return null
+
+  return service.value.audioFormat
+})
 
 const hasDlPlus = computed(() => {
   return (service.value?.dl?.dl_plus ?? []).length
@@ -49,11 +54,12 @@ defineProps<{ level: Types.Level }>()
           <span>{{ af.codec }}</span>
           <span>{{ af.samplerate }} kHz</span>
           <span>@ {{ af.bitrate }} kBit/s</span>
-          <span>Stereo</span>
-          <span v-if="af.is_sbr || af.is_ps" class="flags">
-            <span v-if="af.is_sbr">SBR</span>
-            <span v-if="af.is_sbr && af.is_ps">+</span>
-            <span v-if="af.is_ps">PS</span>
+          <span v-if="af.channels == 2">Stereo</span>
+          <span v-else>Mono</span>
+          <span v-if="af.sbr || af.ps" class="flags">
+            <span v-if="af.sbr">SBR</span>
+            <span v-if="af.sbr && af.ps">+</span>
+            <span v-if="af.ps">PS</span>
           </span>
         </div>
       </div>
@@ -104,13 +110,14 @@ defineProps<{ level: Types.Level }>()
     flex-direction: column;
     min-width: 0;
     .svc {
-      margin-bottom: 16px;
+      margin-bottom: 8px;
       > .label {
         margin-bottom: 8px;
         font-size: 1.25rem;
       }
     }
     > .format {
+      margin-bottom: 4px;
       .subchannel {
         font-size: 0.75rem;
       }

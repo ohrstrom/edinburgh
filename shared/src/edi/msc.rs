@@ -15,10 +15,10 @@ pub enum FormatError {
     StartValuesZero,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AudioFormat {
-    is_sbr: bool,
-    is_ps: bool,
+    sbr: bool,
+    ps: bool,
     codec: String,
     samplerate: u8,
     bitrate: usize,
@@ -34,37 +34,38 @@ impl AudioFormat {
 
         let h = sf[2];
 
-        let dac_rate = (h & 0x40) != 0;
-        let is_sbr = (h & 0x20) != 0;
-        let is_ps = (h & 0x08) != 0;
+        let dac_mode = (h & 0x40) != 0;
+        let sbr = (h & 0x20) != 0;
+        let ps = (h & 0x08) != 0;
         let channel_mode = (h & 0x10) != 0;
+
         // let channel_mode_x = h & 0x10;
 
         // log::debug!("channel mode: {:?} - {}", channel_mode_x, channel_mode);
 
-        let codec = match (is_sbr, is_ps) {
-            (true, true) => "HE-AAC v2",
+        let codec = match (sbr, ps) {
+            (true, true) => "HE-AACv2",
             (true, false) => "HE-AAC",
             (false, _) => "AAC-LC",
         }
         .to_string();
 
-        let samplerate = if dac_rate { 48 } else { 32 };
+        let samplerate = if dac_mode { 48 } else { 32 };
         let bitrate = sf_len / 120 * 8;
 
-        let au_count = match (samplerate, is_sbr) {
+        let au_count = match (samplerate, sbr) {
             (48, true) => 3,
             (48, false) => 6,
             (_, true) => 2,
             (_, false) => 4,
         };
 
-        let channels = if channel_mode || is_ps { 2 } else { 1 };
+        let channels = if channel_mode || ps { 2 } else { 1 };
 
 
         Ok(Self {
-            is_sbr,
-            is_ps,
+            sbr,
+            ps,
             codec,
             samplerate,
             bitrate,
@@ -78,14 +79,14 @@ impl AudioFormat {
 #[derivative(Debug)]
 pub struct AACPResult {
     pub scid: u8,
-    // #[derivative(Debug = "ignore")]
+    pub audio_format: Option<AudioFormat>,
     #[derivative(Debug(format_with = "AACPResult::debug_frames"))]
     pub frames: Vec<Vec<u8>>,
 }
 
 impl AACPResult {
-    pub fn new(scid: u8, frames: Vec<Vec<u8>>) -> Self {
-        Self { scid, frames }
+    pub fn new(scid: u8, audio_format: Option<AudioFormat>, frames: Vec<Vec<u8>>) -> Self {
+        Self { scid, audio_format, frames }
     }
     fn debug_frames(frames: &Vec<Vec<u8>>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", frames.len())
@@ -233,7 +234,7 @@ impl AACPExctractor {
                 }
                 Err(err) => {
                     // NOTE: silenced log for the moment
-                    // log::warn!("Format error: {} {:?}", self.scid, err);
+                    log::warn!("Format error: {} {:?}", self.scid, err);
                 }
             }
         }
@@ -274,7 +275,7 @@ impl AACPExctractor {
 
         self.f_count = 0;
 
-        let result: AACPResult = AACPResult::new(self.scid, self.au_frames.clone());
+        let result: AACPResult = AACPResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
         emit_event(EDIEvent::AACPFramesExtracted(result.clone()));
 
@@ -304,7 +305,7 @@ impl AACPExctractor {
         self.au_count = sf_format.au_count;
 
         // NOTE: check if this is correct
-        self.au_start[0] = match (sf_format.samplerate, sf_format.is_sbr) {
+        self.au_start[0] = match (sf_format.samplerate, sf_format.sbr) {
             (48, true) => 6,
             (48, false) => 11,
             (_, true) => 5,
