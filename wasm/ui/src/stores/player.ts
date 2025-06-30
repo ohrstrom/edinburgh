@@ -7,7 +7,7 @@ import type * as Types from '@/types'
 export const usePlayerStore = defineStore('player', () => {
   const state = ref<Types.PlayerState>('stopped')
 
-  const volume = useStorage('player/volume', 100, localStorage, {
+  const volume = useStorage('player/volume', 1, localStorage, {
     serializer: {
       read: (v: string) => Number(v),
       write: (v: number) => v.toString(),

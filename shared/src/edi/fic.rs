@@ -268,7 +268,7 @@ impl Fig0_5 {
 
             if ls_flag {
                 // Long form — skip 3 bytes
-                log::debug!("FIG0/5: Long form detected, skipping 3 bytes");
+                // log::debug!("FIG0/5: Long form detected, skipping 3 bytes");
                 offset += 3;
                 continue;
             }
@@ -287,7 +287,7 @@ impl Fig0_5 {
         }
 
         // log::debug!("FIG0/5: {:?} - SVC: {:?}", base, services);
-        log::debug!("FIG0/5: SVC: {:?}", services);
+        // log::debug!("FIG0/5: SVC: {:?}", services);
 
         Ok(Self {
             base,

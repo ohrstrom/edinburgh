@@ -21,9 +21,11 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use shared::edi::bus::{EDIEvent, init_event_bus};
 use shared::edi::{AACPFrame, EDISource};
 
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct AudioDecoder {
+    asc: Vec<u8>,
     #[derivative(Debug = "ignore")]
     decoder: Decoder,
     #[derivative(Debug = "ignore")]
@@ -36,7 +38,12 @@ impl AudioDecoder {
     pub fn new() -> Self {
         // ASC: audio specific config
         // see: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
-        let asc = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // extracted from dablin at runtime
+        let asc = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // HE-AAC - extracted from dablin at runtime
+
+        // example program HE-AAC-v2
+        // cargo run -- --addr edi-uk.digris.net:8851 --scid 13
+        // 13 0C 56 E5 9D 48 80 // HE-AAC-v2 - extracted from dablin at runtime
+        // let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - works sometimes? maybe need "right" frame to start?
 
         let decoder = Decoder::new(&asc).unwrap();
 
@@ -44,8 +51,9 @@ impl AudioDecoder {
         let sink = Sink::try_new(&handle).expect("Error creating sink");
 
         Self {
+            asc,
             decoder,
-            _stream: stream, // NOTE:L we need to keep the stream alive
+            _stream: stream, // NOTE: we need to keep the stream alive
             sink,
         }
     }
@@ -60,15 +68,24 @@ impl AudioDecoder {
                     r.sample_rate as u32,
                     r.samples,
                 ));
-                // log::debug!(
-                //     "Decoded: {} samples, {} ch @ {} Hz",
-                //     r.samples.len(),
-                //     r.channels,
-                //     r.sample_rate
-                // );
             }
+            // Err(e) => {
+            //     log::error!("DEC: {}", e);
+            //     return;
+            // }
             Err(e) => {
-                log::error!("DEC: {}", e);
+                log::error!("DEC: {} — resetting decoder", e);
+
+                match Decoder::new(&self.asc) {
+                    Ok(new_decoder) => {
+                        self.decoder = new_decoder;
+                        log::warn!("Decoder reset done — will try next AU");
+                    }
+                    Err(_) => {
+                        log::error!("Decoder reset failed — stuck until next good AU!");
+                    }
+                }
+
                 return;
             }
         }

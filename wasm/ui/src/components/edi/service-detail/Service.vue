@@ -65,7 +65,9 @@ defineProps<{ level: Types.Level }>()
       </div>
       <div class="info-section dl-container" :class="{ 'has-dl-plus': hasDlPlus }">
         <div class="dl">
+          <!--
           <span v-if="hasDlPlus" class="has-dl-plus-flag">DL+</span>
+          -->
           <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
           <!--
           <span class="label">{{ dummyLabel }}</span>

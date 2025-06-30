@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::js_sys;
+use web_sys;
 
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
@@ -28,11 +28,7 @@ use shared::edi::EDISource;
 #[wasm_bindgen]
 pub struct EDI {
     inner: Rc<RefCell<EDISource>>,
-    cb: Rc<RefCell<Option<js_sys::Function>>>,
-    on_ensemble_update_cb: Rc<RefCell<Option<js_sys::Function>>>,
-    on_aac_segment_cb: Rc<RefCell<Option<js_sys::Function>>>,
-    on_mot_image_received_cb: Rc<RefCell<Option<js_sys::Function>>>,
-    on_dl_object_received_cb: Rc<RefCell<Option<js_sys::Function>>>,
+    event_target: web_sys::EventTarget,
 }
 
 #[wasm_bindgen]
@@ -40,26 +36,18 @@ impl EDI {
     #[wasm_bindgen(constructor)]
     pub fn new() -> EDI {
         utils::set_panic_hook();
-        let _ = console_log::init_with_level(Level::Debug);
+        let _ = console_log::init_with_level(Level::Info);
 
         let mut event_rx = init_event_bus();
         log::info!("EDI:init");
 
         let edi_source = Rc::new(RefCell::new(EDISource::new(None, None)));
 
-        let cb = Rc::new(RefCell::new(None));
-        let on_ensemble_update_cb = Rc::new(RefCell::new(None));
-        let on_aac_segment_cb = Rc::new(RefCell::new(None));
-        let on_mot_image_received_cb = Rc::new(RefCell::new(None));
-        let on_dl_object_received_cb = Rc::new(RefCell::new(None));
+        let event_target: web_sys::EventTarget = web_sys::EventTarget::new().unwrap().unchecked_into();
 
         let edi = EDI {
             inner: edi_source,
-            cb: Rc::clone(&cb),
-            on_ensemble_update_cb: Rc::clone(&on_ensemble_update_cb),
-            on_aac_segment_cb: Rc::clone(&on_aac_segment_cb),
-            on_mot_image_received_cb: Rc::clone(&on_mot_image_received_cb),
-            on_dl_object_received_cb: Rc::clone(&on_dl_object_received_cb),
+            event_target,
         };
 
         // Clone the edi instance for the async task.
@@ -67,48 +55,36 @@ impl EDI {
 
         spawn_local(async move {
             while let Some(event) = event_rx.next().await {
-                match &event {
+                let js_event = match &event {
                     EDIEvent::EnsembleUpdated(ensemble) => {
-                        if let Some(cb) = edi_clone.on_ensemble_update_cb.borrow().as_ref() {
-                            let this = JsValue::NULL;
-                            let event_data = to_value(&ensemble).unwrap();
-                            cb.call1(&this, &event_data).unwrap();
-                        }
+                        let data = to_value(&ensemble).unwrap();
+                        Self::create_event("ensemble_updated", &data)
                     }
-                    EDIEvent::AACPFramesExtracted(r) => {
-                        if let Some(cb) = edi_clone.on_aac_segment_cb.borrow().as_ref() {
-                            let this = JsValue::NULL;
-                            let event_data = to_value(&r).unwrap();
-                            cb.call1(&this, &event_data).unwrap();
-                        }
+                    EDIEvent::AACPFramesExtracted(aac) => {
+                        let data = to_value(&aac).unwrap();
+                        Self::create_event("aac_segment", &data)
                     }
-                    EDIEvent::MOTImageReceived(m) => {
-                        // log::debug!("MOT image received: {:?}", m.md5);
-                        if let Some(cb) = edi_clone.on_mot_image_received_cb.borrow().as_ref() {
-                            let this = JsValue::NULL;
-                            let event_data = to_value(&m).unwrap();
-                            cb.call1(&this, &event_data).unwrap();
-                        }
+                    EDIEvent::MOTImageReceived(mot) => {
+                        let data = to_value(&mot).unwrap();
+                        Self::create_event("mot_image", &data)
                     }
-                    EDIEvent::DLObjectReceived(d) => {
-                        // log::debug!("DL obj received: {:?}", d);
-                        if let Some(cb) = edi_clone.on_dl_object_received_cb.borrow().as_ref() {
-                            let this = JsValue::NULL;
-                            let event_data = to_value(&d).unwrap();
-                            cb.call1(&this, &event_data).unwrap();
-                        }
+                    EDIEvent::DLObjectReceived(dl) => {
+                        let data = to_value(&dl).unwrap();
+                        Self::create_event("dl_object", &data)
                     }
-                }
+                };
 
-                if let Some(callback) = edi_clone.cb.borrow().as_ref() {
-                    let this = JsValue::NULL;
-                    let event_data = to_value(&event).unwrap();
-                    callback.call1(&this, &event_data).unwrap();
-                }
+                edi_clone.event_target.dispatch_event(&js_event).unwrap();
             }
         });
 
         edi
+    }
+
+    fn create_event(name: &str, detail: &JsValue) -> web_sys::CustomEvent {
+        let init = web_sys::CustomEventInit::new();
+        init.set_detail(detail);
+        web_sys::CustomEvent::new_with_event_init_dict(name, &init).unwrap()
     }
 
     #[wasm_bindgen]
@@ -124,23 +100,40 @@ impl EDI {
         Ok(())
     }
 
+
+    #[wasm_bindgen(js_name = addEventListener)]
+    pub fn add_event_listener(&self, event: &str, cb: &web_sys::js_sys::Function) {
+        self.event_target
+            .add_event_listener_with_callback(event, cb)
+            .unwrap();
+    }
+
+    #[wasm_bindgen(js_name = removeEventListener)]
+    pub fn remove_event_listener(&self, event: &str, cb: &web_sys::js_sys::Function) {
+        self.event_target
+            .remove_event_listener_with_callback(event, cb)
+            .unwrap();
+    }
+
+    /*
     #[wasm_bindgen]
-    pub fn on_ensemble_update(&self, callback: js_sys::Function) {
+    pub fn on_ensemble_update(&self, callback: web_sys::js_sys::Function) {
         *self.on_ensemble_update_cb.borrow_mut() = Some(callback);
     }
 
     #[wasm_bindgen]
-    pub fn on_aac_segment(&self, callback: js_sys::Function) {
+    pub fn on_aac_segment(&self, callback: web_sys::js_sys::Function) {
         *self.on_aac_segment_cb.borrow_mut() = Some(callback);
     }
 
     #[wasm_bindgen]
-    pub fn on_mot_image_received(&self, callback: js_sys::Function) {
+    pub fn on_mot_image_received(&self, callback: web_sys::js_sys::Function) {
         *self.on_mot_image_received_cb.borrow_mut() = Some(callback);
     }
 
     #[wasm_bindgen]
-    pub fn on_dl_object_received(&self, callback: js_sys::Function) {
+    pub fn on_dl_object_received(&self, callback: web_sys::js_sys::Function) {
         *self.on_dl_object_received_cb.borrow_mut() = Some(callback);
     }
+    */
 }

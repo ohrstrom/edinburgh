@@ -62,7 +62,6 @@ impl AudioFormat {
 
         let channels = if channel_mode || ps { 2 } else { 1 };
 
-
         Ok(Self {
             sbr,
             ps,
@@ -196,6 +195,7 @@ impl AACPExctractor {
             self.sf_buff.resize(self.sf_len, 0);
         }
 
+        // NOTE: problem start ?
         if self.f_count == 5 {
             self.sf_raw.copy_within(self.f_len.., 0);
         } else {
@@ -211,6 +211,23 @@ impl AACPExctractor {
         }
 
         self.sf_buff.copy_from_slice(&self.sf_raw[0..self.sf_len]);
+        // NOTE: problem end ?
+
+        /*
+        let start = self.f_count * self.f_len;
+        let end = start + self.f_len;
+        self.sf_raw[start..end].copy_from_slice(&data[..self.f_len]);
+        self.f_count += 1;
+
+        if self.f_count < 5 {
+            return Ok(FeedResult::Buffering);
+        }
+
+        // Now we have 5 frames collected
+        self.sf_buff.copy_from_slice(&self.sf_raw[0..self.sf_len]);
+        self.f_count = 0;
+        */
+
 
         if !self.re_sync() {
             if self.f_sync == 0 {
@@ -294,7 +311,7 @@ impl AACPExctractor {
 
         // abort processing if no audio format is set
         if self.audio_format.is_none() {
-            // log::debug!("AD: no audio format yet");
+            log::debug!("AD: no audio format yet");
             return true;
         }
 
@@ -332,6 +349,27 @@ impl AACPExctractor {
             self.au_start[5] =
                 ((self.sf_buff[9] as usize) << 4) | ((self.sf_buff[10] >> 4) as usize);
         }
+
+        // ✅ ADD THIS LOG
+        log::info!(
+            "SF sync OK: samplerate={} sbr={} ps={} channels={} au_count={} dac_rate={}",
+            sf_format.samplerate,
+            sf_format.sbr,
+            sf_format.ps,
+            sf_format.channels,
+            self.au_count,
+            if sf_format.samplerate == 48 { "yes" } else { "no" }
+        );
+
+        // log::info!(
+        //     "AU start table: {:?}",
+        //     &self.au_start[..=self.au_count]
+        // );
+
+        // log::info!(
+        //     "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
+        //     self.sf_buff[2], self.sf_buff[3], self.sf_buff[4]
+        // );
 
         for i in 0..self.au_count {
             if self.au_start[i] >= self.au_start[i + 1] {

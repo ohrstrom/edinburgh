@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["cli", "wasm", "frame-forwarder", "shared"]
+
+[patch.crates-io]
+faad2 = { path = "./faad2-local" }

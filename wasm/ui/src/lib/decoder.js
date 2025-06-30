@@ -5,9 +5,6 @@ import Faad2Module from './faad2.js'
 
 export async function initDecoder(ascBytes) {
   if (!instance) {
-    // const mod = await import('./faad2.js')
-    // instance = await mod.default
-    // console.debug("instance", mod, instance)
     instance = await Faad2Module()
   }
 

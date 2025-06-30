@@ -1,0 +1,3 @@
+[submodule "faad2-sys/faad2"]
+	path = faad2-sys/faad2
+	url = https://github.com/charliesome/faad2

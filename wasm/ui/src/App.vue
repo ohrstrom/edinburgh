@@ -6,6 +6,8 @@ import { EDI } from '../../pkg'
 
 import { decodeAAC, initDecoder } from './lib/decoder.js'
 
+import FAAD2Decoder from '@/decoder/faad2'
+
 import type * as Types from '@/types'
 
 import { useEDIStore } from '@/stores/edi'
@@ -20,6 +22,8 @@ import EnsembleTable from '@/components/edi/ensemble/EnsembleTable.vue'
 import ServiceDetail from '@/components/edi/service-detail/Service.vue'
 import ServiceList from '@/components/edi/service-list/Services.vue'
 
+import CodecSupport from '@/components/dev/CodecSupport.vue'
+
 interface Analyser {
   l: AnalyserNode
   r: AnalyserNode
@@ -31,7 +35,8 @@ class EDInburgh {
   audioContext: AudioContext | null = null
   workletNode: AudioWorkletNode | null = null
   gainNode: GainNode | null = null
-  decoder: AudioDecoder | null = null
+  // decoder: AudioDecoder | null = null
+  decoder: FAAD2Decoder | null = null
   analyser: Analyser | null = null
   analyserReading = false
 
@@ -108,6 +113,44 @@ class EDInburgh {
      ******************************************************************/
 
     const edi = new EDI()
+
+    edi.addEventListener("ensemble_updated", async (e: CustomEvent) => {
+      await this.updateEnsemble(e.detail as Types.Ensemble)
+    })
+
+    edi.addEventListener("mot_image", async (e: CustomEvent) => {
+      await this.updateSLS(e.detail as Types.SLS)
+    })
+
+    edi.addEventListener("dl_object", async (e: CustomEvent) => {
+      await this.updateDL(e.detail as Types.DL)
+    })
+
+    edi.addEventListener("aac_segment", async (e: CustomEvent) => {
+      const aacSegment = e.detail as Types.AACSegment
+
+      this.setAudioFormat(aacSegment.scid, aacSegment.audio_format)
+
+      if (!this.decodeAudio) {
+        return
+      }
+
+      const selected = this.selectedService.value
+      if (!selected) {
+        return
+      }
+
+      if (aacSegment.scid !== selected.scid) {
+        return
+      }
+
+      aacSegment.frames.forEach((frame) => {
+        this.processAACSegment(new Uint8Array(frame))
+      })
+
+    })
+
+    /*
     edi.on_ensemble_update(async (data: Types.Ensemble) => {
       await this.updateEnsemble(data)
     })
@@ -146,6 +189,7 @@ class EDInburgh {
         this.processAACSegment(new Uint8Array(frame))
       })
     })
+    */
 
     this.edi = edi
 
@@ -194,11 +238,10 @@ class EDInburgh {
     )
 
     // initDecoder(new Uint8Array([0x12, 0x10]))  // Most standard
-
-    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
-    const dec = initDecoder(asc)
-
-    this.faad = dec
+    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
+    // // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2
+    // const dec = initDecoder(asc)
+    // this.faad = dec
   }
 
   async connect(conn: { host: string; port: number }): Promise<void> {
@@ -269,8 +312,8 @@ class EDInburgh {
 
     const audioContext = new AudioContext({
       latencyHint: 'balanced',
-      // sampleRate: 48_000,
-      sampleRate: 24_000,
+      sampleRate: 48_000,
+      // sampleRate: 24_000,
     })
 
     await audioContext.audioWorklet.addModule('pcm-processor.js')
@@ -318,7 +361,8 @@ class EDInburgh {
     workletNode.connect(gainNode)
     gainNode.connect(audioContext.destination)
 
-    const decoder = new AudioDecoder({
+    // const decoder = new AudioDecoder({
+    const decoder = new FAAD2Decoder({
       output: (audioData) => {
         // console.debug("decoded", audioData)
         this.playDecodedAudio(audioData)
@@ -352,13 +396,25 @@ class EDInburgh {
 
     this.decoder.reset()
 
-    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
-    // const asc = new Uint8Array([0x13, 0x14])
-    this.decoder.configure({
+    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
+
+    // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2
+
+    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x99, 0x00])
+
+    await this.decoder.configure({
       codec: 'mp4a.40.5',
+      // codec: 'mp4a.40.29',
       sampleRate: 48_000,
       numberOfChannels: 2,
       description: asc.buffer,
+    })
+
+    await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+            console.log('ENC: configured')
+            resolve()
+        }, 100)
     })
 
     this.workletNode.port.postMessage(
@@ -408,7 +464,8 @@ class EDInburgh {
     try {
       this.decoder.decode(chunk)
     } catch (err) {
-      console.error('Decoder error:', err)
+      console.warn('Decoder error:', err)
+      // await this.resetAudioDecoder()
     }
   }
 
@@ -545,6 +602,9 @@ const reset = async () => {
   <pre v-text="edinburgh" />
   -->
   <main>
+    <Panel>
+      <CodecSupport />
+    </Panel>
     <Panel class="header">
       <template #header>
         <Settings />
@@ -552,7 +612,9 @@ const reset = async () => {
       <Ensemble />
       <div>
         <Connection @connect="connect" @reset="reset" />
+        <!--
         <Scanner :edi="edinburgh.edi" />
+        -->
       </div>
       <template #footer>
         <EnsembleTable @select="(sid) => edinburgh.playService(sid)" />

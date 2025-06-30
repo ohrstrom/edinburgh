@@ -14,7 +14,7 @@ default = ["console_error_panic_hook"]
 shared = { path = "../shared" }
 wasm-bindgen = { version = "0.2.84", features = ["serde"] }
 wasm-bindgen-futures = "0.4.50"
-web-sys = { version = "0.3", features = ["console", "WebSocket", "MessageEvent", "BinaryType"] }
+web-sys = { version = "0.3", features = ["console", "WebSocket", "MessageEvent", "BinaryType", "CustomEvent", "CustomEventInit", "EventTarget"] }
 
 serde = { version = "1.0.219", features = ["derive"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
