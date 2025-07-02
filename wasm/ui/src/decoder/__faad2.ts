@@ -64,40 +64,33 @@ class FAAD2Decoder {
   }
 
   async decode(chunk: EncodedAudioChunk): Promise<void> {
-    // try {
+    try {
       if (!this.module || !this.initialized) {
         throw new Error('Decoder not initialized');
       }
+
+
   
       const input = new Uint8Array(chunk.byteLength);
       chunk.copyTo(input);
 
-      const inputLength = input.length;
-      const pad = 8;
-
-      const inPtr = this.module._malloc(inputLength + pad);
+    //   console.debug('FAAD2Decoder:chunk', input.length, chunk)
+  
+      const inPtr = this.module._malloc(input.length);
+      const outPtr = this.module._malloc(4096 * 4 * 2); // adjust size if needed
+  
       this.module.HEAPU8.set(input, inPtr);
-      this.module.HEAPU8.fill(0, inPtr + inputLength, inPtr + inputLength + pad);
+  
+      const samples = this.module._decode_frame(inPtr, input.length, outPtr, 4096 * 4 * 2);
 
-      const maxFrames = 2048 * 2; // SBR worst-case
-      const maxChannels = 2;      // PS expansion mono → stereo
-      // const maxSamples = maxFrames * maxChannels;
-      const maxSamples = maxFrames;
-      const outputSize = maxSamples * Float32Array.BYTES_PER_ELEMENT;
-
-      const outPtr = this.module._malloc(outputSize);
-
-      const packed = this.module._decode_frame(inPtr, input.length, outPtr, outputSize);
       this.module._free(inPtr);
-      if (packed <= 0) {
+  
+      if (samples <= 0) {
         this.module._free(outPtr);
         return;
       }
 
-      const samples = packed & 0xFFFFFF;
-      const numChannels = (packed >>> 24) & 0xFF;
-
-      // 
+      const numChannels = 2;
       const numFrames = samples / numChannels;
       const planeSize = numFrames * Float32Array.BYTES_PER_ELEMENT;
 
@@ -128,9 +121,9 @@ class FAAD2Decoder {
     
       this.output(audioData);
   
-    // } catch (err) {
-    //   this.error(new DOMException((err as Error).message, 'DecodingError'));
-    // }
+    } catch (err) {
+      this.error(new DOMException((err as Error).message, 'EncodingError'));
+    }
   }
 }
 

@@ -139,6 +139,8 @@ impl Decoder {
         unsafe {
             let mut frame_info = MaybeUninit::zeroed();
 
+            // println!("FAAD2 decode: {} bytes", data.len());
+
             let samples = faad2_sys::NeAACDecDecode(
                 self.decoder.handle,
                 frame_info.as_mut_ptr(),
@@ -148,7 +150,17 @@ impl Decoder {
 
             let frame_info = frame_info.assume_init();
 
+            // println!(
+            //     "FAAD2: in bytes: {} - consumed: {} - samples: {} - ch: {} - sr: {}",
+            //     data.len(),
+            //     frame_info.bytesconsumed,
+            //     frame_info.samples,
+            //     frame_info.channels,
+            //     frame_info.samplerate
+            // );
+
             if samples == ptr::null_mut() {
+                // println!("FAAD2 decode error: {}", frame_info.error);
                 return Err(Error(frame_info.error));
             }
 

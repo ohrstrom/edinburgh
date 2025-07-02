@@ -4,8 +4,6 @@ import { storeToRefs } from 'pinia'
 
 import { EDI } from '../../pkg'
 
-import { decodeAAC, initDecoder } from './lib/decoder.js'
-
 import FAAD2Decoder from '@/decoder/faad2'
 
 import type * as Types from '@/types'
@@ -396,11 +394,9 @@ class EDInburgh {
 
     this.decoder.reset()
 
-    const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
+    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
+    const asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]); // HE-AAV v2
 
-    // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2
-
-    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x99, 0x00])
 
     await this.decoder.configure({
       codec: 'mp4a.40.5',
@@ -422,26 +418,6 @@ class EDInburgh {
         type: 'reset',
       }
     )
-  }
-
-  async __processAACSegment(aacSegment): Promise<void> {
-    if (!this.faad) {
-      console.info('FAAD not initialized')
-      return
-    }
-
-    // console.debug("buffer", aacSegment.buffer)
-
-    const pcmData = decodeAAC(new Uint8Array(aacSegment.buffer))
-
-    if (pcmData) {
-      this.workletNode?.port.postMessage(
-        {
-          type: 'audio',
-          samples: pcmData,
-        }
-      )
-    }
   }
 
   async processAACSegment(aacSegment): Promise<void> {

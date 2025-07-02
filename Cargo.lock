@@ -558,16 +558,14 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "faad2"
-version = "0.1.0"
+version = "2.11.2"
 dependencies = [
  "faad2-sys",
 ]
 
 [[package]]
 name = "faad2-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64c8e672825b5eeb7c824bfadc986fe2188b86d79fa18f518940aa0635f72edc"
+version = "2.11.2"
 dependencies = [
  "cc",
 ]

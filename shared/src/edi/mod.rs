@@ -12,7 +12,7 @@ use msc::{AACPExctractor, FeedResult};
 use serde::Serialize;
 
 use bus::EDIEvent;
-use ensemble::Ensemble;
+pub use ensemble::Ensemble;
 use frame::Frame;
 use frame::Tag;
 
@@ -96,6 +96,20 @@ impl EDISource {
                             let slice_data = &tag.value[3..];
                             let slice_len = (tag.len / 8).saturating_sub(3);
 
+                            if scid == 0 {
+                                let dbg = &slice_data[..slice_len.min(slice_data.len())];
+                                let head = &dbg[..dbg.len().min(8)];
+                                let tail = &dbg[dbg.len().saturating_sub(8)..];
+
+
+                                // NOTE: until here dablin & edinburgh behave IDENTICA!
+                                println!(
+                                    "SLICE: scid={} len={} head={:02X?} tail={:02X?}",
+                                    scid, slice_len, head, tail
+                                );
+                            }
+                            
+
                             let sc = match self.subchannels.iter_mut().find(|x| x.scid == scid) {
                                 Some(sc) => sc,
                                 None => {
@@ -108,7 +122,8 @@ impl EDISource {
 
                             match sc
                                 .audio_extractor
-                                .feed(&slice_data, slice_len)
+                                // .feed(&slice_data, slice_len)
+                                .feed(&slice_data[..slice_len], slice_len)
                                 .await
                             {
                                 Ok(FeedResult::Complete(r)) => {

@@ -298,7 +298,7 @@ impl MOTDecoder {
 
                     if obj.is_complete() {
                         log::info!(
-                            "MOT complete! Header = {} bytes, Body = {} bytes",
+                            "MOT complete: Header = {} bytes, Body = {} bytes",
                             obj.header.len(),
                             obj.body.len()
                         );

@@ -9,6 +9,8 @@ use serde::Serialize;
 
 const FPAD_LEN: usize = 2;
 
+const DEBUG_SCID: u8 = 0; // Debug SCID for logging
+
 #[derive(Debug, Error)]
 pub enum FormatError {
     #[error("AU start values are zero")]
@@ -169,6 +171,19 @@ impl AACPExctractor {
     ) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
 
+        if self.scid == 0 {
+            let dbg = &data[..f_len.min(data.len())];
+            let head = &dbg[..dbg.len().min(8)];
+            let tail = &dbg[dbg.len().saturating_sub(8)..];
+
+            // NOTE: until here dablin & edinburgh behave 100% THE SAME!
+            println!(
+                "SL___: scid={} len={} head={:02X?} tail={:02X?}",
+                13, f_len, head, tail
+            );
+        }
+
+
         if self.f_len != 0 {
             if self.f_len != f_len {
                 return Err(FeedError::FrameLengtMismatch {
@@ -195,7 +210,6 @@ impl AACPExctractor {
             self.sf_buff.resize(self.sf_len, 0);
         }
 
-        // NOTE: problem start ?
         if self.f_count == 5 {
             self.sf_raw.copy_within(self.f_len.., 0);
         } else {
@@ -205,33 +219,18 @@ impl AACPExctractor {
         let start = (self.f_count - 1) * self.f_len;
         let end = start + self.f_len;
         self.sf_raw[start..end].copy_from_slice(&data[..self.f_len]);
+       
 
         if self.f_count < 5 {
             return Ok(FeedResult::Buffering);
         }
 
         self.sf_buff.copy_from_slice(&self.sf_raw[0..self.sf_len]);
-        // NOTE: problem end ?
-
-        /*
-        let start = self.f_count * self.f_len;
-        let end = start + self.f_len;
-        self.sf_raw[start..end].copy_from_slice(&data[..self.f_len]);
-        self.f_count += 1;
-
-        if self.f_count < 5 {
-            return Ok(FeedResult::Buffering);
-        }
-
-        // Now we have 5 frames collected
-        self.sf_buff.copy_from_slice(&self.sf_raw[0..self.sf_len]);
-        self.f_count = 0;
-        */
-
 
         if !self.re_sync() {
+            self.au_count = 0;
             if self.f_sync == 0 {
-                log::debug!("AD: SF sync START {} frames", self.f_sync);
+                // log::debug!("SF sync START - SCID: {}", self.scid);
             }
             self.f_sync += 1;
 
@@ -239,14 +238,28 @@ impl AACPExctractor {
         }
 
         if self.f_sync > 0 {
-            log::debug!("SF {} sync OK after {} frames", self.scid, self.f_sync);
+            // log::debug!("SF sync OK - SCID: {} - after {} frames", self.scid, self.f_sync);
             self.f_sync = 0;
         }
 
         if self.audio_format.is_none() && self.sf_buff.len() >= 11 {
             match AudioFormat::from_bytes(&self.sf_buff, self.sf_len) {
                 Ok(af) => {
-                    log::info!("SCID: {} {:?}", self.scid, af);
+                    // log::info!("SCID: {} {:?}", self.scid, af);
+                    log::info!(
+                        "AF SCID: {:>2} - {} {} kHz {} @ {} kBit/s",
+                        self.scid,
+                        af.codec,
+                        af.samplerate,
+                        af.bitrate,
+                        if af.channels == 1 {
+                            "Mono".to_string()
+                        } else if af.channels == 2 {
+                            "Stereo".to_string()
+                        } else {
+                            format!("{} Chan", af.channels)
+                        },
+                    );
                     self.audio_format = Some(af);
                 }
                 Err(err) => {
@@ -257,6 +270,15 @@ impl AACPExctractor {
         }
 
         for i in 0..self.au_count {
+
+            let start = self.au_start[i];
+            let end = self.au_start[i + 1];
+
+            if end > self.sf_len || end <= start + 2 {
+                log::warn!("AU[{}]: invalid bounds {}..{}", i, start, end);
+                continue;
+            }
+
             // NOTE: check if this is correct
             let au_data = &self.sf_buff[self.au_start[i]..self.au_start[i + 1]];
             let au_len = self.au_start[i + 1] - self.au_start[i];
@@ -269,38 +291,50 @@ impl AACPExctractor {
                 continue;
             }
 
+            if self.scid == DEBUG_SCID {
+                log::debug!("AU[{}]: start={} end={} len={} bytes={:?}", i, self.au_start[i], self.au_start[i+1], au_len, &au_data[0..8]);
+            }
+            
             // copy AU frames to buffer. do not forget to remove last two bytes (CRC)
             self.au_frames.push(au_data[..au_len - 2].to_vec());
 
-            // check for PAD data. locked to SCID 6 (edi-ch.digris.net:8855 0x4DA4 open broadcast)
-            /**/
-            // if self.scid == 10 {
-            //     let pad = Self::extract_pad(&au_data[..au_len - 2]);
-            //     if let Some(pad) = pad {
-            //         self.pad_decoder.feed(&pad.fpad, &pad.xpad);
-            //     }
-            // }
-
-
-            // if self.extract_pad {
-                let pad = Self::extract_pad(&au_data[..au_len - 2]);
-                if let Some(pad) = pad {
-                    self.pad_decoder.feed(&pad.fpad, &pad.xpad);
-                }
-            // }
+            let pad = Self::extract_pad(&au_data[..au_len - 2]);
+            if let Some(pad) = pad {
+                self.pad_decoder.feed(&pad.fpad, &pad.xpad);
+            }
         }
 
-        self.f_count = 0;
+        /**/
+        if self.scid == 0 {
+            for (i, f) in self.au_frames.iter().enumerate() {
+                println!(
+                    "AU[{}] len={} head={:02X?} tail={:02X?}",
+                    i,
+                    f.len(),
+                    &f[..8],
+                    &f[f.len().saturating_sub(8)..]
+                );
+            }
+        }
 
         let result: AACPResult = AACPResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
         emit_event(EDIEvent::AACPFramesExtracted(result.clone()));
 
+        if self.scid == DEBUG_SCID {
+            log::info!(
+                "AACP: SCID: {}\n{:?}",
+                self.scid,
+                result.frames
+            );
+        }
+
+        self.f_count = 0;
+
         self.au_frames.clear();
 
         Ok(FeedResult::Complete(result))
     }
-
     fn re_sync(&mut self) -> bool {
         let crc_stored = u16::from_be_bytes([self.sf_buff[0], self.sf_buff[1]]);
         let crc_calculated = utils::calc_crc_fire_code(&self.sf_buff[2..11]);
@@ -311,7 +345,7 @@ impl AACPExctractor {
 
         // abort processing if no audio format is set
         if self.audio_format.is_none() {
-            log::debug!("AD: no audio format yet");
+            // log::debug!("AD: no audio format yet");
             return true;
         }
 
@@ -350,26 +384,41 @@ impl AACPExctractor {
                 ((self.sf_buff[9] as usize) << 4) | ((self.sf_buff[10] >> 4) as usize);
         }
 
-        // ✅ ADD THIS LOG
-        log::info!(
-            "SF sync OK: samplerate={} sbr={} ps={} channels={} au_count={} dac_rate={}",
-            sf_format.samplerate,
-            sf_format.sbr,
-            sf_format.ps,
-            sf_format.channels,
-            self.au_count,
-            if sf_format.samplerate == 48 { "yes" } else { "no" }
-        );
+        if self.scid == DEBUG_SCID {
+            log::info!(
+                "SF sync OK: SCID: {} samplerate={} sbr={} ps={} channels={} au_count={} dac_rate={}",
+                self.scid,
+                sf_format.samplerate,
+                sf_format.sbr,
+                sf_format.ps,
+                sf_format.channels,
+                self.au_count,
+                if sf_format.samplerate == 48 { "yes" } else { "no" }
+            );
 
-        // log::info!(
-        //     "AU start table: {:?}",
-        //     &self.au_start[..=self.au_count]
-        // );
+            log::info!(
+                "AU start table: {:?}",
+                &self.au_start[..=self.au_count]
+            );
 
-        // log::info!(
-        //     "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
-        //     self.sf_buff[2], self.sf_buff[3], self.sf_buff[4]
-        // );
+            log::info!(
+                "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
+                self.sf_buff[2], self.sf_buff[3], self.sf_buff[4]
+            );
+        }
+
+        if self.scid == 133 {
+            log::info!(
+                "AU start table: {:?} (au_count = {}, sf_len = {})",
+                &self.au_start[..=self.au_count],
+                self.au_count,
+                self.sf_len
+            );
+            log::info!(
+                "SF header bytes: [2..11]: {:02X?}",
+                &self.sf_buff[2..11]
+            );
+        }
 
         for i in 0..self.au_count {
             if self.au_start[i] >= self.au_start[i + 1] {
@@ -380,7 +429,6 @@ impl AACPExctractor {
 
         return true;
     }
-
     fn extract_pad(au_data: &[u8]) -> Option<PADResult> {
         if au_data.len() < 3 {
             return None;

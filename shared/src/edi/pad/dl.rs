@@ -203,7 +203,6 @@ impl DLDecoder {
 
                 // TODO: abort if t != toggle
                 let t = (data[0] & 0x80);
-
                 // log::debug!("DL Plus: toggle: {} t: {}", toggle, t);
 
                 if data.len() < 3 {
@@ -217,7 +216,7 @@ impl DLDecoder {
                 return None
             }
             (true, _) => {
-                log::warn!("Unexpected DL command");
+                log::warn!("Unexpected DL command: 0x{:02X}", data[0]);
             }
             _ => {
                 // not a DL+ or display-clear command

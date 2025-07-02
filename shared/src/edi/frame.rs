@@ -232,6 +232,14 @@ impl ESTTag {
 
         // TODO: maybe add some checks?
 
+        // println!("ESTTag: len: {}, header: {:?}, value: {:?}", len, header, value);
+
+        // let scid = value[0] >> 2;
+        // if scid == 13 {
+        //     println!("ESTTag: SCID: {} - header: {:?} - data: {:?}", scid, header, &value[..11]);
+        // }
+        
+
         Ok(Self { len, header, value })
     }
 }

@@ -1,3 +1,8 @@
+
+/*
+NOT IN USE
+see src/decoder/faad2.ts for the current decoder implementation
+*/
 let instance = null
 let initialized = false
 

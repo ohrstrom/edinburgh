@@ -39,6 +39,7 @@ pub struct Ensemble {
     pub short_label: Option<String>,
     pub services: Vec<Service>,
     pub subchannels: Vec<Subchannel>,
+    pub complete: bool,
 }
 
 impl Ensemble {
@@ -50,6 +51,7 @@ impl Ensemble {
             short_label: None,
             services: Vec::new(),
             subchannels: Vec::new(),
+            complete: false,
         }
     }
 
@@ -174,6 +176,31 @@ impl Ensemble {
                 }
                 _ => {}
             }
+        }
+
+        if updated {
+            // "completeness" means for the moment:
+            // - EID and label present
+            // - SID and label present on all services
+            
+            // this is not so nice, as complete could / will set to true
+            // when subchannels are not yet completed (e.g. language)
+
+            if self.eid.is_some()
+                && self.label.is_some()
+                && self.services.iter().all(|s| s.label.is_some())
+            {
+                self.complete = true;
+            } else {
+                self.complete = false;
+            }
+
+            for s in &self.services {
+                // println!("{:?}", s);
+                for sc in &s.components {
+                    println!("{:?}", sc);
+                } 
+            } 
         }
 
         if updated {
