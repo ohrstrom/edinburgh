@@ -6,7 +6,7 @@ const codecs = [
         name: 'AAC-HE v1', kind: 'mp4a.40.5', asc: [0x13, 0x14, 0x56, 0xe5, 0x98],
     },
     {
-        name: 'AAC-HE v2', kind: 'mp4a.40.29', asc: [0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80],
+        name: 'AAC-HE v2', kind: 'mp4a.40.29', asc: [0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80],
     },
 ]
 
@@ -34,9 +34,9 @@ const probeDecoder = async (codec) => {
         const res = await AudioDecoder.isConfigSupported(config)
         if (res.supported) {
             supported = true
-            console.log('Supported codec:', kind, res.supported, '--------')
+            // console.log('Supported codec:', kind, res.supported)
         } else {
-            console.log('Unsupported codec:', kind)
+            // console.log('Unsupported codec:', kind)
             error = 'Unsupported codec'
         }
     } catch (err) {
@@ -47,16 +47,16 @@ const probeDecoder = async (codec) => {
     const decoder = new AudioDecoder({
         output: (ad) => console.debug("decoded", ad),
         error: (err) => {
-            console.info('Decoder error:', err);
+            // console.info('Decoder error:', err);
             error = `err: ${err.name} ${err.message}`;
         }
     });
 
     try {
         await decoder.configure(config)
-        console.log('Configured decoder:', kind)
+        // console.log('Configured decoder:', kind)
     } catch (err) {
-        console.error('Error configuring decoder:', err)
+        // console.error('Error configuring decoder:', err)
         error = 'Error configuring decoder'
     }
 

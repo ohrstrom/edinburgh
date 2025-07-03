@@ -38,8 +38,8 @@ class FAAD2Decoder {
     try {
       if (!this.module) {
         this.module = await Faad2Module()
-        console.debug('FAAD2: module loaded')
-        console.debug('FAAD2:capabilities', this.module._get_faad_capabilities())
+        // console.debug('FAAD2: module loaded')
+        // console.debug('FAAD2:capabilities', this.module._get_faad_capabilities())
       }
 
       const ascPtr = this.module._malloc(asc.length)

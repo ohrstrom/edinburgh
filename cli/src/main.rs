@@ -90,7 +90,13 @@ impl AudioDecoder {
         // example program HE-AAC-v2
         // cargo run -- --addr edi-uk.digris.net:8851 --scid 13
         // 13 0C 56 E5 9D 48 80 // HE-AAC-v2 - extracted from dablin at runtime
-        let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - works sometimes? maybe need "right" frame to start?
+        let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 24kHz
+
+        //               14    0C    56    E5    AD    48    80
+        // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]; // HE-AAC v2 - 16kHz
+        
+        // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 16kHz
+        // let asc = vec![0x12, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 32kHz
 
         let decoder = Decoder::new(&asc).unwrap();
 

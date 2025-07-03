@@ -4,6 +4,7 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.audioQueue = [];
         this.bufferL = new Float32Array(0);
         this.bufferR = new Float32Array(0);
+        this.started = false;
 
         this.maxQueueSize = 32;
         this.maxBufferSize = 48_000 * 2;
@@ -14,6 +15,7 @@ class PCMProcessor extends AudioWorkletProcessor {
                 this.audioQueue = [];
                 this.bufferL = new Float32Array(0);
                 this.bufferR = new Float32Array(0);
+                this.started = false;
 
             }
             if (event.data && "audio" === event.data.type) {
@@ -21,7 +23,7 @@ class PCMProcessor extends AudioWorkletProcessor {
                 let right = event.data.samples[1];
 
                 if (this.audioQueue.length >= this.maxQueueSize) {
-                    console.debug(`PCMProcessor: dropping buffer: ${this.maxQueueSize - this.audioQueue.length}`);
+                    console.debug(`PCMProcessor: drop buffer: ${this.maxQueueSize - this.audioQueue.length}`);
                     this.audioQueue.shift();
                 }
 
@@ -34,32 +36,16 @@ class PCMProcessor extends AudioWorkletProcessor {
         const outputL = outputs[0][0];
         const outputR = outputs[0][1];
 
-        // Ensure we have enough buffered audio before starting playback
-        if (4 > this.audioQueue.length) {
-            // console.debug(`PCMProcessor: filling buffer: ${16 - this.audioQueue.length} missing`);
-            outputL.fill(0);
-            outputR.fill(0);
-            return true;
+        // Wait for a larger buffer before starting playback
+        if (!this.started) {
+            if (this.audioQueue.length < 4) {
+                outputL.fill(0);
+                outputR.fill(0);
+                return true;
+            } else {
+                this.started = true;
+            }
         }
-
-        // Fill bufferL and bufferR if they are too small
-        // if (this.bufferL.length < outputL.length) {
-        //     if (this.audioQueue.length > 0) {
-        //         const nextBuffer = this.audioQueue.shift();
-        //         this.bufferL = new Float32Array([...this.bufferL, ...nextBuffer.left]);
-        //         this.bufferR = new Float32Array([...this.bufferR, ...nextBuffer.right]);
-        //
-        //         // Prevent bufferL/bufferR from growing too large
-        //         if (this.bufferL.length > this.maxBufferSize) {
-        //             this.bufferL = this.bufferL.slice(-this.maxBufferSize);
-        //             this.bufferR = this.bufferR.slice(-this.maxBufferSize);
-        //         }
-        //     } else {
-        //         outputL.fill(0);
-        //         outputR.fill(0);
-        //         return true;
-        //     }
-        // }
 
         // Fill bufferL and bufferR until we have enough data to output
         while (this.bufferL.length < outputL.length && 0 < this.audioQueue.length) {
@@ -74,7 +60,6 @@ class PCMProcessor extends AudioWorkletProcessor {
             outputR.fill(0);
             return true;
         }
-
 
         // Output available samples
         outputL.set(this.bufferL.subarray(0, outputL.length));

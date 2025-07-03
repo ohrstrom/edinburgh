@@ -33,8 +33,10 @@ class EDInburgh {
   audioContext: AudioContext | null = null
   workletNode: AudioWorkletNode | null = null
   gainNode: GainNode | null = null
+  gainFadeNode: GainNode | null = null
   // decoder: AudioDecoder | null = null
-  decoder: FAAD2Decoder | null = null
+  decoder: FAAD2Decoder | AudioDecoder | null = null
+  useFAAD2Decoder: boolean = true
   analyser: Analyser | null = null
   analyserReading = false
 
@@ -148,77 +150,18 @@ class EDInburgh {
 
     })
 
-    /*
-    edi.on_ensemble_update(async (data: Types.Ensemble) => {
-      await this.updateEnsemble(data)
-    })
-
-    edi.on_mot_image_received(async (data: Types.SLS) => {
-      await this.updateSLS(data)
-    })
-
-    edi.on_dl_object_received(async (data: Types.DL) => {
-      await this.updateDL(data)
-    })
-
-    edi.on_aac_segment(async (aacSegment) => {
-
-
-      // console.debug('AAC segment:', aacSegment)
-
-      this.setAudioFormat(aacSegment.scid, aacSegment.audio_format)
-
-      if (!this.decodeAudio) {
-        return
-      }
-
-      const selected = this.selectedService.value
-      if (!selected) {
-        return
-      }
-
-      if (aacSegment.scid !== selected.scid) {
-        return
-      }
-
-      // console.debug('AAC segment:', aacSegment)
-
-      aacSegment.frames.forEach((frame) => {
-        this.processAACSegment(new Uint8Array(frame))
-      })
-    })
-    */
-
     this.edi = edi
-
-    // Watch for selected service changes
-    /*
-    watch(
-      this.selectedService,
-      (newVal, oldVal) => {
-        if (newVal?.scid !== oldVal?.scid) {
-          console.debug('Service selected:', newVal)
-          ;(async () => {
-            await this.resetAudioDecoder()
-            await this.startAnalyser()
-          })()
-        }
-        console.debug("selectedService", oldVal, newVal)
-        this.decodeAudio = true
-      },
-      { immediate: true },
-    )
-    */
 
     // Watch for selected SID changes
     watch(
     () => this.selectedService.value?.scid,
       async (newScid, oldScid) => {
         if (newScid !== oldScid) {
-          await this.resetAudioDecoder()
+          await this.resetAudioDecoder(this.selectedService.value.audioFormat)
           await this.startAnalyser()
+          await this.fadeIn(0.2)
         }
-        this.decodeAudio = true
+        // this.decodeAudio = true
       },
       { immediate: true }
     )
@@ -234,12 +177,6 @@ class EDInburgh {
       },
       { immediate: true }
     )
-
-    // initDecoder(new Uint8Array([0x12, 0x10]))  // Most standard
-    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98])
-    // // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2
-    // const dec = initDecoder(asc)
-    // this.faad = dec
   }
 
   async connect(conn: { host: string; port: number }): Promise<void> {
@@ -302,16 +239,21 @@ class EDInburgh {
   }
 
   async initializeAudioDecoder(): Promise<void> {
-    console.log('EDInburgh:initializeAudioDecoder')
+
+    console.log('EDInburgh: initializeAudioDecoder')
+
     if (this.decoder) {
-      console.info('decoder already initialized')
+      console.info('EDInburgh: decoder already initialized')
       return
     }
 
+    const sampleRate = this.useFAAD2Decoder ? 48_000 : 24_000
+
     const audioContext = new AudioContext({
       latencyHint: 'balanced',
-      sampleRate: 48_000,
-      // sampleRate: 24_000,
+      sampleRate,
+      // sampleRate: 48_000, // when using faad2 decoder
+      // sampleRate: 24_000, // when using browser nadive decoder
     })
 
     await audioContext.audioWorklet.addModule('pcm-processor.js')
@@ -319,14 +261,6 @@ class EDInburgh {
     const workletNode = new AudioWorkletNode(audioContext, 'pcm-processor', {
       outputChannelCount: [2],
     })
-
-    /* single / sum analyser
-    const analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    // connect worklet → analyser → destination
-    workletNode.connect(analyser)
-    analyser.connect(audioContext.destination)
-    */
 
     // channel splitter
     const splitter = audioContext.createChannelSplitter(2)
@@ -346,47 +280,66 @@ class EDInburgh {
     splitter.connect(analyserL, 0)
     splitter.connect(analyserR, 1)
 
-    // NOTE: this fuck's things up!!
-    // analyserL.connect(audioContext.destination)
-    // analyserR.connect(audioContext.destination)
-
+    // user-controlled volume control
     const gainNode = audioContext.createGain()
     gainNode.gain.value = this.volume
 
-    // NOTE: just connect the context..
-    // workletNode.connect(audioContext.destination)
+    // Fade in/out control
+    const gainFadeNode = audioContext.createGain();
+    // gainFadeNode.gain.value = 1.0;
+    gainFadeNode.gain.setValueAtTime(0.0, audioContext.currentTime);
 
     workletNode.connect(gainNode)
-    gainNode.connect(audioContext.destination)
+    gainNode.connect(gainFadeNode)
+
+    gainFadeNode.connect(audioContext.destination)
 
     // const decoder = new AudioDecoder({
-    const decoder = new FAAD2Decoder({
-      output: (audioData) => {
-        // console.debug("decoded", audioData)
-        this.playDecodedAudio(audioData)
-      },
-      error: (e) => console.error('Decoder error:', e),
-    })
+    // const decoder = new FAAD2Decoder({
+    //   output: (audioData) => {
+    //     this.playDecodedAudio(audioData)
+    //   },
+    //   error: (e) => console.error('Decoder error:', e),
+    // })
+
+    let decoder: FAAD2Decoder | AudioDecoder | null = null
+
+    if (this.useFAAD2Decoder) {
+      decoder = new FAAD2Decoder({
+        output: (audioData) => {
+          this.playDecodedAudio(audioData)
+        },
+        error: (e) => console.error('Decoder error:', e),
+      })
+    } else {
+      decoder = new AudioDecoder({
+        output: (audioData) => {
+          this.playDecodedAudio(audioData)
+        },
+        error: (e) => console.error('Decoder error:', e),
+      })
+    }
 
     this.audioContext = audioContext
     this.workletNode = workletNode
     this.gainNode = gainNode
+    this.gainFadeNode = gainFadeNode
     this.decoder = decoder
     this.analyser = {
       l: analyserL,
       r: analyserR,
     }
   }
-  async resetAudioDecoder(): Promise<void> {
-    console.log('EDInburgh:resetAudioDecoder')
+  async resetAudioDecoder(audioFormat): Promise<void> {
+    console.log('EDInburgh: resetAudioDecoder', audioFormat)
 
     if (!this.decoder) {
-      console.info('decoder not initialized')
+      console.info('EDInburgh: decoder not initialized')
       return
     }
 
     if (!this.workletNode) {
-      console.info('worklet node not initialized')
+      console.info('EDInburgh: worklet node not initialized')
       return
     }
 
@@ -395,22 +348,26 @@ class EDInburgh {
     this.decoder.reset()
 
     // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
-    const asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]); // HE-AAV v2
+    // const asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]); // HE-AAV v2 24 kHz
+    // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2 16 kHz
+
+    // NOTE: this is just for testing...
+    let asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
+    let codec = 'mp4a.40.5'
+
+    if (audioFormat.codec === "HE-AACv2") {
+        asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]) // HE-AAV v2 24 kHz
+        codec = 'mp4a.40.29'
+    }
 
 
     await this.decoder.configure({
-      codec: 'mp4a.40.5',
-      // codec: 'mp4a.40.29',
+      codec,
+      // codec: 'mp4a.40.5', // HE-AAV v1
+      // codec: 'mp4a.40.29', // HE-AAV
       sampleRate: 48_000,
       numberOfChannels: 2,
       description: asc.buffer,
-    })
-
-    await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-            console.log('ENC: configured')
-            resolve()
-        }, 100)
     })
 
     this.workletNode.port.postMessage(
@@ -418,6 +375,13 @@ class EDInburgh {
         type: 'reset',
       }
     )
+
+    // NOTE: is this a good idea?
+    await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+            resolve()
+        }, 10)
+    })
   }
 
   async processAACSegment(aacSegment): Promise<void> {
@@ -428,6 +392,11 @@ class EDInburgh {
 
     if (!this.audioContext) {
       console.info('context not initialized')
+      return
+    }
+
+    if (!this.decodeAudio) {
+      console.info('decodeAudio disabled')
       return
     }
 
@@ -451,14 +420,20 @@ class EDInburgh {
       return
     }
 
+    // console.debug('EDInburgh: AD', audioData)
 
-    const numChannels = 2
+
+    const numChannels = audioData.numberOfChannels
     const numFrames = audioData.numberOfFrames
 
     const pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
 
     for (let channel = 0; channel < numChannels; channel++) {
       audioData.copyTo(pcmData[channel], { planeIndex: channel })
+      if (numChannels === 1) {
+        // If mono, duplicate the channel to both L and R
+        pcmData[1] = pcmData[0]
+      }
     }
 
     // console.debug("pcmData", pcmData)
@@ -474,12 +449,62 @@ class EDInburgh {
   }
 
   async playService(sid: number): Promise<void> {
+    console.debug('EDInburgh: play service', sid)
+    if (this.decodeAudio) {
+      await this.fadeOut(0.1)
+    }
     this.selectService(sid)
     this.decodeAudio = true
   }
 
+  async fadeIn(time: number = 1.0): Promise<void> {
+
+    if (!this.decoder || !this.gainFadeNode || !this.audioContext) {
+      return
+    }
+
+    console.debug('EDInburgh: fade in', time)
+
+    const startTime = this.audioContext.currentTime;
+    const endTime = startTime + time;
+
+    this.gainFadeNode.gain.cancelScheduledValues(startTime);
+    this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime);
+    this.gainFadeNode.gain.linearRampToValueAtTime(1.0, endTime);
+
+    // Wait until the fade completes using wall clock
+    const now = this.audioContext.currentTime;
+    const remaining = Math.max(0, endTime - now);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, remaining * 1000);
+    });
+  }
+
+  async fadeOut(time: number = 1.0): Promise<void> {
+
+    if (!this.decoder || !this.gainFadeNode || !this.audioContext) {
+      return
+    }
+
+    console.debug('EDInburgh: fade out', time)
+
+    const startTime = this.audioContext.currentTime;
+    const endTime = startTime + time;
+
+    this.gainFadeNode.gain.cancelScheduledValues(startTime);
+    this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime);
+    this.gainFadeNode.gain.linearRampToValueAtTime(0.0, endTime);
+
+    // Wait until the fade completes using wall clock
+    const now = this.audioContext.currentTime;
+    const remaining = Math.max(0, endTime - now);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, remaining * 1000);
+    });
+  }
+
   async stopService(): Promise<void> {
-    console.debug('stopService')
+    console.debug('EDInburgh: stop service')
     this.decodeAudio = false
     this.setPlayerState('stopped')
   }

@@ -33,13 +33,13 @@ class FAAD2Decoder {
     const asc = new Uint8Array(description);
 
 
-    console.debug('FAAD2Decoder:configure', codec, asc)
+    // console.debug('FAAD2Decoder:configure', codec, asc)
 
     try {
       if (!this.module) {
         this.module = await Faad2Module()
-        console.debug('FAAD2: module loaded')
-        console.debug('FAAD2:capabilities', this.module._get_faad_capabilities())
+        // console.debug('FAAD2: module loaded')
+        // console.debug('FAAD2: capabilities', this.module._get_faad_capabilities())
       }
 
       const ascPtr = this.module._malloc(asc.length)
@@ -53,14 +53,22 @@ class FAAD2Decoder {
       }
 
       this.initialized = true
-      console.debug('FAAD2 decoder initialized with ASC:', asc)
+
+      // console.debug('FAAD2Decoder:configured', codec, asc)
+
+      console.debug(
+        'FAAD2Decoder: configured',
+        codec,
+        Array.from(asc).map(b => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`).join(', ')
+      );
+
     } catch (err) {
       this.error(new DOMException((err as Error).message, 'InvalidStateError'))
     }
   }
 
-  async reset(asc) {
-
+  async reset() {
+    console.debug('FAAD2Decoder: reset')
   }
 
   async decode(chunk: EncodedAudioChunk): Promise<void> {
@@ -73,16 +81,16 @@ class FAAD2Decoder {
       chunk.copyTo(input);
 
       const inputLength = input.length;
-      const pad = 8;
+      const pad = 64; // Increased padding to prevent read-overruns in the decoder
 
       const inPtr = this.module._malloc(inputLength + pad);
       this.module.HEAPU8.set(input, inPtr);
       this.module.HEAPU8.fill(0, inPtr + inputLength, inPtr + inputLength + pad);
 
-      const maxFrames = 2048 * 2; // SBR worst-case
+      const maxFrames = 2048 * 2; // SBR worst-case (2048 samples), with a 2x safety margin
       const maxChannels = 2;      // PS expansion mono → stereo
-      // const maxSamples = maxFrames * maxChannels;
-      const maxSamples = maxFrames;
+      // The total buffer size must account for stereo output, hence maxFrames * maxChannels.
+      const maxSamples = maxFrames * maxChannels;
       const outputSize = maxSamples * Float32Array.BYTES_PER_ELEMENT;
 
       const outPtr = this.module._malloc(outputSize);
