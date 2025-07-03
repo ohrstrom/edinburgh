@@ -493,7 +493,6 @@ impl PADDecoder {
                 // }
 
                 if let Some(data) = self.dl_dg.feed(&payload) {
-
                     // log::debug!(
                     //     "DL: DG: {:?}",
                     //     String::from_utf8_lossy(&data[..]),

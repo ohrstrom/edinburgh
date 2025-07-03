@@ -238,7 +238,6 @@ impl ESTTag {
         // if scid == 13 {
         //     println!("ESTTag: SCID: {} - header: {:?} - data: {:?}", scid, header, &value[..11]);
         // }
-        
 
         Ok(Self { len, header, value })
     }

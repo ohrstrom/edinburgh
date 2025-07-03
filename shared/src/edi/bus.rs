@@ -2,8 +2,8 @@ use serde::Serialize;
 
 use super::ensemble::Ensemble;
 use super::msc::AACPResult;
-use super::pad::mot::MOTImage;
 use super::pad::dl::DLObject;
+use super::pad::mot::MOTImage;
 
 #[derive(Debug, Serialize)]
 pub enum EDIEvent {
@@ -17,10 +17,10 @@ pub enum EDIEvent {
 #[cfg(target_arch = "wasm32")]
 mod platform {
     use super::*;
-    use futures::channel::mpsc::{unbounded, UnboundedSender, UnboundedReceiver};
+    use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
     use once_cell::unsync::OnceCell;
-    use std::rc::Rc;
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     thread_local! {
         static EVENT_TX: OnceCell<Rc<RefCell<UnboundedSender<EDIEvent>>>> = OnceCell::new();
@@ -29,7 +29,8 @@ mod platform {
     pub fn init_event_bus() -> UnboundedReceiver<EDIEvent> {
         let (tx, rx) = unbounded::<EDIEvent>();
         EVENT_TX.with(|cell| {
-            cell.set(Rc::new(RefCell::new(tx))).expect("Already initialized");
+            cell.set(Rc::new(RefCell::new(tx)))
+                .expect("Already initialized");
         });
         rx
     }
@@ -46,15 +47,17 @@ mod platform {
 #[cfg(not(target_arch = "wasm32"))]
 mod platform {
     use super::*;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedSender, UnboundedReceiver};
     use once_cell::sync::OnceCell;
     use std::sync::Mutex;
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
     static EVENT_TX: OnceCell<Mutex<UnboundedSender<EDIEvent>>> = OnceCell::new();
 
     pub fn init_event_bus() -> UnboundedReceiver<EDIEvent> {
         let (tx, rx) = unbounded_channel::<EDIEvent>();
-        EVENT_TX.set(Mutex::new(tx)).expect("Event bus already initialized");
+        EVENT_TX
+            .set(Mutex::new(tx))
+            .expect("Event bus already initialized");
         rx
     }
 
@@ -68,4 +71,4 @@ mod platform {
 }
 
 // re-export unified interface from the platform module
-pub use platform::{init_event_bus, emit_event};
+pub use platform::{emit_event, init_event_bus};

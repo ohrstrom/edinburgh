@@ -22,6 +22,44 @@ import ServiceList from '@/components/edi/service-list/Services.vue'
 
 import CodecSupport from '@/components/dev/CodecSupport.vue'
 
+
+const resample = async (
+  buffer: Float32Array,
+  sourceRate: number,
+  targetRate: number
+): Promise<Float32Array> => {
+  if (sourceRate === targetRate) {
+    return buffer; // no resampling needed
+  }
+
+  const numFrames = buffer.length;
+
+  // Calculate target length
+  const targetLength = Math.ceil(numFrames * targetRate / sourceRate);
+
+  // Create OfflineAudioContext
+  const offlineContext = new OfflineAudioContext({
+    numberOfChannels: 1,
+    length: targetLength,
+    sampleRate: targetRate,
+  });
+
+  // Create buffer in source rate
+  const audioBuffer = offlineContext.createBuffer(1, numFrames, sourceRate);
+  audioBuffer.copyToChannel(buffer, 0);
+
+  // Buffer source
+  const sourceNode = offlineContext.createBufferSource();
+  sourceNode.buffer = audioBuffer;
+  sourceNode.connect(offlineContext.destination);
+  sourceNode.start();
+
+  // Render
+  const resampledBuffer = await offlineContext.startRendering();
+
+  return resampledBuffer.getChannelData(0);
+};
+
 interface Analyser {
   l: AnalyserNode
   r: AnalyserNode
@@ -352,13 +390,16 @@ class EDInburgh {
     // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2 16 kHz
 
     // NOTE: this is just for testing...
-    let asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
-    let codec = 'mp4a.40.5'
+    // let asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
+    // let codec = 'mp4a.40.5'
 
-    if (audioFormat.codec === "HE-AACv2") {
-        asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]) // HE-AAV v2 24 kHz
-        codec = 'mp4a.40.29'
-    }
+    // if (audioFormat.codec === "HE-AACv2") {
+    //     asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]) // HE-AAV v2 24 kHz
+    //     codec = 'mp4a.40.29'
+    // }
+
+    let codec = 'mp4a.40.5'
+    const asc = new Uint8Array(audioFormat.asc)
 
 
     await this.decoder.configure({
@@ -426,7 +467,7 @@ class EDInburgh {
     const numChannels = audioData.numberOfChannels
     const numFrames = audioData.numberOfFrames
 
-    const pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
+    let pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
 
     for (let channel = 0; channel < numChannels; channel++) {
       audioData.copyTo(pcmData[channel], { planeIndex: channel })
@@ -434,6 +475,26 @@ class EDInburgh {
         // If mono, duplicate the channel to both L and R
         pcmData[1] = pcmData[0]
       }
+    }
+
+    const sampleRate = audioData.sampleRate
+    // const sampleRate = 32_000
+
+    if (sampleRate !== this.audioContext.sampleRate) {
+      // console.warn('EDInburgh: sample rate mismatch', audioData.sampleRate, this.audioContext.sampleRate)
+
+      pcmData[0] = await resample(
+        pcmData[0],
+        sampleRate,
+        this.audioContext.sampleRate
+      )
+
+      pcmData[1] = await resample(
+        pcmData[1],
+        sampleRate,
+        this.audioContext.sampleRate
+      )
+
     }
 
     // console.debug("pcmData", pcmData)
@@ -448,16 +509,7 @@ class EDInburgh {
     )
   }
 
-  async playService(sid: number): Promise<void> {
-    console.debug('EDInburgh: play service', sid)
-    if (this.decodeAudio) {
-      await this.fadeOut(0.1)
-    }
-    this.selectService(sid)
-    this.decodeAudio = true
-  }
-
-  async fadeIn(time: number = 1.0): Promise<void> {
+  async fadeTo(value: number = 1.0, time: number = 1.0): Promise<void> {
 
     if (!this.decoder || !this.gainFadeNode || !this.audioContext) {
       return
@@ -470,7 +522,7 @@ class EDInburgh {
 
     this.gainFadeNode.gain.cancelScheduledValues(startTime);
     this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime);
-    this.gainFadeNode.gain.linearRampToValueAtTime(1.0, endTime);
+    this.gainFadeNode.gain.linearRampToValueAtTime(value, endTime);
 
     // Wait until the fade completes using wall clock
     const now = this.audioContext.currentTime;
@@ -480,27 +532,27 @@ class EDInburgh {
     });
   }
 
-  async fadeOut(time: number = 1.0): Promise<void> {
+  async fadeIn(time: number = 0.5): Promise<void> {
+    return await this.fadeTo(1.0, time)
+  }
 
-    if (!this.decoder || !this.gainFadeNode || !this.audioContext) {
+  async fadeOut(time: number = 0.5): Promise<void> {
+    return await this.fadeTo(0.0, time)
+  }
+
+  async playService(sid: number): Promise<void> {
+    console.debug('EDInburgh: play service', sid)
+
+    if (sid === this.selectedService.value?.sid) {
+      console.info('EDInburgh: already playing service', sid)
       return
     }
 
-    console.debug('EDInburgh: fade out', time)
-
-    const startTime = this.audioContext.currentTime;
-    const endTime = startTime + time;
-
-    this.gainFadeNode.gain.cancelScheduledValues(startTime);
-    this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime);
-    this.gainFadeNode.gain.linearRampToValueAtTime(0.0, endTime);
-
-    // Wait until the fade completes using wall clock
-    const now = this.audioContext.currentTime;
-    const remaining = Math.max(0, endTime - now);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, remaining * 1000);
-    });
+    if (this.decodeAudio) {
+      await this.fadeOut(0.1)
+    }
+    this.selectService(sid)
+    this.decodeAudio = true
   }
 
   async stopService(): Promise<void> {

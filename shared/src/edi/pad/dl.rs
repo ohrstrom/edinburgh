@@ -1,11 +1,10 @@
 use super::MSCDataGroup;
-use crate::edi::bus::{EDIEvent, emit_event};
-use std::fmt;
+use crate::edi::bus::{emit_event, EDIEvent};
 use derivative::Derivative;
-use serde::{Serialize, Serializer, ser::SerializeStruct};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
+use std::fmt;
 
 const DL_LEN_MAX: usize = 8 * 16;
-
 
 fn decode_chars(chars: &[u8], charset: u8) -> String {
     match charset {
@@ -18,7 +17,6 @@ fn decode_chars(chars: &[u8], charset: u8) -> String {
         _ => "[unsupported charset]".into(),
     }
 }
-
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
@@ -108,7 +106,6 @@ impl Serialize for DLObject {
     }
 }
 
-
 #[derive(Debug, Serialize, Clone)]
 pub struct DLPlusTag {
     pub kind: u8,
@@ -118,11 +115,7 @@ pub struct DLPlusTag {
 
 impl DLPlusTag {
     pub fn new(kind: u8, start: u8, len: u8) -> Self {
-        Self {
-            kind,
-            start,
-            len,
-        }
+        Self { kind, start, len }
     }
 }
 
@@ -165,7 +158,6 @@ impl fmt::Display for DLPlusContentType {
     }
 }
 
-
 #[derive(Debug)]
 pub struct DLDecoder {
     scid: u8,
@@ -183,7 +175,6 @@ impl DLDecoder {
     }
 
     pub fn feed(&mut self, data: &[u8]) -> Option<Vec<u8>> {
-
         if data.len() < 2 {
             return None;
         }
@@ -200,7 +191,6 @@ impl DLDecoder {
                 // TODO: implement reset
             }
             (true, 0b0010) => {
-
                 // TODO: abort if t != toggle
                 let t = (data[0] & 0x80);
                 // log::debug!("DL Plus: toggle: {} t: {}", toggle, t);
@@ -213,7 +203,7 @@ impl DLDecoder {
                 self.parse_dl_plus(&data[2..]);
 
                 // do not continue on DL+ command
-                return None
+                return None;
             }
             (true, _) => {
                 log::warn!("Unexpected DL command: 0x{:02X}", data[0]);
@@ -236,7 +226,6 @@ impl DLDecoder {
             self.flush();
 
             self.current = Some(DLObject::new(self.scid, toggle, charset.unwrap_or(0)));
-
         }
 
         let start = 2;
@@ -247,7 +236,11 @@ impl DLDecoder {
                 current.chars.extend_from_slice(&data[start..end]);
             }
         } else {
-            log::warn!("DL: segment too short: expected {} bytes, got {}", end, data.len());
+            log::warn!(
+                "DL: segment too short: expected {} bytes, got {}",
+                end,
+                data.len()
+            );
             return None;
         }
 
@@ -264,14 +257,12 @@ impl DLDecoder {
 
         // log::debug!("🔤 DL UTF-8: {:?}", String::from_utf8_lossy(&self.current.chars));
 
-
         if is_last {
             // log::debug!("DL: {}", self.current.decode_label());
             // self.reset();
         }
 
         // log::debug!("DL: {}", self.current.decode_label());
-
 
         // log::debug!(
         //     "DL: first = {} - last = {} - charset = {} - seg_no = {}",
@@ -282,11 +273,9 @@ impl DLDecoder {
         // );
 
         None
-
     }
 
     pub fn parse_dl_plus(&mut self, data: &[u8]) {
-
         if data.is_empty() {
             log::warn!("DL+: empty command");
             return;
@@ -310,7 +299,10 @@ impl DLDecoder {
 
         // if data.len() < 0 + num_tags as usize * 3 {
         if data.len() < 1 + num_tags as usize * 3 {
-            log::warn!("DL+: unexpected length, expected at least {}", 1 + num_tags * 3);
+            log::warn!(
+                "DL+: unexpected length, expected at least {}",
+                1 + num_tags * 3
+            );
             return;
         }
 
@@ -320,11 +312,7 @@ impl DLDecoder {
             let start = data[base + 1] & 0x7F;
             let len = (data[base + 2] & 0x7F) + 1;
 
-            let tag = DLPlusTag::new(
-                content_type,
-                start,
-                len,
-            );
+            let tag = DLPlusTag::new(content_type, start, len);
 
             // log::debug!(
             //     "DL+ tag: {:?}", tag
@@ -333,11 +321,9 @@ impl DLDecoder {
             if let Some(current) = self.current.as_mut() {
                 current.dl_plus_tags.push(tag);
             }
-
         }
 
         // log::debug!("DL+ it_toggle={}, it_running={}", it_toggle, it_running);
-
     }
 
     pub fn flush(&mut self) {

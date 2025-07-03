@@ -1,9 +1,9 @@
 pub mod bus;
-pub mod pad;
 mod ensemble;
 mod fic;
 mod frame;
 mod msc;
+pub mod pad;
 mod tables;
 
 use derivative::Derivative;
@@ -15,7 +15,6 @@ use bus::EDIEvent;
 pub use ensemble::Ensemble;
 use frame::Frame;
 use frame::Tag;
-
 
 #[derive(Debug, Serialize)]
 pub struct AACPFrame {
@@ -101,14 +100,12 @@ impl EDISource {
                                 let head = &dbg[..dbg.len().min(8)];
                                 let tail = &dbg[dbg.len().saturating_sub(8)..];
 
-
                                 // NOTE: until here dablin & edinburgh behave IDENTICA!
                                 println!(
                                     "SLICE: scid={} len={} head={:02X?} tail={:02X?}",
                                     scid, slice_len, head, tail
                                 );
                             }
-                            
 
                             let sc = match self.subchannels.iter_mut().find(|x| x.scid == scid) {
                                 Some(sc) => sc,
@@ -151,14 +148,12 @@ impl EDISource {
                         // unknown tags
                         Tag::FSST(_tag) => {}
                         Tag::FPTT(_tag) => {}
-                        Tag::FSID(_tag) => {}
-
-                        // unsupported tags
-                                             /*
-                                             tag => {
-                                                 log::warn!("Unsupported tag: {:?}", tag);
-                                             }
-                                             */
+                        Tag::FSID(_tag) => {} // unsupported tags
+                                              /*
+                                              tag => {
+                                                  log::warn!("Unsupported tag: {:?}", tag);
+                                              }
+                                              */
                     }
                 }
             }

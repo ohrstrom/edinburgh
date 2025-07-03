@@ -1,10 +1,10 @@
 use log;
 use serde::Serialize;
 
-use super::bus::{EDIEvent, emit_event};
+use super::bus::{emit_event, EDIEvent};
 use super::fic::FIG;
-use super::tables;
 use super::frame::DETITag;
+use super::tables;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Subchannel {
@@ -71,8 +71,11 @@ impl Ensemble {
                         match existing_sc {
                             Some(existing_sc) => {
                                 updated |= existing_sc.start.replace(sc.start) != Some(sc.start);
-                                updated |= existing_sc.size.replace(sc.size.unwrap_or_default()) != sc.size;
-                                updated |= existing_sc.bitrate.replace(sc.bitrate.unwrap_or_default()) != sc.bitrate;
+                                updated |= existing_sc.size.replace(sc.size.unwrap_or_default())
+                                    != sc.size;
+                                updated |=
+                                    existing_sc.bitrate.replace(sc.bitrate.unwrap_or_default())
+                                        != sc.bitrate;
                                 if existing_sc.pl != sc.pl {
                                     existing_sc.pl = sc.pl.clone();
                                     updated = true;
@@ -97,7 +100,11 @@ impl Ensemble {
 
                         match service {
                             Some(existing_service) => {
-                                if !existing_service.components.iter().any(|c| c.scid == entry.scid) {
+                                if !existing_service
+                                    .components
+                                    .iter()
+                                    .any(|c| c.scid == entry.scid)
+                                {
                                     existing_service.components.push(ServiceComponent {
                                         scid: entry.scid,
                                         language: None,
@@ -128,9 +135,12 @@ impl Ensemble {
                     for lang in &fig.services {
                         let mut matched = 0;
                         for service in &mut self.services {
-                            if let Some(component) = service.components.iter_mut().find(|c| c.scid == lang.scid) {
+                            if let Some(component) =
+                                service.components.iter_mut().find(|c| c.scid == lang.scid)
+                            {
                                 matched += 1;
-                                updated |= component.language.replace(lang.language) != Some(lang.language);
+                                updated |= component.language.replace(lang.language)
+                                    != Some(lang.language);
                             }
                         }
                         if matched > 1 {
@@ -140,7 +150,8 @@ impl Ensemble {
                 }
                 FIG::F0_13(fig) => {
                     for entry in &fig.services {
-                        if let Some(service) = self.services.iter_mut().find(|s| s.sid == entry.sid) {
+                        if let Some(service) = self.services.iter_mut().find(|s| s.sid == entry.sid)
+                        {
                             if entry.scids == 0 {
                                 // Apply to all components
                                 for component in &mut service.components {
@@ -152,7 +163,9 @@ impl Ensemble {
                             } else {
                                 for i in 0..8 {
                                     if (entry.scids & (1 << i)) != 0 {
-                                        if let Some(component) = service.components.iter_mut().find(|c| c.scid == i) {
+                                        if let Some(component) =
+                                            service.components.iter_mut().find(|c| c.scid == i)
+                                        {
                                             if component.user_apps != entry.uas {
                                                 component.user_apps = entry.uas.clone();
                                                 updated = true;
@@ -166,12 +179,15 @@ impl Ensemble {
                 }
                 FIG::F1_0(fig) => {
                     updated |= self.label.replace(fig.label.clone()) != Some(fig.label.clone());
-                    updated |= self.short_label.replace(fig.short_label.clone()) != Some(fig.short_label.clone());
+                    updated |= self.short_label.replace(fig.short_label.clone())
+                        != Some(fig.short_label.clone());
                 }
                 FIG::F1_1(fig) => {
                     if let Some(service) = self.services.iter_mut().find(|s| s.sid == fig.sid) {
-                        updated |= service.label.replace(fig.label.clone()) != Some(fig.label.clone());
-                        updated |= service.short_label.replace(fig.short_label.clone()) != Some(fig.short_label.clone());
+                        updated |=
+                            service.label.replace(fig.label.clone()) != Some(fig.label.clone());
+                        updated |= service.short_label.replace(fig.short_label.clone())
+                            != Some(fig.short_label.clone());
                     }
                 }
                 _ => {}
@@ -182,7 +198,7 @@ impl Ensemble {
             // "completeness" means for the moment:
             // - EID and label present
             // - SID and label present on all services
-            
+
             // this is not so nice, as complete could / will set to true
             // when subchannels are not yet completed (e.g. language)
 
@@ -199,8 +215,8 @@ impl Ensemble {
                 // println!("{:?}", s);
                 for sc in &s.components {
                     println!("{:?}", sc);
-                } 
-            } 
+                }
+            }
         }
 
         if updated {

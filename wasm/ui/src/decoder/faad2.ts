@@ -1,5 +1,18 @@
 import Faad2Module from '@/lib/faad2.js'
 
+
+const SAMPLE_RATE = {
+  1: 8000,
+  2: 16000,
+  3: 22050,
+  4: 32000,
+  5: 44100,
+  6: 48000,
+  7: 64000,
+  8: 88200,
+  9: 96000,
+};
+
 class FAAD2Decoder {
 
   private module: any = null
@@ -102,8 +115,16 @@ class FAAD2Decoder {
         return;
       }
 
-      const samples = packed & 0xFFFFFF;
-      const numChannels = (packed >>> 24) & 0xFF;
+      const samplerateIndex = (packed >>> 28) & 0xF;
+      const numChannels     = (packed >>> 24) & 0xF;
+      const samples         = packed & 0xFFFFFF;
+
+      const samplerate = SAMPLE_RATE[samplerateIndex] || 0;
+
+      // console.debug(`FAAD2: channels=${numChannels} samplerate=${samplerate} samples=${samples}`);
+
+      // const samples = packed & 0xFFFFFF;
+      // const numChannels = (packed >>> 24) & 0xFF;
 
       // 
       const numFrames = samples / numChannels;
@@ -126,7 +147,8 @@ class FAAD2Decoder {
       // Create AudioData using planar buffer
       const audioData = new AudioData({
         format: 'f32-planar',
-        sampleRate: 48000,
+        // sampleRate: 48_000,
+        sampleRate: samplerate,
         numberOfFrames: numFrames,
         numberOfChannels: 2,
         timestamp: chunk.timestamp,

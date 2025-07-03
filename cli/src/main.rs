@@ -2,7 +2,6 @@ mod edi_frame_extractor;
 
 use shared::utils;
 
-
 use colog;
 use log;
 use std::io;
@@ -12,14 +11,14 @@ use std::sync::{Arc, Mutex};
 use clap::Parser;
 use derivative::Derivative;
 use edi_frame_extractor::EDIFrameExtractor;
-use faad2::{Decoder, version};
+use faad2::{version, Decoder};
 use futures::channel::mpsc::unbounded;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use shared::edi::bus::{EDIEvent, init_event_bus};
+use shared::edi::bus::{init_event_bus, EDIEvent};
 use shared::edi::{AACPFrame, EDISource, Ensemble};
 
 pub fn pp_ensemble(ensemble: &Ensemble) {
@@ -56,16 +55,10 @@ pub fn pp_ensemble(ensemble: &Ensemble) {
                     .join(", ")
             };
 
-            println!(
-                "   - {:03}: {} - {}",
-                component.scid,
-                language,
-                apps
-            );
+            println!("   - {:03}: {} - {}", component.scid, language, apps);
         }
     }
 }
-
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -94,7 +87,7 @@ impl AudioDecoder {
 
         //               14    0C    56    E5    AD    48    80
         // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]; // HE-AAC v2 - 16kHz
-        
+
         // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 16kHz
         // let asc = vec![0x12, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 32kHz
 
@@ -111,7 +104,6 @@ impl AudioDecoder {
         }
     }
     fn feed(&mut self, au_data: &[u8]) {
-
         // log::debug!("AU: {} bytes - {:?} ...", au_data.len(), &au_data[0..8]);
 
         match self.decoder.decode(&au_data) {
@@ -168,7 +160,11 @@ impl EDIHandler {
         while let Some(event) = self.receiver.recv().await {
             match event {
                 EDIEvent::EnsembleUpdated(ensemble) => {
-                    log::debug!("Ensemble updated: 0x{:4x} - {}", ensemble.eid.unwrap_or(0), ensemble.complete);
+                    log::debug!(
+                        "Ensemble updated: 0x{:4x} - {}",
+                        ensemble.eid.unwrap_or(0),
+                        ensemble.complete
+                    );
                     if ensemble.complete {
                         println!("{:?}", ensemble);
 

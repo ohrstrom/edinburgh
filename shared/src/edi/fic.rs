@@ -245,7 +245,6 @@ pub struct Fig0_5 {
     pub services: Vec<ServiceLanguage>,
 }
 
-
 #[derive(Debug, Serialize)]
 pub struct ServiceLanguage {
     pub scid: u8,
@@ -289,10 +288,7 @@ impl Fig0_5 {
         // log::debug!("FIG0/5: {:?} - SVC: {:?}", base, services);
         // log::debug!("FIG0/5: SVC: {:?}", services);
 
-        Ok(Self {
-            base,
-            services,
-        })
+        Ok(Self { base, services })
     }
 }
 
@@ -334,7 +330,10 @@ impl Fig0_9 {
             while idx + 3 <= data.len() {
                 let byte = data[idx];
                 let num_services = byte >> 6;
-                let ecc = data.get(idx + 1).copied().ok_or(FIGError::InvalidSize { l: data.len() })?;
+                let ecc = data
+                    .get(idx + 1)
+                    .copied()
+                    .ok_or(FIGError::InvalidSize { l: data.len() })?;
 
                 let mut sids = Vec::new();
                 for i in 0..num_services {
@@ -401,14 +400,13 @@ impl Fig0_10 {
         if data.len() < 4 {
             return Err(FIGError::InvalidSize { l: data.len() });
         }
-    
+
         // log::debug!("FIG0/10: {:?} - SVC: {:?}", base, data);
-    
+
         // Correct MJD extraction: 17 bits from data[0], data[1], and top 2 bits of data[2]
-        let mjd = (((data[0] & 0x7F) as u32) << 10)
-            | ((data[1] as u32) << 2)
-            | ((data[2] as u32) >> 6);
-    
+        let mjd =
+            (((data[0] & 0x7F) as u32) << 10) | ((data[1] as u32) << 2) | ((data[2] as u32) >> 6);
+
         // Inline MJD → Gregorian date conversion
         let mjd_f = mjd as f64;
         let y0 = ((mjd_f - 15078.2) / 365.25).floor();
@@ -418,21 +416,24 @@ impl Fig0_10 {
         let year = (y0 + k) as i32 + 1900;
         let month = (m0 - 1.0 - k * 12.0) as u8;
         let day = d;
-    
+
         let lsi = ((data[2] >> 5) & 0x01) != 0;
         let utc_flag = ((data[2] >> 3) & 0x01) != 0;
-    
+
         let utc = if utc_flag {
             if data.len() < 6 {
-                log::warn!("FIG0/10: Invalid size for long form UTC: {} bytes", data.len());
+                log::warn!(
+                    "FIG0/10: Invalid size for long form UTC: {} bytes",
+                    data.len()
+                );
                 return Err(FIGError::InvalidSize { l: data.len() });
             }
-    
+
             let hour = ((data[2] & 0x07) << 2) | (data[3] >> 6);
             let minute = data[3] & 0x3F;
             let second = data[4] >> 2;
             let millisecond = ((data[4] & 0x03) as u16) << 8 | data[5] as u16;
-    
+
             DateTimeUTC::Long {
                 year,
                 month,
@@ -444,16 +445,19 @@ impl Fig0_10 {
             }
         } else {
             if data.len() < 6 {
-                log::warn!("FIG0/10: Invalid size for short form UTC: {} bytes", data.len());
+                log::warn!(
+                    "FIG0/10: Invalid size for short form UTC: {} bytes",
+                    data.len()
+                );
                 return Err(FIGError::InvalidSize { l: data.len() });
             }
-    
+
             let b4 = data[4];
             let b5 = data[5];
-    
+
             let hour = (b4 >> 3) & 0x1F;
             let minute = ((b4 & 0x07) << 3) | (b5 >> 5);
-    
+
             DateTimeUTC::Short {
                 year,
                 month,
@@ -462,7 +466,7 @@ impl Fig0_10 {
                 minutes: minute,
             }
         };
-    
+
         Ok(Self {
             base,
             mjd,
@@ -479,7 +483,6 @@ pub struct Fig0_13 {
     pub services: Vec<ServiceUA>,
 }
 
-
 #[derive(Debug, Serialize)]
 pub struct ServiceUA {
     pub sid: u16,
@@ -495,7 +498,7 @@ impl Fig0_13 {
         while offset + 3 <= data.len() {
             let sid = u16::from_be_bytes([data[offset], data[offset + 1]]);
             offset += 2;
-            
+
             let scids = data[offset] >> 4;
             let num_uas = data[offset] & 0x0F;
             offset += 1;

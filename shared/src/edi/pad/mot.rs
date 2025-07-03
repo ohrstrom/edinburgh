@@ -1,8 +1,8 @@
 use super::MSCDataGroup;
-use crate::edi::bus::{EDIEvent, emit_event};
+use crate::edi::bus::{emit_event, EDIEvent};
+use base64;
 use derivative::Derivative;
 use md5::{compute, Digest};
-use base64;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -244,7 +244,10 @@ pub struct MOTDecoder {
 
 impl MOTDecoder {
     pub fn new(scid: u8) -> Self {
-        Self { scid, current: None }
+        Self {
+            scid,
+            current: None,
+        }
     }
     pub fn feed(&mut self, dg: &MSCDataGroup) {
         if !dg.is_valid || !dg.segment_flag {
@@ -307,15 +310,21 @@ impl MOTDecoder {
 
                         match obj.content_type {
                             Some(2) => {
-                                let mot_image = MOTImage::new(self.scid, obj.content_subtype.unwrap_or(0), obj.body.clone());
+                                let mot_image = MOTImage::new(
+                                    self.scid,
+                                    obj.content_subtype.unwrap_or(0),
+                                    obj.body.clone(),
+                                );
                                 // log::debug!("MOT image: {:?}", mot_image);
                                 emit_event(EDIEvent::MOTImageReceived(mot_image));
                             }
                             _ => {
-                                log::warn!("MOT unknown content type: {}", obj.content_type.unwrap_or(0));
+                                log::warn!(
+                                    "MOT unknown content type: {}",
+                                    obj.content_type.unwrap_or(0)
+                                );
                             }
                         }
-
 
                         self.current = None;
                     }

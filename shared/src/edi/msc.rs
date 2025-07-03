@@ -1,11 +1,10 @@
-use super::bus::{EDIEvent, emit_event};
+use super::bus::{emit_event, EDIEvent};
 use super::pad::PADDecoder;
 use crate::utils;
 use derivative::Derivative;
 use log;
-use thiserror::Error;
 use serde::Serialize;
-
+use thiserror::Error;
 
 const FPAD_LEN: usize = 2;
 
@@ -26,6 +25,8 @@ pub struct AudioFormat {
     bitrate: usize,
     au_count: usize,
     channels: u8,
+    //
+    asc: Vec<u8>,
 }
 
 impl AudioFormat {
@@ -64,6 +65,21 @@ impl AudioFormat {
 
         let channels = if channel_mode || ps { 2 } else { 1 };
 
+        // let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80];
+        let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]; // HE-AAC v2 - 16kHz
+
+        // NOTE: it would likely be better to actually "build" the ASC ;)
+        let asc = match (samplerate, sbr, ps) {
+            (48, false, false) => vec![0x11, 0x8C], // NOTE: 1 channel
+            (48, true, false) => vec![0x13, 0x14, 0x56, 0xe5, 0x98],
+            (48, false, true) => vec![],
+            (48, true, true) => vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80],
+            (_, false, false) => vec![],
+            (_, true, false) => vec![],
+            (_, false, true) => vec![],
+            (_, true, true) => vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80],
+        };
+
         Ok(Self {
             sbr,
             ps,
@@ -72,6 +88,8 @@ impl AudioFormat {
             bitrate,
             au_count,
             channels,
+            //
+            asc,
         })
     }
 }
@@ -87,7 +105,11 @@ pub struct AACPResult {
 
 impl AACPResult {
     pub fn new(scid: u8, audio_format: Option<AudioFormat>, frames: Vec<Vec<u8>>) -> Self {
-        Self { scid, audio_format, frames }
+        Self {
+            scid,
+            audio_format,
+            frames,
+        }
     }
     fn debug_frames(frames: &Vec<Vec<u8>>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", frames.len())
@@ -164,11 +186,7 @@ impl AACPExctractor {
             extract_pad: false,
         }
     }
-    pub async fn feed(
-        &mut self,
-        data: &[u8],
-        f_len: usize,
-    ) -> Result<FeedResult, FeedError> {
+    pub async fn feed(&mut self, data: &[u8], f_len: usize) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
 
         if self.scid == 0 {
@@ -182,7 +200,6 @@ impl AACPExctractor {
                 13, f_len, head, tail
             );
         }
-
 
         if self.f_len != 0 {
             if self.f_len != f_len {
@@ -219,7 +236,6 @@ impl AACPExctractor {
         let start = (self.f_count - 1) * self.f_len;
         let end = start + self.f_len;
         self.sf_raw[start..end].copy_from_slice(&data[..self.f_len]);
-       
 
         if self.f_count < 5 {
             return Ok(FeedResult::Buffering);
@@ -270,7 +286,6 @@ impl AACPExctractor {
         }
 
         for i in 0..self.au_count {
-
             let start = self.au_start[i];
             let end = self.au_start[i + 1];
 
@@ -292,9 +307,16 @@ impl AACPExctractor {
             }
 
             if self.scid == DEBUG_SCID {
-                log::debug!("AU[{}]: start={} end={} len={} bytes={:?}", i, self.au_start[i], self.au_start[i+1], au_len, &au_data[0..8]);
+                log::debug!(
+                    "AU[{}]: start={} end={} len={} bytes={:?}",
+                    i,
+                    self.au_start[i],
+                    self.au_start[i + 1],
+                    au_len,
+                    &au_data[0..8]
+                );
             }
-            
+
             // copy AU frames to buffer. do not forget to remove last two bytes (CRC)
             self.au_frames.push(au_data[..au_len - 2].to_vec());
 
@@ -317,16 +339,13 @@ impl AACPExctractor {
             }
         }
 
-        let result: AACPResult = AACPResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
+        let result: AACPResult =
+            AACPResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
         emit_event(EDIEvent::AACPFramesExtracted(result.clone()));
 
         if self.scid == DEBUG_SCID {
-            log::info!(
-                "AACP: SCID: {}\n{:?}",
-                self.scid,
-                result.frames
-            );
+            log::info!("AACP: SCID: {}\n{:?}", self.scid, result.frames);
         }
 
         self.f_count = 0;
@@ -396,14 +415,13 @@ impl AACPExctractor {
                 if sf_format.samplerate == 48 { "yes" } else { "no" }
             );
 
-            log::info!(
-                "AU start table: {:?}",
-                &self.au_start[..=self.au_count]
-            );
+            log::info!("AU start table: {:?}", &self.au_start[..=self.au_count]);
 
             log::info!(
                 "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
-                self.sf_buff[2], self.sf_buff[3], self.sf_buff[4]
+                self.sf_buff[2],
+                self.sf_buff[3],
+                self.sf_buff[4]
             );
         }
 
@@ -414,10 +432,7 @@ impl AACPExctractor {
                 self.au_count,
                 self.sf_len
             );
-            log::info!(
-                "SF header bytes: [2..11]: {:02X?}",
-                &self.sf_buff[2..11]
-            );
+            log::info!("SF header bytes: [2..11]: {:02X?}", &self.sf_buff[2..11]);
         }
 
         for i in 0..self.au_count {
