@@ -8,11 +8,19 @@ use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio::time::{self, timeout, Duration};
+use tokio::sync::Semaphore;
 use tracing as log;
+use futures::stream::{FuturesUnordered, StreamExt};
 
 use crate::edi_frame_extractor::EDIFrameExtractor;
 use shared::edi::EDISource;
 use shared::edi::Ensemble;
+
+/*
+    - edi-ch.digris.net:8851-8866
+    - edi-fr.digris.net:8851-8880
+    - edi-uk.digris.net:8851-8860
+ */
 
 #[derive(Serialize)]
 pub struct Message {
@@ -96,8 +104,9 @@ impl DirectoryService {
         *self.ctr.read().await
     }
 
+
     async fn run_scan(self: Arc<Self>) {
-        let mut interval = time::interval(Duration::from_secs(20));
+        let mut interval = time::interval(Duration::from_secs(10));
         interval.tick().await; // eat the first tick
 
         let endpoints: Vec<String> = self
@@ -112,31 +121,41 @@ impl DirectoryService {
         println!("targets:   {:?}", self.scan_targets);
         println!("endpoints: {:?}", endpoints);
 
+        let semaphore = Arc::new(Semaphore::new(8));
+
         loop {
-            // dummy - increment counter
-            {
-                let mut lock = self.ctr.write().await;
-                *lock += 1;
+            let mut scans = FuturesUnordered::new();
+
+            for endpoint in &endpoints {
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                let endpoint = endpoint.clone();
+
+                scans.push(tokio::spawn(async move {
+                    let result = scan(endpoint).await;
+                    drop(permit); // release slot for next scan
+                    result
+                }));
             }
 
             let mut ensembles = Vec::new();
 
-            for endpoint in &endpoints {
-                match scan(endpoint.to_string()).await {
-                    Ok(ensemble) => {
+            while let Some(result) = scans.next().await {
+                match result {
+                    Ok(Ok(ensemble)) => {
                         log::info!(
-                            "Scanning endpoint complete: {} - 0x{:4x} - {}",
-                            endpoint,
+                            "Scanning endpoint complete: 0x{:4x} - {}",
                             ensemble.eid.unwrap_or(0),
                             ensemble.label.as_deref().unwrap_or("-")
                         );
                         ensembles.push(ensemble);
                     }
-                    Err(err) => {
+                    Ok(Err(err)) => {
                         log::error!("Failed to scan ensemble: {}", err);
-                        continue;
                     }
-                };
+                    Err(join_err) => {
+                        log::error!("Join error in scan task: {}", join_err);
+                    }
+                }
             }
 
             {
@@ -144,16 +163,16 @@ impl DirectoryService {
                 *lock = ensembles;
             }
 
-            // sleep until next scan
             interval.tick().await;
         }
     }
+
 }
 
 async fn scan(endpoint: String) -> anyhow::Result<Ensemble> {
-    log::debug!("Scanning endpoint: {}", endpoint);
+    // log::debug!("Scanning endpoint: {}", endpoint);
 
-    let timeout_ms = 100;
+    let timeout_ms = 2000;
 
     let stream = match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&endpoint)).await {
         Ok(Ok(stream)) => stream,

@@ -34,7 +34,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter("debug").init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     let args = Args::parse();
     let addr = format!("{}:{}", args.host, args.port.unwrap());
