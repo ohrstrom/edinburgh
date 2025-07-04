@@ -206,7 +206,7 @@ impl DLDecoder {
                 return None;
             }
             (true, _) => {
-                log::warn!("Unexpected DL command: 0x{:02X}", data[0]);
+                log::debug!("Unexpected DL command: 0x{:02X}", data[0]);
             }
             _ => {
                 // not a DL+ or display-clear command
@@ -284,7 +284,7 @@ impl DLDecoder {
         let cid = (data[0] >> 4) & 0x0F;
 
         if cid != 0 {
-            log::warn!("DL+: unsupported command ID = {}", cid);
+            log::debug!("DL+: unsupported command ID = {}", cid);
             return;
         }
 

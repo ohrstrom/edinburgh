@@ -29,7 +29,6 @@ struct Args {
     /// multiple targets can be specified
     /// format: <host>:<start_port>-<end_port>
     #[arg(long, value_delimiter = ',')]
-    // #[arg(value_parser = ScanTarget::from_str)]
     scan_targets: Vec<ScanTarget>,
 }
 

@@ -64,8 +64,6 @@ mod platform {
     pub fn emit_event(event: EDIEvent) {
         if let Some(tx) = EVENT_TX.get() {
             let _ = tx.lock().unwrap().send(event);
-        } else {
-            eprintln!("Event bus not initialized");
         }
     }
 }

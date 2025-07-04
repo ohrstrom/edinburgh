@@ -245,10 +245,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let mut source = EDISource::new(event_tx, Some(aac_callback));
+    let mut source = EDISource::new(event_tx, None, Some(aac_callback));
     */
 
-    let mut source = EDISource::new(args.scid, None);
+    let mut source = EDISource::new(args.scid, None, None);
 
     let event_handler = EDIHandler::new(args.scid, event_rx);
 

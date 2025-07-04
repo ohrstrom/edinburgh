@@ -55,7 +55,8 @@ pub struct EDISource {
     ensemble: Ensemble,
     subchannels: Vec<EDISubchannel>,
     scid: u8,
-    // on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
+    #[derivative(Debug = "ignore")]
+    on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
     #[derivative(Debug = "ignore")]
     on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
 }
@@ -63,6 +64,7 @@ pub struct EDISource {
 impl EDISource {
     pub fn new(
         scid: Option<u8>,
+        on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
         on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
     ) -> Self {
         EDISource {
@@ -70,7 +72,8 @@ impl EDISource {
             subchannels: Vec::new(),
             // scid: scid.unwrap_or(0),
             scid: scid.unwrap_or(0),
-            // on_ensemble_update: None,
+            //
+            on_ensemble_update: on_ensemble_update,
             on_aac_segment: on_aac_segment,
         }
     }
@@ -82,9 +85,9 @@ impl EDISource {
                     match tag {
                         Tag::DETI(tag) => {
                             if self.ensemble.feed(tag).await {
-                                // if let Some(ref callback) = self.on_ensemble_update {
-                                //     let _ = callback.call1(&self.ensemble).ok();
-                                // }
+                                if let Some(ref mut callback) = self.on_ensemble_update {
+                                    let _ = callback(&self.ensemble);
+                                }
                             }
                         }
 

@@ -39,7 +39,7 @@ impl EDI {
         let mut event_rx = init_event_bus();
         log::info!("EDI:init");
 
-        let edi_source = Rc::new(RefCell::new(EDISource::new(None, None)));
+        let edi_source = Rc::new(RefCell::new(EDISource::new(None, None, None)));
 
         let event_target: web_sys::EventTarget =
             web_sys::EventTarget::new().unwrap().unchecked_into();
