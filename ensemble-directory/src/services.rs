@@ -153,7 +153,14 @@ impl DirectoryService {
 async fn scan(endpoint: String) -> anyhow::Result<Ensemble> {
     log::debug!("Scanning endpoint: {}", endpoint);
 
-    let stream = TcpStream::connect(endpoint).await?;
+    let timeout_ms = 100;
+
+    let stream = match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&endpoint)).await {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(e)) => anyhow::bail!("Failed to connect to {}: {}", endpoint, e),
+        Err(_) => anyhow::bail!("Timeout connecting to {}", endpoint),
+    };
+
     let mut filled = 0;
     let mut extractor = EDIFrameExtractor::new();
 
@@ -181,7 +188,7 @@ async fn scan(endpoint: String) -> anyhow::Result<Ensemble> {
             Ok(ensemble) = &mut done_rx => {
                 return Ok(ensemble);
             }
-            ready = timeout(Duration::from_secs(5), stream.ready(Interest::READABLE)) => {
+            ready = timeout(Duration::from_millis(timeout_ms), stream.ready(Interest::READABLE)) => {
                 match ready {
                     Ok(Ok(ready)) => {
                     if ready.is_readable() {

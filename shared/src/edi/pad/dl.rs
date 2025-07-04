@@ -299,7 +299,7 @@ impl DLDecoder {
 
         // if data.len() < 0 + num_tags as usize * 3 {
         if data.len() < 1 + num_tags as usize * 3 {
-            log::warn!(
+            log::debug!(
                 "DL+: unexpected length, expected at least {}",
                 1 + num_tags * 3
             );
