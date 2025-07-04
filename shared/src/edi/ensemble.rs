@@ -211,12 +211,14 @@ impl Ensemble {
                 self.complete = false;
             }
 
+            /*
             for s in &self.services {
-                // println!("{:?}", s);
+                println!("{:?}", s);
                 for sc in &s.components {
                     println!("{:?}", sc);
                 }
             }
+            */
         }
 
         if updated {

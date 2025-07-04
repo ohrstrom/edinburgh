@@ -262,20 +262,20 @@ impl AACPExctractor {
             match AudioFormat::from_bytes(&self.sf_buff, self.sf_len) {
                 Ok(af) => {
                     // log::info!("SCID: {} {:?}", self.scid, af);
-                    log::info!(
-                        "AF SCID: {:>2} - {} {} kHz {} @ {} kBit/s",
-                        self.scid,
-                        af.codec,
-                        af.samplerate,
-                        af.bitrate,
-                        if af.channels == 1 {
-                            "Mono".to_string()
-                        } else if af.channels == 2 {
-                            "Stereo".to_string()
-                        } else {
-                            format!("{} Chan", af.channels)
-                        },
-                    );
+                    // log::info!(
+                    //     "AF SCID: {:>2} - {} {} kHz {} @ {} kBit/s",
+                    //     self.scid,
+                    //     af.codec,
+                    //     af.samplerate,
+                    //     af.bitrate,
+                    //     if af.channels == 1 {
+                    //         "Mono".to_string()
+                    //     } else if af.channels == 2 {
+                    //         "Stereo".to_string()
+                    //     } else {
+                    //         format!("{} Chan", af.channels)
+                    //     },
+                    // );
                     self.audio_format = Some(af);
                 }
                 Err(err) => {

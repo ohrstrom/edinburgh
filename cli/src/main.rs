@@ -223,10 +223,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("endpoint: {}", endpoint);
 
     let stream = TcpStream::connect(endpoint).await?;
-    let mut buffer = vec![0; 4096];
 
     let mut filled = 0;
-    let mut sync_skipped = 0;
+    let mut _sync_skipped = 0;
 
     let mut extractor = EDIFrameExtractor::new();
 
@@ -260,7 +259,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let ready = stream.ready(Interest::READABLE).await?;
         if ready.is_readable() {
-            // match stream.try_read(&mut buffer) {
             match stream.try_read(&mut extractor.frame.data[filled..]) {
                 Ok(0) => {
                     log::info!("Connection closed by peer");
@@ -279,11 +277,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             log::debug!("offset: {}", offset);
                             extractor.frame.data.copy_within(offset.., 0);
                             filled -= offset;
-                            sync_skipped += offset;
+                            _sync_skipped += offset;
 
                             continue;
                         } else {
-                            sync_skipped = 0;
+                            _sync_skipped = 0;
                         }
 
                         if extractor.frame.check_completed() {

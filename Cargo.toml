@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cli", "wasm", "frame-forwarder", "shared"]
+members = ["cli", "wasm", "frame-forwarder", "ensemble-directory", "shared"]
 
 
 # [patch.crates-io]

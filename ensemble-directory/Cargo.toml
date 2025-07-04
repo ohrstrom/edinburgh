@@ -1,0 +1,22 @@
+[package]
+name = "edinburgh-ensemble-directory"
+version = "0.0.1"
+edition = "2021"
+description = "Ensemble directory service"
+
+[dependencies]
+shared = { path = "../shared" }
+clap = { version = "4.5.32", features = ["derive"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+axum = "0.8.4"
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+serde_json = "1.0.140"
+serde_yaml = "0.9.34"
+anyhow = "1.0.98"
+regex = "1.11.1"
+
+[[bin]]
+name = "edinburgh-ensemble-directory"
+path = "src/main.rs"
