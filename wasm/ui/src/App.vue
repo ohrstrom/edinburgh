@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ComputedRef, Ref, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useStorage } from '@vueuse/core'
 
 import { EDI } from '../../pkg'
 
@@ -16,10 +17,11 @@ import Connection from '@/components/edi/connection/Connection.vue'
 import Scanner from '@/components/edi/connection/Scanner.vue'
 import Settings from '@/components/edi/settings/Settings.vue'
 import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
-import EnsembleTable from '@/components/edi/ensemble/EnsembleTable.vue'
+import ServiceTable from '@/components/edi/ensemble/ServiceTable.vue'
 import ServiceDetail from '@/components/edi/service-detail/Service.vue'
 import ServiceList from '@/components/edi/service-list/Services.vue'
 
+import EnsembleTable from '@/components/directory/EnsembleTable.vue'
 import CodecSupport from '@/components/dev/CodecSupport.vue'
 
 
@@ -648,6 +650,34 @@ const reset = async () => {
   await edinburgh.reset()
   await resetStore()
 }
+
+
+const { ediHost, ediPort } = storeToRefs(useEDIStore())
+
+const selectEnsemble = async (conn: { host: string; port: number }) => {
+  await edinburgh.reset()
+  await resetStore()
+  ediHost.value = conn.host
+  ediPort.value = conn.port
+  await connect(conn)
+}
+
+
+// ui states - maybe place somewhere else ;)
+
+
+const serviceTableExpanded = useStorage('edi/ensemble/service-table/expanded', false)
+const ensembleTableExpanded = useStorage('edi/ensemble/ensemble-table/expanded', false)
+
+const toggleServiceTable = () => {
+  ensembleTableExpanded.value = false
+  serviceTableExpanded.value = !serviceTableExpanded.value
+}
+const toggleEnsembleTable = () => {
+  serviceTableExpanded.value = false
+  ensembleTableExpanded.value = !ensembleTableExpanded.value
+}
+
 </script>
 
 <template>
@@ -655,7 +685,7 @@ const reset = async () => {
   <pre v-text="edinburgh" />
   -->
   <main>
-    <Panel>
+    <Panel v-if="false">
       <CodecSupport />
     </Panel>
     <Panel class="header">
@@ -665,12 +695,24 @@ const reset = async () => {
       <Ensemble />
       <div>
         <Connection @connect="connect" @reset="reset" />
-        <!--
-        <Scanner :edi="edinburgh.edi" />
-        -->
       </div>
-      <template #footer>
-        <EnsembleTable @select="(sid) => edinburgh.playService(sid)" />
+      <template #sub-navigation>
+        <div class="sub-navigation">
+          <div @click.prevent="toggleServiceTable()" class="toggle">
+            <span class="label">Service Table</span>
+            <span v-if="serviceTableExpanded" class="icon icon--close">⌃</span>
+            <span v-else class="icon icon--open">⌄</span>
+          </div>
+          <div @click.prevent="toggleEnsembleTable()" class="toggle">
+            <span class="label">Ensemble Table</span>
+            <span v-if="ensembleTableExpanded" class="icon icon--close">⌃</span>
+            <span v-else class="icon icon--open">⌄</span>
+          </div>
+        </div>
+      </template>
+      <template #sub-content>
+        <ServiceTable v-if="serviceTableExpanded" @select="(sid) => edinburgh.playService(sid)" />
+        <EnsembleTable v-if="ensembleTableExpanded" @select="selectEnsemble" />
       </template>
     </Panel>
 
@@ -684,7 +726,7 @@ const reset = async () => {
   </main>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 main {
   width: 100%;
   height: 100vh;
@@ -707,6 +749,35 @@ main {
     .settings {
       border-bottom: 1px solid black;
     }
+
+    .sub-navigation {
+      display: flex;
+      gap: 8px;
+      padding: 0 8px;
+      border-top: 1px solid black;
+      justify-content: space-between;
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        height: 24px;
+        cursor: pointer;
+
+        > .label {
+          font-size: 0.75rem;
+        }
+
+        > .icon {
+          &--open {
+            margin-top: -9px;
+          }
+          &--close {
+            margin-top: 5px;
+          }
+        }
+      }
+    }
+
   }
 
   .service-detail {

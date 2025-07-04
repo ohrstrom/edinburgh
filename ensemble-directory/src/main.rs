@@ -6,6 +6,7 @@ use shared::utils;
 
 use anyhow;
 use axum::{extract::State, routing::get, serve, Json, Router};
+use tower_http::cors::{Any, CorsLayer};
 use clap::Parser;
 use serde_json::{json, Value};
 use tracing as log;
@@ -25,25 +26,32 @@ struct Args {
     #[arg(long, default_value = "9001")]
     port: Option<u16>,
 
-    /// Scan targets
-    /// multiple targets can be specified
-    /// format: <host>:<start_port>-<end_port>
-    #[arg(long, value_delimiter = ',')]
+    /// Scan pattern
+    /// format: host:port-port or host:port  
+    /// repeat for multiple targets
+    #[arg(long = "scan")]
     scan_targets: Vec<ScanTarget>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_env_filter("info").init();
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .with_target(false)
+        .without_time()
+        .init();
 
     let args = Args::parse();
     let addr = format!("{}:{}", args.host, args.port.unwrap());
 
-    println!("ARGS: {:?}", args);
-
     log::info!("Starting service on http://{}/", addr);
 
     let svc = services::DirectoryService::new(args.scan_targets);
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     let app =
         Router::new()
@@ -65,7 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Json(service.get_ctr().await)
                 }),
             )
-            .with_state(svc);
+            .with_state(svc)
+            .layer(cors);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

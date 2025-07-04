@@ -1,0 +1,113 @@
+<script lang="ts" setup>
+import { ref, onMounted, computed } from 'vue';
+
+import HexValue from '@/components/ui/HexValue.vue'
+
+const directoryUrl = ref<string>('http://localhost:9001/ensembles');
+
+defineEmits<{
+  (event: 'select', payload: { host: string; port: number }): void
+}>()
+
+onMounted(async () => {
+    try {
+        const response = await fetch(directoryUrl.value);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        ensembleList.value = data;
+    } catch (error) {
+        console.error('Error fetching ensemble directory:', error);
+    }
+});
+
+const ensembleList = ref<any[]>([]);
+
+const ensembles = computed(() => {
+    return ensembleList.value.sort((a, b) => {
+    const hostC = a.host.localeCompare(b.host)
+    if (hostC !== 0) {
+      return hostC
+    }
+    return a.label.localeCompare(b.label)
+  })
+})
+</script>
+
+<template>
+    <div class="ensemble-table">
+    <div v-if="ensembles.length" class="table">
+        <div class="ensemble" v-for="(ensemble, index) in ensembles" :key="`table-ensemble-${index}`" @click.prevent="$emit('select', {host: ensemble.host, port: ensemble.port})">
+            <HexValue class="eid" :value="ensemble.eid" />
+            <span class="label">{{ ensemble?.label ?? '-' }}</span>
+            <span class="host">{{ ensemble.host }}:{{ ensemble.port }}</span>
+            <span class="services">
+                <span>Services:</span>
+                <span>{{ (ensemble?.services ?? []).length }}</span>
+            </span>
+        </div>
+    </div>
+    <div v-else class="table table--skeleton">
+      <div class="info">
+        <span>no ensembles scanned</span>
+      </div>
+    </div>
+    </div>
+</template>
+
+<style lang="scss" scoped>
+.ensemble-table {
+  border-top: 1px solid black;
+}
+.table {
+  font-size: 0.75rem;
+  padding: 8px;
+  overflow-y: auto;
+  max-height: 25vh;
+  cursor: pointer;
+
+    /* scrollbar */
+    &::-webkit-scrollbar {
+      width: 4px;
+      background: hsl(var(--c-muted));
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: hsl(var(--c-fg));
+      border-radius: 0;
+    }
+
+  >.ensemble {
+    display: grid;
+    grid-template-columns: 80px 2fr 1fr 80px;
+    gap: 8px;
+    padding: 2px 8px;
+
+    &:hover {
+      background: hsl(var(--c-muted));
+    }
+
+    > .eid {
+      text-align: end;
+    }
+
+    > .services {
+      text-align: end;
+      display: inline-flex;
+      gap: 4px;
+    }
+  }
+  &--skeleton {
+    padding: 8px;
+    > .info {
+      .message {
+        display: inline-flex;
+        color: black;
+        padding: 2px 4px;
+        font-size: 0.75rem;
+      }
+    }
+  }
+}
+</style>

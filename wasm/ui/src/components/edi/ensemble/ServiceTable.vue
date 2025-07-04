@@ -13,8 +13,6 @@ defineEmits<{
   (event: 'select', sid: number): void
 }>()
 
-const expanded = useStorage('edi/ensemble/service-table/expanded', false)
-
 const services = computed(() => {
   if (!ensemble.value) return []
 
@@ -35,20 +33,11 @@ const services = computed(() => {
     })
   }).sort((a, b) => a.scid - b.scid)
 })
-
 </script>
 
 <template>
-  <div class="ensemble-table">
-   <div class="header">
-    <div @click.prevent="expanded = !expanded" class="toggle">
-      <span class="label">Service Table</span>
-      <span v-if="expanded" class="icon icon--close">⌃</span>
-      <span v-else class="icon icon--open">⌄</span>
-    </div>
-   </div>
-    
-    <div v-if="expanded && services.length" class="table">
+  <div class="service-table">
+    <div v-if="services.length" class="table">
       <div class="service" v-for="(svc, index) in services ?? []" :key="`table-svc-${index}`" @click.prevent="$emit('select', svc.sid)">
         <span class="scid">{{ svc.scid }}</span>
         <HexValue class="sid" :value="svc.sid" />
@@ -78,46 +67,22 @@ const services = computed(() => {
         </span>
       </div>
     </div>
-    <!-- 
-    <pre v-text="ensemble" />
-    -->
+    <div v-else class="table table--skeleton">
+      <div class="info">
+        <span>no services scanned</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.ensemble-table {
-  /* border-top: 1px solid #000; */
-}
-
-.header {
-  border-top: 1px solid #000;
-  border-bottom: 1px solid #000;
-  padding-left: 8px;
-  > .toggle {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 24px;
-    cursor: pointer;
-
-    > .label {
-      font-size: 0.75rem;
-    }
-
-    > .icon {
-      &--open {
-        margin-top: -9px;
-      }
-      &--close {
-        margin-top: 5px;
-      }
-    }
-  }
+.service-table {
+  border-top: 1px solid black;
 }
 
 .table {
   padding-top: 8px;
-  padding-bottom: 8px;;
+  padding-bottom: 8px;
   font-size: 0.75rem;
   .service {
     display: grid;
@@ -145,6 +110,17 @@ const services = computed(() => {
         > .codec {
           min-width: 60px;
         }
+      }
+    }
+  }
+  &--skeleton {
+    padding: 8px;
+    > .info {
+      .message {
+        display: inline-flex;
+        color: black;
+        padding: 2px 4px;
+        font-size: 0.75rem;
       }
     }
   }

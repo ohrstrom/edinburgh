@@ -9,7 +9,7 @@ import Input from '@/components/ui/Input.vue'
 const { connected, ediHost, ediPort } = storeToRefs(useEDIStore())
 
 const emit = defineEmits<{
-  (event: 'connect', payload: { host: host; port: number }): void
+  (event: 'connect', payload: { host: string; port: number }): void
   (event: 'reset'): void
 }>()
 

@@ -16,6 +16,14 @@ use crate::edi_frame_extractor::EDIFrameExtractor;
 use shared::edi::EDISource;
 use shared::edi::Ensemble;
 
+#[derive(Serialize, Clone, Debug)]
+pub struct DirectoryEnsemble {
+    pub host: String,
+    pub port: u16,
+    #[serde(flatten)]
+    pub ensemble: Ensemble,
+}
+
 /*
     - edi-ch.digris.net:8851-8866
     - edi-fr.digris.net:8851-8880
@@ -25,6 +33,12 @@ use shared::edi::Ensemble;
 #[derive(Serialize)]
 pub struct Message {
     pub message: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Endpoint {
+    pub host: String,
+    pub port: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -68,7 +82,7 @@ impl std::str::FromStr for ScanTarget {
 
 #[derive(Clone)]
 pub struct DirectoryService {
-    pub ensembles: Arc<RwLock<Vec<Ensemble>>>,
+    pub ensembles: Arc<RwLock<Vec<DirectoryEnsemble>>>,
     pub ctr: Arc<RwLock<u32>>,
     pub scan_targets: Vec<ScanTarget>,
 }
@@ -96,7 +110,7 @@ impl DirectoryService {
         }
     }
 
-    pub async fn get_ensembles(&self) -> Vec<Ensemble> {
+    pub async fn get_ensembles(&self) -> Vec<DirectoryEnsemble> {
         self.ensembles.read().await.clone()
     }
 
@@ -109,17 +123,22 @@ impl DirectoryService {
         let mut interval = time::interval(Duration::from_secs(10));
         interval.tick().await; // eat the first tick
 
-        let endpoints: Vec<String> = self
+        let endpoints: Vec<Endpoint> = self
             .scan_targets
             .iter()
             .flat_map(|target| {
                 let (start, end) = target.port_range;
-                (start..=end).map(move |port| format!("{}:{}", target.host, port))
+                (start..=end).map(move |port| Endpoint {
+                    host: target.host.clone(),
+                    port,
+                })
             })
             .collect();
 
+        /*
         println!("targets:   {:?}", self.scan_targets);
         println!("endpoints: {:?}", endpoints);
+        */
 
         let semaphore = Arc::new(Semaphore::new(8));
 
@@ -143,9 +162,11 @@ impl DirectoryService {
                 match result {
                     Ok(Ok(ensemble)) => {
                         log::info!(
-                            "Scanning endpoint complete: 0x{:4x} - {}",
-                            ensemble.eid.unwrap_or(0),
-                            ensemble.label.as_deref().unwrap_or("-")
+                            "Scanning endpoint complete: {} {} - 0x{:4x} - {}",
+                            ensemble.host,
+                            ensemble.port,
+                            ensemble.ensemble.eid.unwrap_or(0),
+                            ensemble.ensemble.label.as_deref().unwrap_or("-")
                         );
                         ensembles.push(ensemble);
                     }
@@ -169,15 +190,17 @@ impl DirectoryService {
 
 }
 
-async fn scan(endpoint: String) -> anyhow::Result<Ensemble> {
+async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
     // log::debug!("Scanning endpoint: {}", endpoint);
 
     let timeout_ms = 2000;
 
-    let stream = match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&endpoint)).await {
+    let uri = format!("{}:{}", endpoint.host, endpoint.port);
+
+    let stream = match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(uri.clone())).await {
         Ok(Ok(stream)) => stream,
-        Ok(Err(e)) => anyhow::bail!("Failed to connect to {}: {}", endpoint, e),
-        Err(_) => anyhow::bail!("Timeout connecting to {}", endpoint),
+        Ok(Err(e)) => anyhow::bail!("Failed to connect to {}: {}", uri, e),
+        Err(_) => anyhow::bail!("Timeout connecting to {}", uri),
     };
 
     let mut filled = 0;
@@ -205,7 +228,11 @@ async fn scan(endpoint: String) -> anyhow::Result<Ensemble> {
     loop {
         tokio::select! {
             Ok(ensemble) = &mut done_rx => {
-                return Ok(ensemble);
+                return Ok(DirectoryEnsemble {
+                    ensemble,
+                    host: endpoint.host.clone(),
+                    port: endpoint.port,
+                });
             }
             ready = timeout(Duration::from_millis(timeout_ms), stream.ready(Interest::READABLE)) => {
                 match ready {
