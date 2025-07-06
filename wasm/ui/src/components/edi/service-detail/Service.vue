@@ -25,6 +25,20 @@ const hasDlPlus = computed(() => {
   return (service.value?.dl?.dl_plus ?? []).length
 })
 
+const formatDlPlusKind = (kind: string | Record<string, unknown>): string => {
+  if (typeof kind === 'string') {
+    return kind.replace(/_/g, '.')
+  }
+  if (typeof kind === 'object' && kind !== null && !Array.isArray(kind)) {
+    const key = Object.keys(kind)[0]
+    if (key) {
+      const value = kind[key]
+      return `${key.toUpperCase()}.${value}`
+    }
+  }
+  return 'UNKNOWN'
+}
+
 defineProps<{ level: Types.Level }>()
 
 // const dummyLabel =  "ARTBAT - Love is Gonna Save And Some More Text we should scroll Us (with Benny Benassi) - radio4tng.ch"
@@ -75,7 +89,7 @@ defineProps<{ level: Types.Level }>()
         </div>
         <div v-if="hasDlPlus" class="dl-plus">
           <div v-for="l in service?.dl?.dl_plus" :key="l.kind" class="item">
-            <span class="kind" v-text="l.kind.replace('_', '.')" />
+            <span class="kind" v-text="formatDlPlusKind(l.kind)" />
             <span class="value" v-text="l.value" />
           </div>
         </div>

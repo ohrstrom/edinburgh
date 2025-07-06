@@ -44,7 +44,7 @@ impl AudioFormat {
 
         // let channel_mode_x = h & 0x10;
 
-        // log::debug!("channel mode: {:?} - {}", channel_mode_x, channel_mode);
+        // log::info!("channel mode: {:?} - {}", dac_mode, channel_mode);
 
         let codec = match (sbr, ps) {
             (true, true) => "HE-AACv2",
@@ -64,9 +64,6 @@ impl AudioFormat {
         };
 
         let channels = if channel_mode || ps { 2 } else { 1 };
-
-        // let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80];
-        let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]; // HE-AAC v2 - 16kHz
 
         // NOTE: it would likely be better to actually "build" the ASC ;)
         let asc = match (samplerate, sbr, ps) {

@@ -120,7 +120,7 @@ impl DirectoryService {
 
 
     async fn run_scan(self: Arc<Self>) {
-        let mut interval = time::interval(Duration::from_secs(10));
+        let mut interval = time::interval(Duration::from_secs(60));
         interval.tick().await; // eat the first tick
 
         let endpoints: Vec<Endpoint> = self

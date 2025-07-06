@@ -69,8 +69,8 @@ impl Frame {
                     // log::debug!("tag_item: B {:?}", tag_item.len());
                     tags.push(tag);
                 }
-                Err(e) => {
-                    log::error!("Error parsing tag: {:?}", e);
+                Err(_e) => {
+                    // log::debug!("Error parsing tag: {:?}", e);
                 }
             }
 

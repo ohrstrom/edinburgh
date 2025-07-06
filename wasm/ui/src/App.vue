@@ -197,7 +197,7 @@ class EDInburgh {
     () => this.selectedService.value?.scid,
       async (newScid, oldScid) => {
         if (newScid !== oldScid) {
-          await this.resetAudioDecoder(this.selectedService.value.audioFormat)
+          await this.resetAudioDecoder(this.selectedService.value?.audioFormat)
           await this.startAnalyser()
           await this.fadeIn(0.2)
         }
@@ -401,7 +401,7 @@ class EDInburgh {
     // }
 
     let codec = 'mp4a.40.5'
-    const asc = new Uint8Array(audioFormat.asc)
+    const asc = new Uint8Array(audioFormat?.asc ?? [])
 
 
     await this.decoder.configure({
@@ -594,13 +594,8 @@ class EDInburgh {
     const avgL = bufferL.reduce((sum, v) => sum + v, 0) / bufferL.length
     const avgR = bufferR.reduce((sum, v) => sum + v, 0) / bufferR.length
 
-    const volumeL = avgL / 255
-    const volumeR = avgR / 255
-
-    // const dBFSL = 20 * Math.log10(Math.max(volumeL, 0.00001))
-    // const dBFSR = 20 * Math.log10(Math.max(volumeR, 0.00001))
-
-    // console.debug("L:", dBFSL, "R:", dBFSR)
+    const volumeL = avgL / 256
+    const volumeR = avgR / 256
 
     this.level.value = {
       l: volumeL,

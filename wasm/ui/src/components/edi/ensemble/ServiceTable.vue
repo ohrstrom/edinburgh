@@ -57,6 +57,7 @@ const services = computed(() => {
             <span v-if="svc.audioFormat.channels == 2">S</span>
             <span v-else>M</span>
           </span>
+          <span v-else>format not supported</span>
         </span>
         <span class="subchannel">
           <span v-if="svc?.subchannel">
