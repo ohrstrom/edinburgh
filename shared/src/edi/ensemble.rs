@@ -3,6 +3,7 @@ use serde::Serialize;
 
 use super::bus::{emit_event, EDIEvent};
 use super::fic::FIG;
+use super::msc::AudioFormat;
 use super::frame::DETITag;
 use super::tables;
 
@@ -21,6 +22,8 @@ pub struct ServiceComponent {
     pub language: Option<tables::Language>,
     pub subchannel_id: Option<u8>,
     pub user_apps: Vec<tables::UserApplication>,
+    // NOTE: is this a good idea?
+    pub audio_format: Option<AudioFormat>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -110,6 +113,7 @@ impl Ensemble {
                                         language: None,
                                         subchannel_id: Some(entry.scid),
                                         user_apps: Vec::new(),
+                                        audio_format: None,
                                     });
                                     updated = true;
                                 }
@@ -124,6 +128,7 @@ impl Ensemble {
                                         language: None,
                                         subchannel_id: Some(entry.scid),
                                         user_apps: Vec::new(),
+                                        audio_format: None,
                                     }],
                                 });
                                 updated = true;
@@ -223,6 +228,31 @@ impl Ensemble {
 
         if updated {
             // log::info!("ENSEMBLE: {:#?}", self);
+            emit_event(EDIEvent::EnsembleUpdated(self.clone()));
+        }
+
+        updated
+    }
+
+    pub fn update_audio_format(
+        &mut self,
+        scid: u8,
+        audio_format: Option<AudioFormat>,
+    ) -> bool {
+        let mut updated = false;
+
+        // println!("Updating audio format for SCID {}: {:?}", scid, audio_format);
+
+        for service in &mut self.services {
+            if let Some(component) = service.components.iter_mut().find(|c| c.scid == scid) {
+                if component.audio_format != audio_format {
+                    component.audio_format = audio_format.clone();
+                    updated = true;
+                }
+            }
+        }
+
+        if updated {
             emit_event(EDIEvent::EnsembleUpdated(self.clone()));
         }
 

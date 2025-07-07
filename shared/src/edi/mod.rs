@@ -127,6 +127,9 @@ impl EDISource {
                                 .await
                             {
                                 Ok(FeedResult::Complete(r)) => {
+                                    // "inject" audio format into ensemble
+                                    self.ensemble.update_audio_format(r.scid, r.audio_format);
+
                                     // audio frames
                                     for frame in r.frames {
                                         let aac_frame = AACPFrame::from_bytes(scid, frame);

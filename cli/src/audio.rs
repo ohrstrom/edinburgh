@@ -1,4 +1,3 @@
-
 use derivative::Derivative;
 use faad2::{version, Decoder};
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
@@ -83,6 +82,7 @@ impl AudioDecoder {
         if aac_result.scid != self.scid {
             log::info!("Changed SCID: {} > {}", self.scid, aac_result.scid);
 
+            /**/
             self.sink.lock().unwrap().set_volume(0.0);
 
             let sink_clone = Arc::clone(&self.sink);
@@ -105,6 +105,7 @@ impl AudioDecoder {
                     sink.set_volume(1.0);
                 }
             });
+            
 
             self.scid = aac_result.scid;
         }

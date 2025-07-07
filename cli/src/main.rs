@@ -1,5 +1,6 @@
 mod audio;
 mod edi_frame_extractor;
+mod tui;
 
 use shared::utils;
 
@@ -11,32 +12,156 @@ use clap::Parser;
 use edi_frame_extractor::EDIFrameExtractor;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
-use tokio::io::{BufReader, AsyncBufReadExt};
 
 use shared::edi::bus::{init_event_bus, EDIEvent};
 use shared::edi::EDISource;
 
 use audio::AudioDecoder;
+use tui::{TUICommand, TUIEvent};
+
+/// EDInburgh
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// EDI host:port to connect to.
+    #[arg(short, long)]
+    addr: String,
+
+    /// Subchannel ID to extract audio from. [optional]
+    #[arg(short, long)]
+    scid: Option<u8>,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var("RUST_LOG", "error");
+
+    env_logger::builder()
+        .format_timestamp(None)
+        .init();
+
+    let args = Args::parse();
+
+
+    let scid = Arc::new(RwLock::new(args.scid));
+
+    // TUI
+    // TUI main -> TUI
+    let (tui_tx, tui_rx) = unbounded_channel::<TUIEvent>();
+
+    // TUI -> main
+    let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TUICommand>();
+
+    tokio::spawn({
+        let tui_tx = tui_tx.clone();
+        let scid = *scid.read().await;
+        async move {
+            if let Err(e) = tui::run_tui(scid, tui_tx, tui_rx, tui_cmd_tx).await {
+                eprintln!("TUI error: {:?}", e);
+            }
+        }
+    });
+
+    let stream = TcpStream::connect(args.addr).await?;
+
+    let mut filled = 0;
+
+    let mut extractor = EDIFrameExtractor::new();
+
+    let event_rx = init_event_bus();
+
+    let mut source = EDISource::new(args.scid, None, None);
+
+    let event_handler = EDIHandler::new(Arc::clone(&scid), event_rx, tui_tx.clone());
+
+    tokio::spawn(async move {
+        event_handler.run().await;
+    });
+
+    loop {
+        tokio::select! {
+
+            // EDI TCP stream
+            ready = stream.ready(Interest::READABLE) => {
+                let ready = ready?;
+                if ready.is_readable() {
+                    match stream.try_read(&mut extractor.frame.data[filled..]) {
+                        Ok(0) => {
+                            log::info!("Connection closed by peer");
+                            break;
+                        }
+                        Ok(n) => {
+                            filled += n;
+                            if filled < extractor.frame.data.len() {
+                                continue;
+                            }
+                            if let Some(offset) = extractor.frame.find_sync_magic() {
+                                if offset > 0 {
+                                    extractor.frame.data.copy_within(offset.., 0);
+                                    filled -= offset;
+                                    continue;
+                                }
+                                if extractor.frame.check_completed() {
+                                    source.feed(&extractor.frame.data).await;
+                                    extractor.frame.reset();
+                                    filled = 0;
+                                }
+                            }
+                        }
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+            }
+
+            // TUI command handler
+            Some(cmd) = tui_cmd_rx.recv() => {
+                match cmd {
+                    TUICommand::ScIDSelected(scid_val) => {
+                        let mut scid = scid.write().await;
+                        *scid = Some(scid_val);
+                    }
+                    TUICommand::Shutdown => {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+
+
 
 struct EDIHandler {
-    receiver: UnboundedReceiver<EDIEvent>,
+    edi_rx: UnboundedReceiver<EDIEvent>,
     scid: Arc<RwLock<Option<u8>>>,
     audio_decoder: Option<AudioDecoder>,
+    // tui
+    tui_tx: UnboundedSender<TUIEvent>,
 }
 
 impl EDIHandler {
-    pub fn new(scid: Arc<RwLock<Option<u8>>>, receiver: UnboundedReceiver<EDIEvent>) -> Self {
+    pub fn new(
+        scid: Arc<RwLock<Option<u8>>>,
+        edi_rx: UnboundedReceiver<EDIEvent>,
+        tui_tx: UnboundedSender<TUIEvent>,
+    ) -> Self {
         Self {
-            receiver,
+            edi_rx,
             scid,
             audio_decoder: None,
+            // tui
+            tui_tx,
         }
     }
 
     pub async fn run(mut self) {
-        while let Some(event) = self.receiver.recv().await {
+        while let Some(event) = self.edi_rx.recv().await {
             match event {
                 EDIEvent::EnsembleUpdated(ensemble) => {
                     log::debug!(
@@ -45,17 +170,14 @@ impl EDIHandler {
                         ensemble.complete
                     );
                     if ensemble.complete {
-                        // println!("{:?}", ensemble);
-                        for service in &ensemble.services {
-                            println!("{:?}", service);
+                        if let Err(e) = self.tui_tx.send(TUIEvent::EnsembleUpdated(ensemble)) {
+                            log::warn!("Could not send TUI update: {:?}", e);
                         }
                     }
                 }
                 EDIEvent::AACPFramesExtracted(r) => {
                     let scid = *self.scid.read().await;
                     if r.scid == scid.unwrap_or(0) {
-                        // println!("R: {:?}", r);
-
                         if r.audio_format.is_none() {
                             log::warn!("Audio format is None for SCID: {}", r.scid);
                             continue;
@@ -73,136 +195,18 @@ impl EDIHandler {
                         if let Some(ref mut audio_decoder) = self.audio_decoder {
                             audio_decoder.feed(&r);
                         }
-
-                        // for frame in r.frames {
-                        //     self.audio_decoder.feed(&frame);
-                        // }
                     }
+
                 }
                 EDIEvent::MOTImageReceived(m) => {
                     // log::debug!("MOT image received: SCID = {}", m.scid);
                 }
                 EDIEvent::DLObjectReceived(d) => {
-                    // log::debug!("DL obj received: SCID = {}", d.scid);
+                    if let Err(e) = self.tui_tx.send(TUIEvent::DLObjectReceived(d)) {
+                        log::warn!("Could not send TUI update: {:?}", e);
+                    }
                 }
             }
         }
     }
-}
-
-/// EDInburgh
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// EDI host:port to connect to.
-    #[arg(short, long)]
-    addr: String,
-
-    /// Subchannel ID to extract audio from. [optional]
-    #[arg(short, long)]
-    scid: Option<u8>,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::env::set_var("RUST_LOG", "debug");
-
-    // env_logger::init();
-    env_logger::builder()
-        .format_timestamp(None)
-        // .format(|buf, record| {
-        //     writeln!(buf, "{}: {}", record.level(), record.args())
-        // })
-        .init();
-
-    let args = Args::parse();
-
-    let scid = Arc::new(RwLock::new(args.scid));
-
-    // cli args
-    let endpoint = args.addr;
-
-    log::debug!("endpoint: {}", endpoint);
-
-    let stream = TcpStream::connect(endpoint).await?;
-
-    let mut filled = 0;
-
-    let mut extractor = EDIFrameExtractor::new();
-
-    let event_rx = init_event_bus();
-
-    let mut source = EDISource::new(args.scid, None, None);
-
-    let event_handler = EDIHandler::new(Arc::clone(&scid), event_rx);
-
-    tokio::spawn(async move {
-        event_handler.run().await;
-    });
-
-    let scid_input = Arc::clone(&scid);
-    // listen for keyboard input 1 - 9
-    tokio::spawn(async move {
-        // read key 1-9 from stdin
-        let reader = BufReader::new(tokio::io::stdin());
-        let mut lines = reader.lines();
-        // println!("l: {}", lines.next_line().await.unwrap().unwrap());
-
-        println!("Type 1-9 + ENTER to set SCID dynamically:");
-
-        while let Ok(Some(line)) = lines.next_line().await {
-            // println!("Got line: {:?}", line);
-            if let Some(digit) = line.trim().chars().next() {
-                if let Some(num) = digit.to_digit(10) {
-                    println!("Setting SCID to {}", num);
-                    let mut scid_write = scid_input.write().await;
-                    *scid_write = Some(num as u8);
-                }
-            }
-        }
-    });
-
-    loop {
-        let ready = stream.ready(Interest::READABLE).await?;
-        if ready.is_readable() {
-            match stream.try_read(&mut extractor.frame.data[filled..]) {
-                Ok(0) => {
-                    log::info!("Connection closed by peer");
-                    break;
-                }
-                Ok(n) => {
-                    filled += n;
-
-                    if filled < extractor.frame.data.len() {
-                        continue;
-                    }
-
-                    // Process the received data
-                    if let Some(offset) = extractor.frame.find_sync_magic() {
-                        if offset > 0 {
-                            extractor.frame.data.copy_within(offset.., 0);
-                            filled -= offset;
-                            continue;
-                        }
-
-                        if extractor.frame.check_completed() {
-                            // log::debug!("frame: {}", extractor.frame);
-
-                            source.feed(&extractor.frame.data).await;
-
-                            extractor.frame.reset();
-                            filled = 0;
-                        }
-                    }
-                }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e.into());
-                }
-            }
-        }
-    }
-    Ok(())
 }

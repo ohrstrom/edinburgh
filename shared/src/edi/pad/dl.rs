@@ -27,7 +27,7 @@ pub struct DLObject {
     chars: Vec<u8>,
     charset: u8,
     dl_plus_tags: Vec<DLPlusTag>,
-    seg_count: u8,
+    pub seg_count: u8,
 }
 
 impl DLObject {
@@ -61,22 +61,6 @@ impl DLObject {
             })
             .collect()
     }
-    /*
-    pub fn get_dl_plus(&self) -> Vec<(DLPlusContentType, String)> {
-        let label = self.decode_label();
-        let label_chars: Vec<char> = label.chars().collect();
-
-        self.dl_plus_tags
-            .iter()
-            .map(|tag| {
-                let start = tag.start as usize;
-                let end = (start + tag.len as usize).min(label_chars.len());
-                let slice: String = label_chars[start..end].iter().collect();
-                (DLPlusContentType::from(tag.kind), slice)
-            })
-            .collect()
-    }
-    */
 }
 
 impl Serialize for DLObject {

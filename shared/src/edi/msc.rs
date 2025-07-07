@@ -1,6 +1,7 @@
 use super::bus::{emit_event, EDIEvent};
 use super::pad::PADDecoder;
 use crate::utils;
+use std::fmt;
 use derivative::Derivative;
 use log;
 use serde::Serialize;
@@ -87,6 +88,26 @@ impl AudioFormat {
             //
             asc,
         })
+    }
+}
+
+impl fmt::Display for AudioFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Channels: show "Stereo" or "Mono"
+        let channels_str = match self.channels {
+            2 => "S",
+            1 => "M",
+            _ => "-",
+        };
+
+        write!(
+            f,
+            "{} {} kHz @ {} kBit/s {}",
+            self.codec,
+            self.samplerate,
+            self.bitrate,
+            channels_str
+        )
     }
 }
 
