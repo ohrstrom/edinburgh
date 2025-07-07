@@ -2,7 +2,7 @@ pub mod bus;
 mod ensemble;
 mod fic;
 mod frame;
-mod msc;
+pub mod msc;
 pub mod pad;
 mod tables;
 

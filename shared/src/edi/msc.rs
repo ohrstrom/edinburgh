@@ -16,17 +16,16 @@ pub enum FormatError {
     StartValuesZero,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AudioFormat {
-    sbr: bool,
-    ps: bool,
-    codec: String,
-    samplerate: u8,
-    bitrate: usize,
-    au_count: usize,
-    channels: u8,
-    //
-    asc: Vec<u8>,
+    pub sbr: bool,
+    pub ps: bool,
+    pub codec: String,
+    pub samplerate: u8,
+    pub bitrate: usize,
+    pub au_count: usize,
+    pub channels: u8,
+    pub asc: Vec<u8>,
 }
 
 impl AudioFormat {

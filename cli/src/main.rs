@@ -1,162 +1,41 @@
+mod audio;
 mod edi_frame_extractor;
 
 use shared::utils;
 
-use colog;
 use log;
 use std::io;
-use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use clap::Parser;
-use derivative::Derivative;
 use edi_frame_extractor::EDIFrameExtractor;
-use faad2::{version, Decoder};
-use futures::channel::mpsc::unbounded;
-use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use tokio::io::Interest;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::RwLock;
+use tokio::io::{BufReader, AsyncBufReadExt};
 
 use shared::edi::bus::{init_event_bus, EDIEvent};
-use shared::edi::{AACPFrame, EDISource, Ensemble};
+use shared::edi::EDISource;
 
-pub fn pp_ensemble(ensemble: &Ensemble) {
-    // Top-level ensemble line
-    println!(
-        "0x{:04x}: \"{}\" | \"{}\"",
-        ensemble.eid.unwrap_or(0),
-        ensemble.label.clone().unwrap_or_default(),
-        ensemble.short_label.clone().unwrap_or_default()
-    );
-
-    for service in &ensemble.services {
-        println!(
-            " - 0x{:04x}: \"{}\" | \"{}\"",
-            service.sid,
-            service.label.clone().unwrap_or_default(),
-            service.short_label.clone().unwrap_or_default()
-        );
-
-        for component in &service.components {
-            let language = match &component.language {
-                Some(lang) => format!("{:?}", lang),
-                None => "NONE".to_string(),
-            };
-
-            let apps = if component.user_apps.is_empty() {
-                "NONE".to_string()
-            } else {
-                component
-                    .user_apps
-                    .iter()
-                    .map(|ua| format!("{:?}", ua))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-
-            println!("   - {:03}: {} - {}", component.scid, language, apps);
-        }
-    }
-}
-
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct AudioDecoder {
-    asc: Vec<u8>,
-    #[derivative(Debug = "ignore")]
-    decoder: Decoder,
-    #[derivative(Debug = "ignore")]
-    _stream: OutputStream,
-    #[derivative(Debug = "ignore")]
-    sink: Sink,
-}
-
-impl AudioDecoder {
-    pub fn new() -> Self {
-        // ASC: audio specific config
-        // see: http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio
-        // let asc = vec![0x13, 0x14, 0x56, 0xE5, 0x98]; // HE-AAC - extracted from dablin at runtime
-
-        println!("FAAD2 version: {:?}", version());
-
-        // example program HE-AAC-v2
-        // cargo run -- --addr edi-uk.digris.net:8851 --scid 13
-        // 13 0C 56 E5 9D 48 80 // HE-AAC-v2 - extracted from dablin at runtime
-        let asc = vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 24kHz
-
-        //               14    0C    56    E5    AD    48    80
-        // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]; // HE-AAC v2 - 16kHz
-
-        // let asc = vec![0x14, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 16kHz
-        // let asc = vec![0x12, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]; // HE-AAC v2 - 32kHz
-
-        let decoder = Decoder::new(&asc).unwrap();
-
-        let (stream, handle) = OutputStream::try_default().expect("Error creating output stream");
-        let sink = Sink::try_new(&handle).expect("Error creating sink");
-
-        Self {
-            asc,
-            decoder,
-            _stream: stream, // NOTE: we need to keep the stream alive
-            sink,
-        }
-    }
-    fn feed(&mut self, au_data: &[u8]) {
-        // log::debug!("AU: {} bytes - {:?} ...", au_data.len(), &au_data[0..8]);
-
-        match self.decoder.decode(&au_data) {
-            Ok(r) => {
-                self.sink.append(SamplesBuffer::new(
-                    r.channels as u16,
-                    r.sample_rate as u32,
-                    r.samples,
-                ));
-            }
-            // Err(e) => {
-            //     log::error!("DEC: {}", e);
-            //     return;
-            // }
-            Err(e) => {
-                log::error!("DEC: {} — resetting decoder", e);
-
-                match Decoder::new(&self.asc) {
-                    Ok(new_decoder) => {
-                        self.decoder = new_decoder;
-                        log::warn!("Decoder reset done — will try next AU");
-                    }
-                    Err(_) => {
-                        log::error!("Decoder reset failed — stuck until next good AU!");
-                    }
-                }
-
-                return;
-            }
-        }
-    }
-}
-
-unsafe impl Send for AudioDecoder {}
+use audio::AudioDecoder;
 
 struct EDIHandler {
     receiver: UnboundedReceiver<EDIEvent>,
-    audio_decoder: AudioDecoder,
-    scid: Option<u8>,
+    scid: Arc<RwLock<Option<u8>>>,
+    audio_decoder: Option<AudioDecoder>,
 }
 
 impl EDIHandler {
-    pub fn new(scid: Option<u8>, receiver: UnboundedReceiver<EDIEvent>) -> Self {
-        let audio_decoder = AudioDecoder::new();
+    pub fn new(scid: Arc<RwLock<Option<u8>>>, receiver: UnboundedReceiver<EDIEvent>) -> Self {
         Self {
-            scid,
             receiver,
-            audio_decoder,
+            scid,
+            audio_decoder: None,
         }
     }
 
     pub async fn run(mut self) {
-        let mut ensemble_complete = false;
         while let Some(event) = self.receiver.recv().await {
             match event {
                 EDIEvent::EnsembleUpdated(ensemble) => {
@@ -166,16 +45,38 @@ impl EDIHandler {
                         ensemble.complete
                     );
                     if ensemble.complete {
-                        println!("{:?}", ensemble);
-
-                        pp_ensemble(&ensemble);
+                        // println!("{:?}", ensemble);
+                        for service in &ensemble.services {
+                            println!("{:?}", service);
+                        }
                     }
                 }
                 EDIEvent::AACPFramesExtracted(r) => {
-                    if r.scid == self.scid.unwrap_or(0) {
-                        for frame in r.frames {
-                            self.audio_decoder.feed(&frame);
+                    let scid = *self.scid.read().await;
+                    if r.scid == scid.unwrap_or(0) {
+                        // println!("R: {:?}", r);
+
+                        if r.audio_format.is_none() {
+                            log::warn!("Audio format is None for SCID: {}", r.scid);
+                            continue;
                         }
+
+                        let audio_format = r.audio_format.as_ref().unwrap();
+
+                        // create aduio decoder if needed
+                        if self.audio_decoder.is_none() {
+                            let audio_decoder = AudioDecoder::new(audio_format.clone());
+                            self.audio_decoder = Some(audio_decoder);
+                        }
+
+                        // feed audio decoder with frames
+                        if let Some(ref mut audio_decoder) = self.audio_decoder {
+                            audio_decoder.feed(&r);
+                        }
+
+                        // for frame in r.frames {
+                        //     self.audio_decoder.feed(&frame);
+                        // }
                     }
                 }
                 EDIEvent::MOTImageReceived(m) => {
@@ -215,7 +116,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let args = Args::parse();
-    log::debug!("{:#?}", args);
+
+    let scid = Arc::new(RwLock::new(args.scid));
 
     // cli args
     let endpoint = args.addr;
@@ -225,35 +127,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stream = TcpStream::connect(endpoint).await?;
 
     let mut filled = 0;
-    let mut _sync_skipped = 0;
 
     let mut extractor = EDIFrameExtractor::new();
 
     let event_rx = init_event_bus();
 
-    /*
-    let audio_decoder = Arc::new(Mutex::new(AudioDecoder::new()));
-
-    let aac_callback: Box<dyn FnMut(&AACPFrame) + Send> = Box::new({
-        let audio_decoder = Arc::clone(&audio_decoder);
-        move |frame: &AACPFrame| {
-            if let Ok(mut decoder) = audio_decoder.lock() {
-                if frame.scid == args.scid.unwrap_or(0) {
-                    decoder.feed(&frame.data);
-                }
-            }
-        }
-    });
-
-    let mut source = EDISource::new(event_tx, None, Some(aac_callback));
-    */
-
     let mut source = EDISource::new(args.scid, None, None);
 
-    let event_handler = EDIHandler::new(args.scid, event_rx);
+    let event_handler = EDIHandler::new(Arc::clone(&scid), event_rx);
 
     tokio::spawn(async move {
         event_handler.run().await;
+    });
+
+    // let scid_input = Arc::clone(&scid);
+    // listen for keyboard input 1 - 9
+    tokio::spawn(async move {
+        // read key 1-9 from stdin
     });
 
     loop {
@@ -274,14 +164,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Process the received data
                     if let Some(offset) = extractor.frame.find_sync_magic() {
                         if offset > 0 {
-                            log::debug!("offset: {}", offset);
                             extractor.frame.data.copy_within(offset.., 0);
                             filled -= offset;
-                            _sync_skipped += offset;
-
                             continue;
-                        } else {
-                            _sync_skipped = 0;
                         }
 
                         if extractor.frame.check_completed() {
