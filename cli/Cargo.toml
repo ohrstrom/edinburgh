@@ -16,7 +16,7 @@ faad2 = { path = "../../../rs/faad2-rs" }
 futures = "0.3.31"
 log = "0.4.26"
 rodio = "0.20.1"
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "time", "sync"] }
 
 [[bin]]
 name = "edinburgh"

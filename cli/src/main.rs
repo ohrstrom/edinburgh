@@ -65,7 +65,7 @@ impl EDIHandler {
 
                         // create aduio decoder if needed
                         if self.audio_decoder.is_none() {
-                            let audio_decoder = AudioDecoder::new(audio_format.clone());
+                            let audio_decoder = AudioDecoder::new(r.scid, audio_format.clone());
                             self.audio_decoder = Some(audio_decoder);
                         }
 
@@ -140,10 +140,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_handler.run().await;
     });
 
-    // let scid_input = Arc::clone(&scid);
+    let scid_input = Arc::clone(&scid);
     // listen for keyboard input 1 - 9
     tokio::spawn(async move {
         // read key 1-9 from stdin
+        let reader = BufReader::new(tokio::io::stdin());
+        let mut lines = reader.lines();
+        // println!("l: {}", lines.next_line().await.unwrap().unwrap());
+
+        println!("Type 1-9 + ENTER to set SCID dynamically:");
+
+        while let Ok(Some(line)) = lines.next_line().await {
+            // println!("Got line: {:?}", line);
+            if let Some(digit) = line.trim().chars().next() {
+                if let Some(num) = digit.to_digit(10) {
+                    println!("Setting SCID to {}", num);
+                    let mut scid_write = scid_input.write().await;
+                    *scid_write = Some(num as u8);
+                }
+            }
+        }
     });
 
     loop {
