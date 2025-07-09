@@ -11,6 +11,7 @@ defineEmits<{
 
 onMounted(async () => {
     try {
+        errors.value = [];
         const response = await fetch(directoryUrl.value);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -19,12 +20,14 @@ onMounted(async () => {
         ensembleList.value = data;
     } catch (error) {
         console.error('Error fetching ensemble directory:', error);
+        errors.value.push(error);
     }
 });
 
+const errors = ref<any[]>([]);
 const ensembleList = ref<any[]>([]);
 
-const ensembles = computed(() => {
+const ensembleListSorted = computed(() => {
     return ensembleList.value.sort((a, b) => {
     const hostC = a.host.localeCompare(b.host)
     if (hostC !== 0) {
@@ -32,6 +35,17 @@ const ensembles = computed(() => {
     }
     return a.label.localeCompare(b.label)
   })
+})
+
+const ensembles = computed(() => {
+    return ensembleListSorted.value.map((ensemble: any) => {
+        const cus = ensemble.subchannels.reduce( (t: number, c: number) => t + c.size, 0);
+        return {
+            ...ensemble,
+            cus,
+            services: ensemble.services || []
+        }
+    })
 })
 </script>
 
@@ -42,15 +56,19 @@ const ensembles = computed(() => {
             <HexValue class="eid" :value="ensemble.eid" />
             <span class="label">{{ ensemble?.label ?? '-' }}</span>
             <span class="host">{{ ensemble.host }}:{{ ensemble.port }}</span>
+            <span class="cus">
+                <span>{{ ensemble.cus }} CUs</span>
+            </span>
             <span class="services">
-                <span>Services:</span>
-                <span>{{ (ensemble?.services ?? []).length }}</span>
+                <span>{{ (ensemble?.services ?? []).length }} SVCs</span>
             </span>
         </div>
     </div>
     <div v-else class="table table--skeleton">
       <div class="info">
         <span>no ensembles scanned</span>
+        <p>{{ directoryUrl }}</p>
+        <pre v-if="errors.length" class="errors" v-text="errors" />
       </div>
     </div>
     </div>
@@ -80,7 +98,7 @@ const ensembles = computed(() => {
 
   >.ensemble {
     display: grid;
-    grid-template-columns: 80px 2fr 1fr 80px;
+    grid-template-columns: 80px 2fr 1fr 80px 80px;
     gap: 8px;
     padding: 2px 8px;
 

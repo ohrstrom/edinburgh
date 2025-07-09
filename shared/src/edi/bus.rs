@@ -4,14 +4,18 @@ use super::ensemble::Ensemble;
 use super::msc::AACPResult;
 use super::pad::dl::DLObject;
 use super::pad::mot::MOTImage;
+use super::EDISStats;
 
 #[derive(Debug, Serialize)]
 pub enum EDIEvent {
+    //
     EnsembleUpdated(Ensemble),
     AACPFramesExtracted(AACPResult),
     //
     MOTImageReceived(MOTImage),
     DLObjectReceived(DLObject),
+    //
+    EDISStatsUpdated(EDISStats),
 }
 
 #[cfg(target_arch = "wasm32")]

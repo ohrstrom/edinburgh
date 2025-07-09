@@ -57,23 +57,26 @@ impl EDI {
                 let js_event = match &event {
                     EDIEvent::EnsembleUpdated(ensemble) => {
                         let data = to_value(&ensemble).unwrap();
-                        Self::create_event("ensemble_updated", &data)
+                        Some(Self::create_event("ensemble_updated", &data))
                     }
                     EDIEvent::AACPFramesExtracted(aac) => {
                         let data = to_value(&aac).unwrap();
-                        Self::create_event("aac_segment", &data)
+                        Some(Self::create_event("aac_segment", &data))
                     }
                     EDIEvent::MOTImageReceived(mot) => {
                         let data = to_value(&mot).unwrap();
-                        Self::create_event("mot_image", &data)
+                        Some(Self::create_event("mot_image", &data))
                     }
                     EDIEvent::DLObjectReceived(dl) => {
                         let data = to_value(&dl).unwrap();
-                        Self::create_event("dl_object", &data)
+                        Some(Self::create_event("dl_object", &data))
                     }
+                    _ => None,
                 };
 
-                edi_clone.event_target.dispatch_event(&js_event).unwrap();
+                if let Some(js_event) = js_event {
+                    edi_clone.event_target.dispatch_event(&js_event).unwrap();
+                }
             }
         });
 

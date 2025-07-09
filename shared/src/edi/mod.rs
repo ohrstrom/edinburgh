@@ -6,15 +6,19 @@ pub mod msc;
 pub mod pad;
 mod tables;
 
+use crate::meter::RateMeter;
 use derivative::Derivative;
+pub use ensemble::{Ensemble, Subchannel};
+use frame::Frame;
+use frame::Tag;
 use log;
 use msc::{AACPExctractor, FeedResult};
 use serde::Serialize;
+use std::clone;
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
-use bus::EDIEvent;
-pub use ensemble::Ensemble;
-use frame::Frame;
-use frame::Tag;
+use bus::{emit_event, EDIEvent};
 
 #[derive(Debug, Serialize)]
 pub struct AACPFrame {
@@ -49,6 +53,39 @@ impl EDISubchannel {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct EDISStats {
+    pub rx_rate: usize,
+    pub rx_bytes: u64,
+    pub rx_frames: u64,
+
+    #[serde(skip)]
+    meter: RateMeter,
+}
+
+impl EDISStats {
+    pub fn new() -> Self {
+        EDISStats {
+            rx_rate: 0,
+            rx_bytes: 0,
+            rx_frames: 0,
+            meter: RateMeter::default(),
+        }
+    }
+    pub fn feed(&mut self, data: &[u8]) {
+        let bytes = data.len();
+
+        self.rx_bytes += bytes as u64;
+        self.rx_frames += 1;
+
+        self.meter.entry(bytes);
+
+        self.rx_rate = self.meter.measure();
+
+        emit_event(EDIEvent::EDISStatsUpdated(self.clone()));
+    }
+}
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct EDISource {
@@ -59,6 +96,8 @@ pub struct EDISource {
     on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
     #[derivative(Debug = "ignore")]
     on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
+    // stats
+    stats: EDISStats,
 }
 
 impl EDISource {
@@ -67,6 +106,7 @@ impl EDISource {
         on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
         on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
     ) -> Self {
+        let stats = EDISStats::new();
         EDISource {
             ensemble: Ensemble::new(),
             subchannels: Vec::new(),
@@ -75,10 +115,14 @@ impl EDISource {
             //
             on_ensemble_update: on_ensemble_update,
             on_aac_segment: on_aac_segment,
+            //
+            stats,
         }
     }
 
     pub async fn feed(&mut self, data: &[u8]) {
+        self.stats.feed(data);
+
         match Frame::from_bytes(data) {
             Ok(frame) => {
                 for tag in &frame.tags {

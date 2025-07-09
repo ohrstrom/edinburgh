@@ -3,8 +3,8 @@ use serde::Serialize;
 
 use super::bus::{emit_event, EDIEvent};
 use super::fic::FIG;
-use super::msc::AudioFormat;
 use super::frame::DETITag;
+use super::msc::AudioFormat;
 use super::tables;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -234,11 +234,7 @@ impl Ensemble {
         updated
     }
 
-    pub fn update_audio_format(
-        &mut self,
-        scid: u8,
-        audio_format: Option<AudioFormat>,
-    ) -> bool {
+    pub fn update_audio_format(&mut self, scid: u8, audio_format: Option<AudioFormat>) -> bool {
         let mut updated = false;
 
         // println!("Updating audio format for SCID {}: {:?}", scid, audio_format);

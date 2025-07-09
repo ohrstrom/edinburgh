@@ -105,7 +105,6 @@ impl AudioDecoder {
                     sink.set_volume(1.0);
                 }
             });
-            
 
             self.scid = aac_result.scid;
         }

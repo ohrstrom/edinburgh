@@ -309,8 +309,8 @@ class EDInburgh {
     const analyserL = audioContext.createAnalyser()
     const analyserR = audioContext.createAnalyser()
 
-    analyserL.fftSize = 256
-    analyserR.fftSize = 256
+    analyserL.fftSize = 8192
+    analyserR.fftSize = 8192
 
     // connect chain:
     // worklet → splitter
@@ -585,21 +585,23 @@ class EDInburgh {
 
     const { l, r } = this.analyser
 
-    const bufferL = new Uint8Array(l.frequencyBinCount)
-    const bufferR = new Uint8Array(r.frequencyBinCount)
+    const bufferL = new Float32Array(l.fftSize)
+    const bufferR = new Float32Array(r.fftSize)
 
-    l.getByteFrequencyData(bufferL)
-    r.getByteFrequencyData(bufferR)
+    l.getFloatTimeDomainData(bufferL)
+    r.getFloatTimeDomainData(bufferR)
 
-    const avgL = bufferL.reduce((sum, v) => sum + v, 0) / bufferL.length
-    const avgR = bufferR.reduce((sum, v) => sum + v, 0) / bufferR.length
+    const rmsLength = 2048 // You can adjust this value
 
-    const volumeL = avgL / 256
-    const volumeR = avgR / 256
+    const sliceL = bufferL.slice(bufferL.length - rmsLength)
+    const sliceR = bufferR.slice(bufferR.length - rmsLength)
+
+    const rmsL = Math.hypot(...sliceL) / Math.sqrt(rmsLength)
+    const rmsR = Math.hypot(...sliceR) / Math.sqrt(rmsLength)
 
     this.level.value = {
-      l: volumeL,
-      r: volumeR,
+      l: rmsL,
+      r: rmsR,
     }
 
     requestAnimationFrame(this.analyserLoop)

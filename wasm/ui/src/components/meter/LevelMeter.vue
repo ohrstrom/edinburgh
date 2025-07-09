@@ -16,9 +16,10 @@ const tickWidth = computed(() => {
 })
 
 const dBFS = computed(() => {
+  const calibrationOffset = 0 // dB
   return {
-    l: 20 * Math.log10(Math.max(props.level.l, 0.000_01)),
-    r: 20 * Math.log10(Math.max(props.level.r, 0.000_01)),
+    l: 20 * Math.log10(Math.max(props.level.l, 0.000_01)) + calibrationOffset,
+    r: 20 * Math.log10(Math.max(props.level.r, 0.000_01)) + calibrationOffset,
   }
 })
 
@@ -40,7 +41,7 @@ let rafId: number
 const levelWidthDecay = reactive({ l: 0, r: 0 }) // displayed % values
 
 onMounted(() => {
-  const decayPerSecond = 70
+  const decayPerSecond = 25
   let lastFrame = performance.now()
 
   const update = (now = performance.now()) => {

@@ -1,10 +1,10 @@
 use super::bus::{emit_event, EDIEvent};
 use super::pad::PADDecoder;
 use crate::utils;
-use std::fmt;
 use derivative::Derivative;
 use log;
 use serde::Serialize;
+use std::fmt;
 use thiserror::Error;
 
 const FPAD_LEN: usize = 2;
@@ -47,7 +47,7 @@ impl AudioFormat {
         // log::info!("channel mode: {:?} - {}", dac_mode, channel_mode);
 
         let codec = match (sbr, ps) {
-            (true, true) => "HE-AACv2",
+            (true, true) => "HE-AAC-v2",
             (true, false) => "HE-AAC",
             (false, _) => "AAC-LC",
         }
@@ -102,11 +102,8 @@ impl fmt::Display for AudioFormat {
 
         write!(
             f,
-            "{} {} kHz @ {} kBit/s {}",
-            self.codec,
-            self.samplerate,
-            self.bitrate,
-            channels_str
+            "{:<10} {} kHz @ {} kBit/s {}",
+            self.codec, self.samplerate, self.bitrate, channels_str
         )
     }
 }

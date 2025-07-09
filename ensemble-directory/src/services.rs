@@ -1,4 +1,5 @@
 use anyhow;
+use futures::stream::{FuturesUnordered, StreamExt};
 use regex::Regex;
 use serde::Serialize;
 use std::any;
@@ -7,10 +8,9 @@ use std::sync::{Arc, Mutex};
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
-use tokio::time::{self, timeout, Duration};
 use tokio::sync::Semaphore;
+use tokio::time::{self, timeout, Duration};
 use tracing as log;
-use futures::stream::{FuturesUnordered, StreamExt};
 
 use crate::edi_frame_extractor::EDIFrameExtractor;
 use shared::edi::EDISource;
@@ -25,10 +25,10 @@ pub struct DirectoryEnsemble {
 }
 
 /*
-    - edi-ch.digris.net:8851-8866
-    - edi-fr.digris.net:8851-8880
-    - edi-uk.digris.net:8851-8860
- */
+   - edi-ch.digris.net:8851-8866
+   - edi-fr.digris.net:8851-8880
+   - edi-uk.digris.net:8851-8860
+*/
 
 #[derive(Serialize)]
 pub struct Message {
@@ -118,7 +118,6 @@ impl DirectoryService {
         *self.ctr.read().await
     }
 
-
     async fn run_scan(self: Arc<Self>) {
         let mut interval = time::interval(Duration::from_secs(60));
         interval.tick().await; // eat the first tick
@@ -187,7 +186,6 @@ impl DirectoryService {
             interval.tick().await;
         }
     }
-
 }
 
 async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
@@ -197,7 +195,12 @@ async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
 
     let uri = format!("{}:{}", endpoint.host, endpoint.port);
 
-    let stream = match timeout(Duration::from_millis(timeout_ms), TcpStream::connect(uri.clone())).await {
+    let stream = match timeout(
+        Duration::from_millis(timeout_ms),
+        TcpStream::connect(uri.clone()),
+    )
+    .await
+    {
         Ok(Ok(stream)) => stream,
         Ok(Err(e)) => anyhow::bail!("Failed to connect to {}: {}", uri, e),
         Err(_) => anyhow::bail!("Timeout connecting to {}", uri),

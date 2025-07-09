@@ -38,12 +38,9 @@ struct Args {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("RUST_LOG", "error");
 
-    env_logger::builder()
-        .format_timestamp(None)
-        .init();
+    env_logger::builder().format_timestamp(None).init();
 
     let args = Args::parse();
-
 
     let scid = Arc::new(RwLock::new(args.scid));
 
@@ -55,10 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TUICommand>();
 
     tokio::spawn({
+        let addr = args.addr.clone();
         let tui_tx = tui_tx.clone();
         let scid = *scid.read().await;
         async move {
-            if let Err(e) = tui::run_tui(scid, tui_tx, tui_rx, tui_cmd_tx).await {
+            if let Err(e) = tui::run_tui(addr, scid, tui_tx, tui_rx, tui_cmd_tx).await {
                 eprintln!("TUI error: {:?}", e);
             }
         }
@@ -134,9 +132,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-
-
-
 struct EDIHandler {
     edi_rx: UnboundedReceiver<EDIEvent>,
     scid: Arc<RwLock<Option<u8>>>,
@@ -196,13 +191,17 @@ impl EDIHandler {
                             audio_decoder.feed(&r);
                         }
                     }
-
                 }
                 EDIEvent::MOTImageReceived(m) => {
                     // log::debug!("MOT image received: SCID = {}", m.scid);
                 }
                 EDIEvent::DLObjectReceived(d) => {
                     if let Err(e) = self.tui_tx.send(TUIEvent::DLObjectReceived(d)) {
+                        log::warn!("Could not send TUI update: {:?}", e);
+                    }
+                }
+                EDIEvent::EDISStatsUpdated(s) => {
+                    if let Err(e) = self.tui_tx.send(TUIEvent::EDISStatsUpdated(s)) {
                         log::warn!("Could not send TUI update: {:?}", e);
                     }
                 }
