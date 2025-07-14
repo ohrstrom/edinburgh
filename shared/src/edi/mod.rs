@@ -78,9 +78,9 @@ impl EDISStats {
         self.rx_bytes += bytes as u64;
         self.rx_frames += 1;
 
-        self.meter.entry(bytes);
+        // self.meter.entry(bytes);
 
-        self.rx_rate = self.meter.measure();
+        // self.rx_rate = self.meter.measure();
 
         emit_event(EDIEvent::EDISStatsUpdated(self.clone()));
     }

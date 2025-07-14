@@ -36,7 +36,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::env::set_var("RUST_LOG", "error");
+    std::env::set_var("RUST_LOG", "warning");
 
     env_logger::builder().format_timestamp(None).init();
 
