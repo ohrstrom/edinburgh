@@ -156,14 +156,14 @@ impl DETITag {
         }
 
         let len = u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize;
-        let header = data[0..8].to_vec();
+        let _header = data[0..8].to_vec();
         let value = data[8..].to_vec();
 
         let has_atstf = (value[0] & 0x80) != 0;
         let has_ficf = (value[0] & 0x40) != 0;
         let has_rfudf = (value[0] & 0x20) != 0;
 
-        let stat = value[2];
+        let _stat = value[2];
         let mid = value[3] >> 6;
 
         let fic_len = match (has_ficf, mid) {

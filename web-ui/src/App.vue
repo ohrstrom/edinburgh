@@ -3,7 +3,8 @@ import { ComputedRef, Ref, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useStorage } from '@vueuse/core'
 
-import { EDI } from '../../pkg'
+// TODO: how to import cross-package?
+import { EDI } from '../../wasm/pkg'
 
 import FAAD2Decoder from '@/decoder/faad2'
 

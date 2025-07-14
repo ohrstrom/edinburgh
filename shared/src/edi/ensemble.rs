@@ -1,4 +1,3 @@
-use log;
 use serde::Serialize;
 
 use super::bus::{emit_event, EDIEvent};
@@ -138,18 +137,13 @@ impl Ensemble {
                 }
                 FIG::F0_5(fig) => {
                     for lang in &fig.services {
-                        let mut matched = 0;
                         for service in &mut self.services {
                             if let Some(component) =
                                 service.components.iter_mut().find(|c| c.scid == lang.scid)
                             {
-                                matched += 1;
                                 updated |= component.language.replace(lang.language)
                                     != Some(lang.language);
                             }
-                        }
-                        if matched > 1 {
-                            // log::warn!("FIG0/5: SCId {} matched multiple components across services!", lang.scid);
                         }
                     }
                 }
@@ -227,7 +221,6 @@ impl Ensemble {
         }
 
         if updated {
-            // log::info!("ENSEMBLE: {:#?}", self);
             emit_event(EDIEvent::EnsembleUpdated(self.clone()));
         }
 

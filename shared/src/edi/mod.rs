@@ -6,7 +6,7 @@ pub mod msc;
 pub mod pad;
 mod tables;
 
-use crate::meter::RateMeter;
+// use crate::meter::RateMeter;
 use derivative::Derivative;
 pub use ensemble::{Ensemble, Subchannel};
 use frame::Frame;
@@ -14,9 +14,6 @@ use frame::Tag;
 use log;
 use msc::{AACPExctractor, FeedResult};
 use serde::Serialize;
-use std::clone;
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
 
 use bus::{emit_event, EDIEvent};
 
@@ -58,9 +55,8 @@ pub struct EDISStats {
     pub rx_rate: usize,
     pub rx_bytes: u64,
     pub rx_frames: u64,
-
-    #[serde(skip)]
-    meter: RateMeter,
+    // #[serde(skip)]
+    // meter: RateMeter,
 }
 
 impl EDISStats {
@@ -69,7 +65,7 @@ impl EDISStats {
             rx_rate: 0,
             rx_bytes: 0,
             rx_frames: 0,
-            meter: RateMeter::default(),
+            // meter: RateMeter::default(),
         }
     }
     pub fn feed(&mut self, data: &[u8]) {

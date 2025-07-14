@@ -2,12 +2,8 @@ use std::sync::Arc;
 mod edi_frame_extractor;
 mod services;
 
-use shared::utils;
-
-use anyhow;
-use axum::{extract::State, routing::get, serve, Json, Router};
+use axum::{extract::State, routing::get, Json, Router};
 use clap::Parser;
-use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 use tracing as log;
 use tracing_subscriber;

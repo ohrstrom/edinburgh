@@ -1,4 +1,4 @@
-use humansize::{format_size, BINARY, DECIMAL};
+use humansize::{format_size, DECIMAL};
 use shared::edi::pad::dl::DLObject;
 use shared::edi::{EDISStats, Ensemble, Subchannel};
 use std::{io, time::Duration};
@@ -17,7 +17,7 @@ use ratatui::{
     Terminal,
 };
 
-use ratatui::widgets::block::{BorderType, Padding, Position, Title};
+use ratatui::widgets::block::{BorderType, Padding};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
@@ -132,7 +132,7 @@ pub struct ServiceRow {
 pub async fn run_tui(
     addr: String,
     scid: Option<u8>,
-    tx: UnboundedSender<TUIEvent>,
+    #[allow(unused_variables)] tx: UnboundedSender<TUIEvent>,
     mut rx: UnboundedReceiver<TUIEvent>,
     cmd_tx: UnboundedSender<TUICommand>,
 ) -> io::Result<()> {
@@ -295,12 +295,12 @@ pub async fn run_tui(
                 None
             };
 
-            let player_title = match (current_service) {
+            let player_title = match current_service {
                 Some(svc) => format!(" Player SC {:>2} - {} ", svc.scid, svc.format),
                 None => " Player ".to_string(),
             };
 
-            let player_text = match (current_service) {
+            let player_text = match current_service {
                 Some(svc) => format!("{}", svc.label),
                 None => "No service selected".to_string(),
             };
@@ -399,6 +399,7 @@ pub async fn run_tui(
                 TUIEvent::EDISStatsUpdated(s) => {
                     state.update_edi_stats(s);
                 }
+                #[allow(unreachable_patterns)]
                 _ => {}
             }
         }

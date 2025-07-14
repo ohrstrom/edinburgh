@@ -3,38 +3,9 @@ pub mod mot;
 
 use derivative::Derivative;
 use log;
-use std::collections::BTreeMap;
-use thiserror::Error;
 
 use dl::DLDecoder;
 use mot::MOTDecoder;
-
-fn parse_mot_header_size(segment: &[u8]) -> Option<usize> {
-    let mut i = 1;
-
-    while i + 1 < segment.len() {
-        let tag = segment[i];
-        let len = segment[i + 1] as usize;
-        i += 2;
-
-        if i + len > segment.len() {
-            break;
-        }
-
-        log::trace!("MOT header tag: 0x{:02X}, len = {}", tag, len);
-
-        if tag == 0x0D && len == 3 {
-            let size = ((segment[i] as usize) << 16)
-                | ((segment[i + 1] as usize) << 8)
-                | (segment[i + 2] as usize);
-            return Some(size);
-        }
-
-        i += len;
-    }
-
-    None
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum XPADIndicator {
@@ -239,11 +210,6 @@ impl DLDataGroup {
             data: Vec::new(),
         }
     }
-    fn init(&mut self) {
-        self.size_needed = 2 + 2; // default minimum: header + CRC
-        self.data.clear();
-    }
-
     pub fn feed(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
         self.data.extend_from_slice(payload);
 
@@ -309,6 +275,7 @@ impl MOTDataGroup {
 
 #[derive(Debug)]
 pub struct PADDecoder {
+    #[allow(dead_code)]
     scid: u8,
     last_xpad_ci: Option<XPADCI>,
     next_dg_size: usize,
@@ -337,7 +304,7 @@ impl PADDecoder {
         }
 
         let used_xpad_len = xpad_bytes.len().min(64);
-        let mut xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
+        let xpad: Vec<u8> = xpad_bytes[..used_xpad_len].iter().rev().copied().collect();
 
         let fpad_type = fpad_bytes[0] >> 6;
         let xpad_ind = (fpad_bytes[0] & 0x30) >> 4;
@@ -352,7 +319,7 @@ impl PADDecoder {
 
         let (ci_list, ci_header_len) = if ci_flag {
             Self::build_ci_list(&xpad, fpad_bytes)
-        } else if (xpad_ind == 0b01 || xpad_ind == 0b10) {
+        } else if xpad_ind == 0b01 || xpad_ind == 0b10 {
             if let Some(prev_ci) = &prev_xpad_ci {
                 if prev_ci.is_valid() {
                     (vec![prev_ci.clone()], 0)
@@ -394,7 +361,7 @@ impl PADDecoder {
 
         // log::debug!("NUM CIs: {}", ci_list.len());
 
-        for (i, ci) in ci_list.iter().enumerate() {
+        for (_i, ci) in ci_list.iter().enumerate() {
             // log::debug!("CI = type {:2}, len {:2}", ci.kind, ci.len);
             self.process_ci(false, ci, &xpad[offset..offset + ci.len]);
             offset += ci.len;
@@ -485,7 +452,7 @@ impl PADDecoder {
                 */
 
                 // let is_start = ci.kind == 2 && !is_continuation;
-                let is_start = ci.kind == 2;
+                let _is_start = ci.kind == 2;
 
                 // if is_start {
                 //     // log::debug!("DG: init");

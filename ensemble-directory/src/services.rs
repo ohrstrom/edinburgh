@@ -2,7 +2,6 @@ use anyhow;
 use futures::stream::{FuturesUnordered, StreamExt};
 use regex::Regex;
 use serde::Serialize;
-use std::any;
 use std::io;
 use std::sync::{Arc, Mutex};
 use tokio::io::Interest;

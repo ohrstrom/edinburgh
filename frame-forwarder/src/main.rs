@@ -1,5 +1,4 @@
 mod edi_frame_extractor;
-mod utils;
 
 use bytes::Bytes;
 use clap::Parser;
@@ -16,7 +15,6 @@ use tokio_tungstenite::accept_hdr_async;
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
-use tokio_tungstenite::tungstenite::Error as WsError;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 
 type SharedReceivers = Arc<

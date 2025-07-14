@@ -2,8 +2,6 @@ mod audio;
 mod edi_frame_extractor;
 mod tui;
 
-use shared::utils;
-
 use log;
 use std::io;
 use std::sync::Arc;
@@ -192,7 +190,7 @@ impl EDIHandler {
                         }
                     }
                 }
-                EDIEvent::MOTImageReceived(m) => {
+                EDIEvent::MOTImageReceived(_m) => {
                     // log::debug!("MOT image received: SCID = {}", m.scid);
                 }
                 EDIEvent::DLObjectReceived(d) => {

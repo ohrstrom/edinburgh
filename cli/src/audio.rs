@@ -22,6 +22,7 @@ pub struct AudioDecoder {
 }
 
 impl AudioDecoder {
+    #[allow(dead_code)]
     pub fn version() -> &'static str {
         version().0
     }
@@ -65,9 +66,11 @@ impl AudioDecoder {
         }
     }
 
+    /*
     fn fade(vol: f32, duration_ms: u64) {
         // NOTE: implement generic fade logic here
     }
+    */
 
     pub fn feed(&mut self, aac_result: &AACPResult) {
         if let Some(new_audio_format) = &aac_result.audio_format {
@@ -96,12 +99,12 @@ impl AudioDecoder {
 
                 for i in 1..=steps {
                     thread::sleep(step_duration);
-                    if let Ok(mut sink) = sink_clone.lock() {
+                    if let Ok(sink) = sink_clone.lock() {
                         sink.set_volume(i as f32 * volume_step);
                     }
                 }
                 // Ensure volume is exactly 1.0 at the end
-                if let Ok(mut sink) = sink_clone.lock() {
+                if let Ok(sink) = sink_clone.lock() {
                     sink.set_volume(1.0);
                 }
             });

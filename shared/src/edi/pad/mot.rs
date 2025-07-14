@@ -1,8 +1,6 @@
 use super::MSCDataGroup;
 use crate::edi::bus::{emit_event, EDIEvent};
-use base64;
-use derivative::Derivative;
-use md5::{compute, Digest};
+use md5::compute;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -12,7 +10,6 @@ pub struct MOTImage {
     #[serde(serialize_with = "MOTImage::serialize_md5")]
     pub md5: [u8; 16],
     pub len: usize,
-    // #[serde(serialize_with = "MOTImage::serialize_data")]
     pub data: Vec<u8>,
 }
 
@@ -45,17 +42,11 @@ impl MOTImage {
         let hex = md5.iter().map(|b| format!("{:02x}", b)).collect::<String>();
         serializer.serialize_str(&hex)
     }
-    fn serialize_data<S>(data: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let encoded = base64::encode(data);
-        serializer.serialize_str(&encoded)
-    }
 }
 
 #[derive(Debug)]
 pub struct MOTObject {
+    #[allow(dead_code)]
     scid: u8,
     // raw values
     pub transport_id: u16,
@@ -191,7 +182,7 @@ impl MOTObject {
 
             // ContentName (ParamID = 0x0C)
             if param_id == 0x0C && field_data.len() > 1 {
-                let charset_id = field_data[0] >> 4; // reserved: field_data[0] & 0x0F
+                let _charset_id = field_data[0] >> 4; // reserved: field_data[0] & 0x0F
                 let name_bytes = &field_data[1..];
                 let name = String::from_utf8_lossy(name_bytes).to_string();
                 self.content_name = Some(name.clone());

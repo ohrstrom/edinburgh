@@ -176,7 +176,7 @@ impl Fig0_2 {
                 }
 
                 let tmid = (data[offset] & 0xC0) >> 6; // Transport Mechanism ID
-                let ascty = data[offset] & 0x3F; // Audio Service Type (ignored)
+                let _ascty = data[offset] & 0x3F; // Audio Service Type (ignored)
                 let scid = data[offset + 1] >> 2; // Subchannel ID
                 let primary = (data[offset + 1] & 0x02) != 0; // Primary component flag
                 let ca = (data[offset + 1] & 0x01) != 0; // Conditional Access flag
@@ -330,7 +330,7 @@ impl Fig0_9 {
             while idx + 3 <= data.len() {
                 let byte = data[idx];
                 let num_services = byte >> 6;
-                let ecc = data
+                let _ecc = data
                     .get(idx + 1)
                     .copied()
                     .ok_or(FIGError::InvalidSize { l: data.len() })?;
@@ -577,7 +577,7 @@ impl Fig1_0 {
         String::from_utf8_lossy(data).trim_end().to_string()
     }
 
-    fn derive_short_label(label: &str, mask: u16) -> String {
+    fn derive_short_label(label: &str, _mask: u16) -> String {
         label.to_string()
     }
 }
@@ -612,6 +612,7 @@ impl Fig1_1 {
         })
     }
 
+    /*
     fn decode_label(data: &[u8]) -> (String, String) {
         // data contains 16 bytes label and 1 byte short label mask
         let label_bytes = &data[..16];
@@ -631,6 +632,7 @@ impl Fig1_1 {
 
         (label, short_label)
     }
+    */
 
     fn label_str(label_bytes: &[u8]) -> String {
         String::from_utf8_lossy(label_bytes).trim_end().to_string()
@@ -654,7 +656,7 @@ pub struct Fig1_4 {
     base: Fig1,
 }
 impl Fig1_4 {
-    pub fn from_bytes(base: Fig1, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig1, _data: &[u8]) -> Result<Self, FIGError> {
         // implement decoding here
 
         Ok(Self { base })
@@ -700,6 +702,7 @@ pub enum FICError {
 
 #[derive(Debug)]
 pub struct FICDecoder {
+    #[allow(dead_code)]
     eid: Option<String>,
 }
 
@@ -741,13 +744,13 @@ impl FICDecoder {
                 0 => {
                     match Self::decode_fig0(&data[offset..offset + fig_length]) {
                         Ok(fig) => figs.push(fig),
-                        Err(e) => {}
+                        Err(_e) => {}
                     };
                 }
                 1 => {
                     match Self::decode_fig1(&data[offset..offset + fig_length]) {
                         Ok(fig) => figs.push(fig),
-                        Err(e) => {}
+                        Err(_e) => {}
                     };
                 }
                 _ => {

@@ -1,9 +1,5 @@
 use std::fmt;
 
-use log;
-
-use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
-
 #[derive(Debug)]
 pub struct FrameDecodeError(pub String);
 
@@ -18,6 +14,7 @@ impl std::error::Error for FrameDecodeError {}
 #[derive(Debug, Clone)]
 struct SyncMagic {
     pattern: Vec<u8>,
+    #[allow(dead_code)]
     name: String,
 }
 
@@ -70,11 +67,9 @@ impl AFFrame {
     pub fn check_completed(&mut self) -> bool {
         let d = &self.data;
         if d.len() == 0 {
-            // log::debug!("check_completed: empty frame");
             return false;
         }
         if d.len() == 8 {
-            // log::debug!("check_completed: header only");
             // header only > retrieve payload len and resize frame
             let len = (d[2] as usize) << 24
                 | (d[3] as usize) << 16
@@ -83,10 +78,8 @@ impl AFFrame {
 
             self.expected_size = len + 10 + 2;
             self.resize(10 + len + 2);
-            // log::debug!("check_completed: resize to {}", self.data.len());
             false
         } else {
-            // log::debug!("check_completed: frame {}", d.len());
             true
         }
     }

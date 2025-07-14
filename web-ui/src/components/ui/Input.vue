@@ -81,7 +81,7 @@ function onInput(e: Event) {
       left: 0px;
       right: 0px;
       height: 14px;
-      background: rgba(0, 0, 0, 0.1);
+      background: rgba(0, 0, 0, 0.0);
     }
     &::after {
       content: '';

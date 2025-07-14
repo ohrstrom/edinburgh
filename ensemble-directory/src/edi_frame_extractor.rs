@@ -1,9 +1,5 @@
 use std::fmt;
 
-use tracing as log;
-
-use crate::utils::{calc_crc16_ccitt, calc_crc_fire_code};
-
 #[derive(Debug)]
 pub struct FrameDecodeError(pub String);
 
@@ -18,6 +14,7 @@ impl std::error::Error for FrameDecodeError {}
 #[derive(Debug, Clone)]
 struct SyncMagic {
     pattern: Vec<u8>,
+    #[allow(dead_code)]
     name: String,
 }
 

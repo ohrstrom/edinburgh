@@ -17,7 +17,6 @@ use wasm_bindgen::JsValue;
 use futures::StreamExt;
 
 use console_log;
-use derivative::Derivative;
 use shared::edi::bus::{init_event_bus, EDIEvent};
 use shared::edi::EDISource;
 use shared::utils;

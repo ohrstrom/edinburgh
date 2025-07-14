@@ -1,10 +1,7 @@
-use super::MSCDataGroup;
 use crate::edi::bus::{emit_event, EDIEvent};
 use derivative::Derivative;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::fmt;
-
-const DL_LEN_MAX: usize = 8 * 16;
 
 fn decode_chars(chars: &[u8], charset: u8) -> String {
     match charset {
@@ -176,8 +173,7 @@ impl DLDecoder {
             }
             (true, 0b0010) => {
                 // TODO: abort if t != toggle
-                let t = (data[0] & 0x80);
-                // log::debug!("DL Plus: toggle: {} t: {}", toggle, t);
+                let _t = data[0] & 0x80;
 
                 if data.len() < 3 {
                     log::warn!("DL+: too short: expected min 3 bytes, got {}", data.len());
@@ -198,7 +194,7 @@ impl DLDecoder {
         }
 
         let nibble = (data[1] >> 4) & 0x0F;
-        let (seg_no, charset) = if is_first {
+        let (_seg_no, charset) = if is_first {
             (0, Some(nibble)) // charset = full 4 bits
         } else {
             (nibble & 0x07, None) // charset not in data
@@ -274,9 +270,9 @@ impl DLDecoder {
 
         // log::debug!("DL Plus: {:?}", cid);
 
-        let cb = data[0] & 0x0F;
-        let it_toggle = (data[0] >> 3) & 0x01;
-        let it_running = (data[0] >> 2) & 0x01;
+        let _cb = data[0] & 0x0F;
+        let _it_toggle = (data[0] >> 3) & 0x01;
+        let _it_running = (data[0] >> 2) & 0x01;
         let num_tags = (data[0] & 0x03) + 1;
 
         // log::debug!("DL+: CID = {}, CB = {}, tags = {} # {} bytes", cid, cb, num_tags, data.len());
