@@ -1,6 +1,5 @@
 mod audio;
 mod edi_frame_extractor;
-mod sls;
 mod tui;
 
 use log;
@@ -17,8 +16,10 @@ use tokio::sync::RwLock;
 use shared::edi::bus::{init_event_bus, EDIEvent};
 use shared::edi::EDISource;
 
-use audio::AudioDecoder;
+use audio::{AudioDecoder, AudioEvent};
 use tui::{TUICommand, TUIEvent};
+
+// use tui::sls;
 
 /// EDInburgh
 #[derive(Parser, Debug)]
@@ -65,6 +66,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TUI -> main
     let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TUICommand>();
 
+    // TUI audio -> TUI
+    let (audio_tx, audio_rx) = unbounded_channel::<AudioEvent>();
+
     // NOTE: check if this is a good idea?
     if args.tui {
         tokio::spawn({
@@ -72,7 +76,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let tui_tx = tui_tx.clone();
             let scid = *scid.read().await;
             async move {
-                if let Err(e) = tui::run_tui(addr, scid, tui_tx, tui_rx, tui_cmd_tx).await {
+                if let Err(e) = tui::run_tui(addr, scid, tui_tx, tui_rx, tui_cmd_tx, audio_rx).await
+                {
                     eprintln!("TUI error: {:?}", e);
                 }
             }
@@ -89,7 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut source = EDISource::new(args.scid, None, None);
 
-    let event_handler = EDIHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone());
+    let event_handler =
+        EDIHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone(), audio_tx.clone());
 
     tokio::spawn(async move {
         event_handler.run().await;
@@ -157,6 +163,7 @@ struct EDIHandler {
     audio_decoder: Option<AudioDecoder>,
     // tui
     tui_tx: UnboundedSender<TUIEvent>,
+    audio_tx: UnboundedSender<AudioEvent>,
 }
 
 // hm - this is kind of verbose. theoretically EDIEvents could be consumed directly in TUI
@@ -166,12 +173,14 @@ impl EDIHandler {
         scid: Arc<RwLock<Option<u8>>>,
         edi_rx: UnboundedReceiver<EDIEvent>,
         tui_tx: UnboundedSender<TUIEvent>,
+        audio_tx: UnboundedSender<AudioEvent>,
     ) -> Self {
         Self {
             edi_rx,
             scid,
             audio_decoder: None,
             tui_tx,
+            audio_tx,
         }
     }
 
@@ -202,7 +211,11 @@ impl EDIHandler {
 
                         // create aduio decoder if needed
                         if self.audio_decoder.is_none() {
-                            let audio_decoder = AudioDecoder::new(r.scid, audio_format.clone());
+                            let audio_decoder = AudioDecoder::new(
+                                r.scid,
+                                audio_format.clone(),
+                                self.audio_tx.clone(),
+                            );
                             self.audio_decoder = Some(audio_decoder);
                         }
 

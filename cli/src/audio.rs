@@ -1,11 +1,141 @@
 use derivative::Derivative;
 use faad2::{version, Decoder};
+use log;
 use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
 use shared::edi::msc::{AACPResult, AudioFormat};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::sync::mpsc::UnboundedSender;
+
+fn calc_rms(samples: &[f32], channels: usize) -> (f32, f32) {
+    let mut sum_l = 0.0;
+    let mut sum_r = 0.0;
+    let mut count_l = 0;
+    let mut count_r = 0;
+
+    for (i, sample) in samples.iter().enumerate() {
+        if i % channels == 0 {
+            sum_l += sample * sample;
+            count_l += 1;
+        } else {
+            sum_r += sample * sample;
+            count_r += 1;
+        }
+    }
+
+    let rms_l = (sum_l / count_l as f32).sqrt();
+    let rms_r = (sum_r / count_r as f32).sqrt();
+    (rms_l, rms_r)
+}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub enum AudioEvent {
+    LevelsUpdated(AudioLevels),
+}
+
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct AudioLevels {
+    pub peak: (f32, f32),
+    pub peak_clamped: (f32, f32),
+    pub rms: (f32, f32),
+
+    pub peak_smooth: (f32, f32),
+    pub rms_smooth: (f32, f32),
+
+    #[derivative(Debug = "ignore")]
+    last_update: Instant,
+}
+
+impl AudioLevels {
+    pub fn new() -> Self {
+        Self {
+            peak: (0.0, 0.0),
+            peak_clamped: (0.0, 0.0),
+            rms: (0.0, 0.0),
+
+            peak_smooth: (0.0, 0.0),
+            rms_smooth: (0.0, 0.0),
+
+            last_update: Instant::now(),
+        }
+    }
+
+    pub fn smooth(
+        current: (f32, f32),
+        previous: (f32, f32),
+        dt: f32,
+        decay_per_second: f32,
+    ) -> (f32, f32) {
+        fn smooth_channel(new: f32, prev: f32, dt: f32, decay: f32) -> f32 {
+            if new > prev {
+                new
+            } else {
+                let decayed = prev - decay * dt;
+                decayed.max(new)
+            }
+        }
+
+        (
+            smooth_channel(current.0, previous.0, dt, decay_per_second),
+            smooth_channel(current.1, previous.1, dt, decay_per_second),
+        )
+    }
+
+    pub fn feed(&mut self, channels: usize, samples: &[f32]) {
+        let count = samples.len() / channels;
+
+        let mut peak_l: f32 = 0.0;
+        let mut peak_r: f32 = 0.0;
+
+        let mut sum_l: f32 = 0.0;
+        let mut sum_r: f32 = 0.0;
+
+        for (i, sample) in samples.iter().enumerate() {
+            if i % channels == 0 {
+                peak_l = peak_l.max(sample.abs());
+                sum_l += sample * sample;
+            } else {
+                peak_r = peak_r.max(sample.abs());
+                sum_r += sample * sample;
+            }
+        }
+
+        let rms_l = (sum_l / count as f32).sqrt();
+        let rms_r = (sum_r / count as f32).sqrt();
+
+        self.peak = (peak_l, peak_r);
+        self.peak_clamped = (peak_l.clamp(0.0, 1.0), peak_r.clamp(0.0, 1.0));
+        self.rms = (rms_l, rms_r);
+
+        let now = Instant::now();
+        let dt = now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = now;
+
+
+        self.peak_smooth = Self::smooth(
+            self.peak,
+            self.peak_smooth,
+            dt,
+            0.1,
+        );
+
+
+        self.rms_smooth = Self::smooth(
+            self.rms,
+            self.rms_smooth,
+            dt,
+            0.1,
+        );
+
+        // log::debug!("{} | PEAK: {:2.2} {:2.2} - RMS: {:2.2} {:2.2}", channels, peak_l, peak_r, rms_l, rms_r);
+
+        log::debug!("{:?}", self);
+    }
+}
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -19,6 +149,9 @@ pub struct AudioDecoder {
     _stream: OutputStream,
     #[derivative(Debug = "ignore")]
     sink: Arc<Mutex<Sink>>,
+    #[derivative(Debug = "ignore")]
+    tx: UnboundedSender<AudioEvent>,
+    levels: AudioLevels,
 }
 
 impl AudioDecoder {
@@ -27,7 +160,11 @@ impl AudioDecoder {
         version().0
     }
 
-    pub fn new(scid: u8, initial_audio_format: AudioFormat) -> Self {
+    pub fn new(
+        scid: u8,
+        initial_audio_format: AudioFormat,
+        tx: UnboundedSender<AudioEvent>,
+    ) -> Self {
         let asc = initial_audio_format.asc.clone();
         let decoder = Decoder::new(&asc).expect("Failed to create initial decoder");
 
@@ -43,6 +180,8 @@ impl AudioDecoder {
             decoder,
             _stream: stream,
             sink,
+            tx,
+            levels: AudioLevels::new(),
         }
     }
 
@@ -109,6 +248,8 @@ impl AudioDecoder {
                 }
             });
 
+            self.levels = AudioLevels::new();
+
             self.scid = aac_result.scid;
         }
 
@@ -125,6 +266,14 @@ impl AudioDecoder {
                     r.sample_rate as u32,
                     r.samples,
                 ));
+
+                self.levels.feed(r.channels, &r.samples);
+
+                let (l, r) = calc_rms(&r.samples, r.channels as usize);
+
+                if let Err(e) = self.tx.send(AudioEvent::LevelsUpdated(self.levels.clone())) {
+                    log::warn!("Could not send AudioEvent update: {:?}", e);
+                }
             }
             Err(e) => {
                 log::error!("DEC: {}", e);

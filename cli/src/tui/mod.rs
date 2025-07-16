@@ -1,3 +1,6 @@
+pub mod meter;
+pub mod sls;
+
 use humansize::{format_size, DECIMAL};
 use shared::edi::pad::dl::DLObject;
 use shared::edi::pad::mot::MOTImage;
@@ -5,6 +8,8 @@ use shared::edi::{EDISStats, Ensemble, Subchannel};
 use std::{io, time::Duration};
 
 use derivative::Derivative;
+
+use crate::audio::{AudioEvent, AudioLevels};
 
 use ratatui::crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -25,7 +30,8 @@ use ratatui::widgets::block::{BorderType, Padding};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::sls::{SLSImage, SLSWidget};
+use meter::LevelMeterWidget;
+use sls::{SLSImage, SLSWidget};
 
 fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
     let [area] = Layout::horizontal([horizontal])
@@ -62,6 +68,8 @@ pub struct TuiState {
     //
     pub show_meter: bool,
     pub show_sls: bool,
+    //
+    pub levels: AudioLevels,
 }
 
 impl TuiState {
@@ -81,6 +89,8 @@ impl TuiState {
             //
             show_meter: false,
             show_sls: false,
+            //
+            levels: AudioLevels::new(),
         }
     }
 
@@ -156,6 +166,10 @@ impl TuiState {
     pub fn update_edi_stats(&mut self, stats: EDISStats) {
         self.edi_stats = stats;
     }
+
+    pub fn update_levels(&mut self, levels: AudioLevels) {
+        self.levels = levels;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -174,6 +188,7 @@ pub async fn run_tui(
     #[allow(unused_variables)] tx: UnboundedSender<TUIEvent>,
     mut rx: UnboundedReceiver<TUIEvent>,
     cmd_tx: UnboundedSender<TUICommand>,
+    mut audio_rx: UnboundedReceiver<AudioEvent>,
 ) -> io::Result<()> {
     // term init
     enable_raw_mode()?;
@@ -307,24 +322,20 @@ pub async fn run_tui(
                     svc.scid.to_string()
                 };
 
-                let dl_info = if let Some(dl) = state
-                    .dl_objects
-                    .iter()
-                    .find(|(scid, _)| *scid == svc.scid)
-                {
-                    if let Some(dl) = dl.1.as_ref() {
-                        if !dl.get_dl_plus().is_empty() {
-                            "DL+"
+                let dl_info =
+                    if let Some(dl) = state.dl_objects.iter().find(|(scid, _)| *scid == svc.scid) {
+                        if let Some(dl) = dl.1.as_ref() {
+                            if !dl.get_dl_plus().is_empty() {
+                                "DL+"
+                            } else {
+                                "DL"
+                            }
                         } else {
-                            "DL"
+                            "-"
                         }
                     } else {
                         "-"
-                    }
-                } else {
-                    "-"
-                };
-
+                    };
 
                 let sls_info = if let Some((_, Some(sls_image))) =
                     state.sls_images.iter().find(|(scid, _)| *scid == svc.scid)
@@ -454,7 +465,6 @@ pub async fn run_tui(
                 .and_then(|selected| state.sls_images.iter().find(|(scid, _)| *scid == selected))
                 .and_then(|(_, dl)| dl.as_ref());
 
-
             let player_dl_text: Text = match player_dl {
                 Some(dl) => {
                     let mut lines = vec![
@@ -470,21 +480,16 @@ pub async fn run_tui(
                             .join(" | ");
 
                         // Add DL+ line with special style
-                        lines.push(
-                            Line::from(vec![
-                                Span::styled(
-                                    tags_joined,
-                                    Style::default().fg(Color::DarkGray),
-                                )
-                            ])
-                        );
+                        lines.push(Line::from(vec![Span::styled(
+                            tags_joined,
+                            Style::default().fg(Color::DarkGray),
+                        )]));
                     }
 
                     Text::from(lines)
                 }
                 None => Text::from("-"),
             };
-
 
             let player_dl_title: String = player_dl
                 .map(|dl| {
@@ -496,8 +501,6 @@ pub async fn run_tui(
                 })
                 .unwrap_or(" DL ")
                 .into();
-
-
 
             let player_left = Paragraph::new(player_text)
                 .block(
@@ -534,14 +537,15 @@ pub async fn run_tui(
                     let lines = vec![
                         Line::from(format!(
                             "{} • {} • {}x{}",
-                            sls.mimetype, format_size(sls.len as u64, DECIMAL), sls.width, sls.height
+                            sls.mimetype,
+                            format_size(sls.len as u64, DECIMAL),
+                            sls.width,
+                            sls.height
                         )),
-                        Line::from(vec![
-                            Span::styled(
-                                format!("MD5: {}", sls.md5),
-                                Style::default().fg(Color::DarkGray),
-                            )
-                        ])
+                        Line::from(vec![Span::styled(
+                            format!("MD5: {}", sls.md5),
+                            Style::default().fg(Color::DarkGray),
+                        )]),
                     ];
                     Text::from(lines)
                 }
@@ -559,6 +563,9 @@ pub async fn run_tui(
 
             frame.render_widget(player_sls, player_layout[2]);
 
+            ///////////////////////////////////////////////////////////
+            // SLS
+            ///////////////////////////////////////////////////////////
             if state.show_sls {
                 let sls_area = center(
                     frame.area(),
@@ -585,6 +592,14 @@ pub async fn run_tui(
                 let sls_widget = SLSWidget::new(sls_image);
 
                 frame.render_widget(sls_widget, sls_area);
+            }
+
+            ///////////////////////////////////////////////////////////
+            // Level meter
+            ///////////////////////////////////////////////////////////
+            if state.show_meter {
+                let level_meter = LevelMeterWidget::new(state.levels.clone());
+                frame.render_widget(level_meter, layout[4]);
             }
         })?;
 
@@ -653,6 +668,16 @@ pub async fn run_tui(
                 }
                 TUIEvent::EDISStatsUpdated(s) => {
                     state.update_edi_stats(s);
+                }
+                #[allow(unreachable_patterns)]
+                _ => {}
+            }
+        }
+
+        while let Ok(msg) = audio_rx.try_recv() {
+            match msg {
+                AudioEvent::LevelsUpdated(l) => {
+                    state.update_levels(l);
                 }
                 #[allow(unreachable_patterns)]
                 _ => {}

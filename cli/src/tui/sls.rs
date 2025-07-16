@@ -10,10 +10,8 @@ use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
     style::{Color, Style},
-    text::{Line},
-    widgets::{
-        Block, Borders, Clear, Paragraph, Widget, Wrap,
-    },
+    text::Line,
+    widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap},
 };
 
 use ratatui::widgets::block::{BorderType, Padding};
