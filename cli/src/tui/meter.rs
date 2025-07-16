@@ -27,19 +27,85 @@ fn level_to_dbfs_48(level: f32) -> f32 {
 }
 
 pub struct LevelMeterWidget {
-    levels: AudioLevels
+    levels: AudioLevels,
 }
 
 impl LevelMeterWidget {
     pub fn new(levels: AudioLevels) -> Self {
         Self { levels }
     }
+
+    fn render_bar(&self, buf: &mut Buffer, area: Rect, label: &str, peak: f32, rms: f32) {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(0),
+                Constraint::Length(36),
+            ])
+            .split(area);
+
+        buf.set_string(cols[0].x, cols[0].y, label, Style::default());
+
+        let bar_area = cols[1];
+        let bar_width = bar_area.width as usize;
+
+        let dbfs = level_to_dbfs_48(rms);
+        let fill = ((dbfs + 48.0) / 48.0).clamp(0.0, 1.0);
+        let filled_width = ((bar_width as f32) * fill).round() as usize;
+
+        /*
+        /
+        for i in 0..bar_width {
+            let symbol = if i < filled_width { "█" } else { " " };
+            buf.set_string(
+                bar_area.x + i as u16,
+                bar_area.y,
+                symbol,
+                Style::default().fg(Color::White),
+            );
+        }
+        */
+
+        let peak_dbfs = level_to_dbfs_48(peak);
+        let peak_fill = ((peak_dbfs + 48.0) / 48.0).clamp(0.0, 1.0);
+        let peak_pos = ((bar_width as f32) * peak_fill).round() as usize;
+
+        for i in 0..bar_width {
+            let is_peak = i == peak_pos.saturating_sub(1).min(bar_width - 1);
+
+            let symbol = if is_peak {
+                // "█"
+                "░"
+            } else if i < filled_width {
+                "█"
+                // "░"
+            } else {
+                " "
+            };
+
+            let style = if is_peak {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            buf.set_string(bar_area.x + i as u16, bar_area.y, symbol, style);
+        }
+
+        let peak_dbfs = level_to_dbfs(peak);
+        let rms_dbfs = level_to_dbfs(rms);
+        buf.set_string(
+            cols[2].x,
+            cols[2].y,
+            format!(" | RMS: {:5.1} PEAK: {:5.1}", rms_dbfs, peak_dbfs),
+            Style::default().fg(Color::White),
+        );
+    }
 }
 
 impl Widget for LevelMeterWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
-
-
         Clear.render(area, buf);
 
         let block = Block::default()
@@ -54,42 +120,14 @@ impl Widget for LevelMeterWidget {
             .constraints([Constraint::Length(1), Constraint::Length(1)])
             .split(inner);
 
-        for (row, (level, label)) in [(self.levels.rms_smooth.0, " L"), (self.levels.rms_smooth.1, " R")].iter().enumerate() {
-            let cols = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Length(3),
-                    Constraint::Min(0),
-                    Constraint::Length(10),
-                ])
-                .split(rows[row]);
+        let levels = [
+            (self.levels.peak_smooth.0, self.levels.rms_smooth.0),
+            (self.levels.peak_smooth.1, self.levels.rms_smooth.1),
+        ];
+        let labels = ["L", "R"];
 
-            // LABEL LEFT
-            buf.set_string(cols[0].x, cols[0].y, format!("{label}"), Style::default());
-
-            // METER BAR
-            let bar_area = cols[1];
-            let bar_width = bar_area.width as usize;
-
-            let dbfs = level_to_dbfs_48(*level);
-            let fill = ((dbfs + 48.0) / 48.0).clamp(0.0, 1.0);
-
-            let filled_width = ((bar_width as f32) * fill).round() as usize;
-
-            for i in 0..bar_width {
-                let symbol = if i < filled_width { "█" } else { " " };
-                buf.set_string(
-                    bar_area.x + i as u16,
-                    bar_area.y,
-                    symbol,
-                    Style::default().fg(Color::White),
-                );
-            }
-
-            // VALUE RIGHT
-            let dbfs = level_to_dbfs(*level);
-            let db = format!("{:5.1} dB", dbfs);
-            buf.set_string(cols[2].x, cols[2].y, db, Style::default().fg(Color::White));
+        for (row, (&(peak, rms), label)) in levels.iter().zip(labels.iter()).enumerate() {
+            self.render_bar(buf, rows[row], label, peak, rms);
         }
     }
 }

@@ -87,22 +87,30 @@ impl AudioLevels {
 
     pub fn feed(&mut self, channels: usize, samples: &[f32]) {
         let count = samples.len() / channels;
+        let top_n = 16;
 
-        let mut peak_l: f32 = 0.0;
-        let mut peak_r: f32 = 0.0;
+        let mut peaks_l = Vec::with_capacity(count);
+        let mut peaks_r = Vec::with_capacity(count);
 
         let mut sum_l: f32 = 0.0;
         let mut sum_r: f32 = 0.0;
 
         for (i, sample) in samples.iter().enumerate() {
+            let abs = sample.abs();
             if i % channels == 0 {
-                peak_l = peak_l.max(sample.abs());
+                peaks_l.push(abs);
                 sum_l += sample * sample;
             } else {
-                peak_r = peak_r.max(sample.abs());
+                peaks_r.push(abs);
                 sum_r += sample * sample;
             }
         }
+
+        peaks_l.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        peaks_r.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+
+        let peak_l = peaks_l.iter().take(top_n).copied().sum::<f32>() / peaks_l.len().min(top_n) as f32;
+        let peak_r = peaks_r.iter().take(top_n).copied().sum::<f32>() / peaks_r.len().min(top_n) as f32;
 
         let rms_l = (sum_l / count as f32).sqrt();
         let rms_r = (sum_r / count as f32).sqrt();
@@ -115,23 +123,8 @@ impl AudioLevels {
         let dt = now.duration_since(self.last_update).as_secs_f32();
         self.last_update = now;
 
-
-        self.peak_smooth = Self::smooth(
-            self.peak,
-            self.peak_smooth,
-            dt,
-            0.1,
-        );
-
-
-        self.rms_smooth = Self::smooth(
-            self.rms,
-            self.rms_smooth,
-            dt,
-            0.1,
-        );
-
-        // log::debug!("{} | PEAK: {:2.2} {:2.2} - RMS: {:2.2} {:2.2}", channels, peak_l, peak_r, rms_l, rms_r);
+        self.peak_smooth = Self::smooth(self.peak, self.peak_smooth, dt, 0.05);
+        self.rms_smooth = Self::smooth(self.rms, self.rms_smooth, dt, 0.1);
 
         log::debug!("{:?}", self);
     }
