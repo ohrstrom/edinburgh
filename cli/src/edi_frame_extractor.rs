@@ -1,3 +1,4 @@
+use log;
 use std::fmt;
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl AFFrame {
     pub fn check_completed(&mut self) -> bool {
         let d = &self.data;
         if d.len() == 0 {
-            // log::debug!("check_completed: empty frame");
+            log::debug!("check_completed: empty frame");
             return false;
         }
         if d.len() == 8 {

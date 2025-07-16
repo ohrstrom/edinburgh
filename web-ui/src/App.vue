@@ -702,7 +702,7 @@ const toggleEnsembleTable = () => {
             <span v-else class="icon icon--open">⌄</span>
           </div>
           <div @click.prevent="toggleEnsembleTable()" class="toggle">
-            <span class="label">Ensemble Table</span>
+            <span class="label">Ensemble Discovery</span>
             <span v-if="ensembleTableExpanded" class="icon icon--close">⌃</span>
             <span v-else class="icon icon--open">⌄</span>
           </div>

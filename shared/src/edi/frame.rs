@@ -51,6 +51,8 @@ impl Frame {
 
         let mut i = 0usize;
 
+        // println!("Frame: kind: {}, len: {}", kind, len);
+
         while i < len.saturating_sub(8) {
             let start = 10 + i;
 
@@ -66,11 +68,11 @@ impl Frame {
 
             match Self::parse_tag(tag_item) {
                 Ok(tag) => {
-                    // log::debug!("tag_item: B {:?}", tag_item.len());
+                    // log::debug!("tag_item: {:?}", tag_item.len());
                     tags.push(tag);
                 }
                 Err(_e) => {
-                    // log::debug!("Error parsing tag: {:?}", e);
+                    // log::debug!("Error parsing tag: {:?}", _e);
                 }
             }
 

@@ -100,10 +100,10 @@ impl DLPlusTag {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct DLPlusTagDecoded {
-    kind: DLPlusContentType,
-    value: String,
+    pub kind: DLPlusContentType,
+    pub value: String,
 }
 
 #[derive(Debug, Serialize, Clone, Copy)]

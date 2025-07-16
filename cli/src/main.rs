@@ -1,5 +1,6 @@
 mod audio;
 mod edi_frame_extractor;
+mod sls;
 mod tui;
 
 use log;
@@ -23,22 +24,37 @@ use tui::{TUICommand, TUIEvent};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// EDI host:port to connect to.
+    /// EDI host:port to connect to
     #[arg(short, long)]
     addr: String,
 
-    /// Subchannel ID to extract audio from. [optional]
+    /// Subchannel ID to extract audio from [optional]
     #[arg(short, long)]
     scid: Option<u8>,
+
+    /// Enable TUI
+    #[arg(long, default_value_t = false)]
+    tui: bool,
+
+    /// Log level (ignored in TUI mode)
+    #[arg(long, default_value = "info", value_parser = ["debug", "info", "warn", "error"])]
+    log_level: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    std::env::set_var("RUST_LOG", "warning");
+    let args = Args::parse();
+
+    // set log level to error in TUI mode, else use args
+    if args.tui {
+        std::env::set_var("RUST_LOG", "error");
+    } else {
+        std::env::set_var("RUST_LOG", args.log_level.clone());
+    }
 
     env_logger::builder().format_timestamp(None).init();
 
-    let args = Args::parse();
+    log::debug!("{:?}", args);
 
     let scid = Arc::new(RwLock::new(args.scid));
 
@@ -49,16 +65,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TUI -> main
     let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TUICommand>();
 
-    tokio::spawn({
-        let addr = args.addr.clone();
-        let tui_tx = tui_tx.clone();
-        let scid = *scid.read().await;
-        async move {
-            if let Err(e) = tui::run_tui(addr, scid, tui_tx, tui_rx, tui_cmd_tx).await {
-                eprintln!("TUI error: {:?}", e);
+    // NOTE: check if this is a good idea?
+    if args.tui {
+        tokio::spawn({
+            let addr = args.addr.clone();
+            let tui_tx = tui_tx.clone();
+            let scid = *scid.read().await;
+            async move {
+                if let Err(e) = tui::run_tui(addr, scid, tui_tx, tui_rx, tui_cmd_tx).await {
+                    eprintln!("TUI error: {:?}", e);
+                }
             }
-        }
-    });
+        });
+    }
+
+    let edi_rx = init_event_bus();
 
     let stream = TcpStream::connect(args.addr).await?;
 
@@ -66,11 +87,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut extractor = EDIFrameExtractor::new();
 
-    let event_rx = init_event_bus();
-
     let mut source = EDISource::new(args.scid, None, None);
 
-    let event_handler = EDIHandler::new(Arc::clone(&scid), event_rx, tui_tx.clone());
+    let event_handler = EDIHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone());
 
     tokio::spawn(async move {
         event_handler.run().await;
@@ -99,8 +118,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     filled -= offset;
                                     continue;
                                 }
+
                                 if extractor.frame.check_completed() {
                                     source.feed(&extractor.frame.data).await;
+                                    // println!("frame completed: {}", extractor.frame);
                                     extractor.frame.reset();
                                     filled = 0;
                                 }
@@ -138,6 +159,8 @@ struct EDIHandler {
     tui_tx: UnboundedSender<TUIEvent>,
 }
 
+// hm - this is kind of verbose. theoretically EDIEvents could be consumed directly in TUI
+// but this does not work with the current edi_rx implementation
 impl EDIHandler {
     pub fn new(
         scid: Arc<RwLock<Option<u8>>>,
@@ -148,7 +171,6 @@ impl EDIHandler {
             edi_rx,
             scid,
             audio_decoder: None,
-            // tui
             tui_tx,
         }
     }
@@ -157,12 +179,12 @@ impl EDIHandler {
         while let Some(event) = self.edi_rx.recv().await {
             match event {
                 EDIEvent::EnsembleUpdated(ensemble) => {
-                    log::debug!(
-                        "Ensemble updated: 0x{:4x} - {}",
-                        ensemble.eid.unwrap_or(0),
-                        ensemble.complete
-                    );
                     if ensemble.complete {
+                        log::debug!(
+                            "Ensemble updated: 0x{:4x} - complete: {}",
+                            ensemble.eid.unwrap_or(0),
+                            ensemble.complete
+                        );
                         if let Err(e) = self.tui_tx.send(TUIEvent::EnsembleUpdated(ensemble)) {
                             log::warn!("Could not send TUI update: {:?}", e);
                         }
@@ -190,8 +212,10 @@ impl EDIHandler {
                         }
                     }
                 }
-                EDIEvent::MOTImageReceived(_m) => {
-                    // log::debug!("MOT image received: SCID = {}", m.scid);
+                EDIEvent::MOTImageReceived(m) => {
+                    if let Err(e) = self.tui_tx.send(TUIEvent::MOTImageReceived(m)) {
+                        log::warn!("Could not send TUI update: {:?}", e);
+                    }
                 }
                 EDIEvent::DLObjectReceived(d) => {
                     if let Err(e) = self.tui_tx.send(TUIEvent::DLObjectReceived(d)) {

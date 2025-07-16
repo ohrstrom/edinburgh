@@ -181,8 +181,8 @@ impl EDISource {
                                 Ok(FeedResult::Buffering) => {
                                     continue;
                                 }
-                                Err(_err) => {
-                                    // log::warn!("Error feeding frame: {}", err);
+                                Err(err) => {
+                                    log::warn!("Error feeding frame: {}", err);
                                 }
                             }
                         }

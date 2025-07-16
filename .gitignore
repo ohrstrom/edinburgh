@@ -6,6 +6,7 @@ Cargo.lock
 .idea/
 .vscode/
 
-docs/
 __ref/
 __src/
+
+docs/local/*

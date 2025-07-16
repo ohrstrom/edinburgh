@@ -1,7 +1,10 @@
 use humansize::{format_size, DECIMAL};
 use shared::edi::pad::dl::DLObject;
+use shared::edi::pad::mot::MOTImage;
 use shared::edi::{EDISStats, Ensemble, Subchannel};
 use std::{io, time::Duration};
+
+use derivative::Derivative;
 
 use ratatui::crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -11,9 +14,10 @@ use ratatui::crossterm::{
 
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Flex, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Row, Table, TableState, Wrap},
+    text::{Line, Span, Text},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
     Terminal,
 };
 
@@ -21,10 +25,21 @@ use ratatui::widgets::block::{BorderType, Padding};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
+use crate::sls::{SLSImage, SLSWidget};
+
+fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
+    let [area] = Layout::horizontal([horizontal])
+        .flex(Flex::Center)
+        .areas(area);
+    let [area] = Layout::vertical([vertical]).flex(Flex::Center).areas(area);
+    area
+}
+
 #[derive(Debug)]
 pub enum TUIEvent {
     EnsembleUpdated(Ensemble),
     DLObjectReceived(DLObject),
+    MOTImageReceived(MOTImage),
     EDISStatsUpdated(EDISStats),
 }
 
@@ -33,7 +48,8 @@ pub enum TUICommand {
     Shutdown,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct TuiState {
     pub addr: String,
     pub current_ensemble: Option<Ensemble>,
@@ -41,13 +57,18 @@ pub struct TuiState {
     pub services: Vec<ServiceRow>,
     pub table_state: TableState,
     pub dl_objects: Vec<(u8, Option<DLObject>)>,
+    pub sls_images: Vec<(u8, Option<SLSImage>)>,
     pub edi_stats: EDISStats,
+    //
+    pub show_meter: bool,
+    pub show_sls: bool,
 }
 
 impl TuiState {
     pub fn new(addr: String, initial_scid: Option<u8>) -> Self {
         let mut table_state = TableState::default();
         table_state.select(Some(0));
+
         Self {
             addr,
             current_ensemble: None,
@@ -55,7 +76,11 @@ impl TuiState {
             services: Vec::new(),
             table_state,
             dl_objects: Vec::new(),
+            sls_images: Vec::new(),
             edi_stats: EDISStats::new(), // NOTE: should we rather use option & none here?
+            //
+            show_meter: false,
+            show_sls: false,
         }
     }
 
@@ -114,6 +139,20 @@ impl TuiState {
         }
     }
 
+    pub fn update_mot_image(&mut self, m: MOTImage) {
+        let s = SLSImage::new(
+            m.mimetype.clone().to_uppercase(),
+            m.len,
+            m.md5_hex().to_uppercase(),
+            m.data.clone(),
+        );
+
+        match self.sls_images.iter_mut().find(|(scid, _)| *scid == m.scid) {
+            Some((_, obj)) => *obj = Some(s),
+            None => self.sls_images.push((m.scid, Some(s))),
+        }
+    }
+
     pub fn update_edi_stats(&mut self, stats: EDISStats) {
         self.edi_stats = stats;
     }
@@ -156,8 +195,11 @@ pub async fn run_tui(
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(4),
+                    Constraint::Length(1),
                     Constraint::Min(0),
-                    Constraint::Length(3),
+                    Constraint::Length(4),
+                    // level meter: 4 if state.show_meter on,. else 0
+                    Constraint::Length(if state.show_meter { 4 } else { 0 }),
                 ])
                 .split(area);
 
@@ -211,15 +253,32 @@ pub async fn run_tui(
             frame.render_widget(ensemble_right, ensemble_layout[1]);
 
             ///////////////////////////////////////////////////////////
+            // keyboard input display
+            ///////////////////////////////////////////////////////////
+            let input_text = "q: quit • m: toggle mute • Enter: select";
+            let input_paragraph = Paragraph::new(input_text)
+                .block(
+                    Block::default()
+                        .padding(Padding::horizontal(2))
+                        .borders(Borders::NONE),
+                )
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+
+            frame.render_widget(input_paragraph, layout[1]);
+
+            ///////////////////////////////////////////////////////////
             // service table
             ///////////////////////////////////////////////////////////
             let header = Row::new(vec![
-                "SC",
+                " SC",
                 "SID",
                 "Label",
                 "Short",
                 "EEP      CUs SA",
                 "Format",
+                "DL",
+                "SLS",
             ])
             .style(
                 Style::default()
@@ -248,14 +307,64 @@ pub async fn run_tui(
                     svc.scid.to_string()
                 };
 
+                let dl_info = if let Some(dl) = state
+                    .dl_objects
+                    .iter()
+                    .find(|(scid, _)| *scid == svc.scid)
+                {
+                    if let Some(dl) = dl.1.as_ref() {
+                        if !dl.get_dl_plus().is_empty() {
+                            "DL+"
+                        } else {
+                            "DL"
+                        }
+                    } else {
+                        "-"
+                    }
+                } else {
+                    "-"
+                };
+
+
+                let sls_info = if let Some((_, Some(sls_image))) =
+                    state.sls_images.iter().find(|(scid, _)| *scid == svc.scid)
+                {
+                    let size_style = if sls_image.len < 15_000 {
+                        Style::default()
+                    } else {
+                        Style::default().fg(Color::Red)
+                    };
+
+                    let dimensions_style = if sls_image.width == 320 && sls_image.height == 240 {
+                        Style::default()
+                    } else {
+                        Style::default().fg(Color::Red)
+                    };
+
+                    Line::from(vec![
+                        Span::raw(format!("{:<10}  ", sls_image.mimetype,)),
+                        Span::styled(
+                            format!("{:>8}  ", format_size(sls_image.len as u64, DECIMAL)),
+                            size_style,
+                        ),
+                        Span::styled(
+                            format!("{}x{}", sls_image.width, sls_image.height),
+                            dimensions_style,
+                        ),
+                    ])
+                } else {
+                    Line::from("")
+                };
+
                 Row::new(vec![
-                    format!("{:>4}", svc.scid),
-                    svc.sid.clone(),
-                    svc.label.clone(),
-                    svc.short_label.clone(),
-                    // service_dl,
-                    sc_info,
-                    svc.format.clone(),
+                    Cell::from(format!("{:>4}", svc.scid)),
+                    Cell::from(svc.sid.clone()),
+                    Cell::from(svc.label.clone()),
+                    Cell::from(svc.short_label.clone()),
+                    Cell::from(sc_info),
+                    Cell::from(svc.format.clone()),
+                    Cell::from(dl_info),
+                    Cell::from(sls_info),
                 ])
                 .style(style)
             });
@@ -266,9 +375,12 @@ pub async fn run_tui(
                     Constraint::Length(8),
                     Constraint::Length(8),
                     Constraint::Length(18),
+                    // Constraint::Length(36),
+                    Constraint::Fill(1),
+                    Constraint::Length(18),
                     Constraint::Length(36),
+                    Constraint::Length(7),
                     Constraint::Length(36),
-                    Constraint::Length(80),
                 ],
             )
             .header(header)
@@ -284,11 +396,12 @@ pub async fn run_tui(
                     .add_modifier(Modifier::BOLD),
             );
 
-            frame.render_stateful_widget(table, layout[1], &mut state.table_state);
+            frame.render_stateful_widget(table, layout[2], &mut state.table_state);
 
             ///////////////////////////////////////////////////////////
             // player
             ///////////////////////////////////////////////////////////
+
             let current_service = if let Some(scid) = state.selected_scid {
                 state.services.iter().find(|svc| svc.scid == scid)
             } else {
@@ -305,14 +418,86 @@ pub async fn run_tui(
                 None => "No service selected".to_string(),
             };
 
+            // let player_dl =
+
+            /*
             let player_dl = if let Some(selected) = state.selected_scid {
-                match state.dl_objects.iter().find(|(scid, _)| *scid == selected) {
-                    Some((_, Some(dl))) => dl.decode_label(),
-                    _ => "-".into(),
-                }
+                state.dl_objects.iter().find(|(scid, _)| *scid == selected)
+            } else {
+                None
+            };
+
+            let player_dl_text = if let Some((_, Some(dl))) = player_dl {
+                dl.decode_label()
             } else {
                 "-".into()
             };
+
+            let player_dl_title: String = if let Some((_, Some(dl))) = player_dl {
+                if dl.get_dl_plus().len() > 0 {
+                    " DL+ ".into()
+                } else {
+                    " DL ".into()
+                }
+            } else {
+                " DL ".into()
+            };
+            */
+
+            let player_dl = state
+                .selected_scid
+                .and_then(|selected| state.dl_objects.iter().find(|(scid, _)| *scid == selected))
+                .and_then(|(_, dl)| dl.as_ref());
+
+            let player_sls_image = state
+                .selected_scid
+                .and_then(|selected| state.sls_images.iter().find(|(scid, _)| *scid == selected))
+                .and_then(|(_, dl)| dl.as_ref());
+
+
+            let player_dl_text: Text = match player_dl {
+                Some(dl) => {
+                    let mut lines = vec![
+                        Line::from(dl.decode_label()), // base line: label, normal style
+                    ];
+
+                    let dl_plus_tags = dl.get_dl_plus();
+                    if !dl_plus_tags.is_empty() {
+                        let tags_joined = dl_plus_tags
+                            .iter()
+                            .map(|tag| format!("{}: {}", tag.kind, tag.value))
+                            .collect::<Vec<_>>()
+                            .join(" | ");
+
+                        // Add DL+ line with special style
+                        lines.push(
+                            Line::from(vec![
+                                Span::styled(
+                                    tags_joined,
+                                    Style::default().fg(Color::DarkGray),
+                                )
+                            ])
+                        );
+                    }
+
+                    Text::from(lines)
+                }
+                None => Text::from("-"),
+            };
+
+
+            let player_dl_title: String = player_dl
+                .map(|dl| {
+                    if !dl.get_dl_plus().is_empty() {
+                        " DL+ "
+                    } else {
+                        " DL "
+                    }
+                })
+                .unwrap_or(" DL ")
+                .into();
+
+
 
             let player_left = Paragraph::new(player_text)
                 .block(
@@ -323,25 +508,86 @@ pub async fn run_tui(
                 )
                 .wrap(Wrap { trim: true });
 
-            let player_right = Paragraph::new(player_dl)
+            let player_right = Paragraph::new(player_dl_text)
                 .block(
                     Block::default()
-                        .title(" DL ")
+                        .title(player_dl_title)
                         .padding(Padding::horizontal(1))
-                        .borders(Borders::TOP | Borders::RIGHT | Borders::BOTTOM),
+                        .borders(Borders::TOP | Borders::BOTTOM),
                 )
                 .wrap(Wrap { trim: true });
 
             let player_layout = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(layout[2]);
+                .constraints([
+                    Constraint::Min(40),
+                    Constraint::Min(30),
+                    Constraint::Length(48),
+                ])
+                .split(layout[3]);
 
             frame.render_widget(player_left, player_layout[0]);
             frame.render_widget(player_right, player_layout[1]);
+
+            let player_sls_text: Text = match player_sls_image {
+                Some(sls) => {
+                    let lines = vec![
+                        Line::from(format!(
+                            "{} • {} • {}x{}",
+                            sls.mimetype, format_size(sls.len as u64, DECIMAL), sls.width, sls.height
+                        )),
+                        Line::from(vec![
+                            Span::styled(
+                                format!("MD5: {}", sls.md5),
+                                Style::default().fg(Color::DarkGray),
+                            )
+                        ])
+                    ];
+                    Text::from(lines)
+                }
+                None => Text::from("-"),
+            };
+
+            let player_sls = Paragraph::new(player_sls_text)
+                .block(
+                    Block::default()
+                        .title(" SLS ")
+                        .padding(Padding::horizontal(1))
+                        .borders(Borders::TOP | Borders::RIGHT | Borders::BOTTOM),
+                )
+                .wrap(Wrap { trim: true });
+
+            frame.render_widget(player_sls, player_layout[2]);
+
+            if state.show_sls {
+                let sls_area = center(
+                    frame.area(),
+                    Constraint::Length(84.min(area.width)),
+                    Constraint::Length(28.min(area.height)),
+                );
+
+                // let sls_image = state.table_state.selected().and_then(|selected| {
+                //     state
+                //         .sls_images
+                //         .iter()
+                //         .find(|(scid, _)| *scid -1 == selected as u8)
+                //         .and_then(|(_, m)| m.clone())
+                // });
+
+                let sls_image = state.selected_scid.and_then(|selected| {
+                    state
+                        .sls_images
+                        .iter()
+                        .find(|(scid, _)| *scid == selected)
+                        .and_then(|(_, m)| m.clone())
+                });
+
+                let sls_widget = SLSWidget::new(sls_image);
+
+                frame.render_widget(sls_widget, sls_area);
+            }
         })?;
 
-        // key input
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
@@ -383,6 +629,12 @@ pub async fn run_tui(
                     KeyCode::Char('m') => {
                         println!("Mute toggled");
                     }
+                    KeyCode::Char('s') => {
+                        state.show_sls = !state.show_sls;
+                    }
+                    KeyCode::Char('l') => {
+                        state.show_meter = !state.show_meter;
+                    }
                     _ => {}
                 }
             }
@@ -396,6 +648,9 @@ pub async fn run_tui(
                 TUIEvent::DLObjectReceived(d) => {
                     state.update_dl_object(d);
                 }
+                TUIEvent::MOTImageReceived(m) => {
+                    state.update_mot_image(m);
+                }
                 TUIEvent::EDISStatsUpdated(s) => {
                     state.update_edi_stats(s);
                 }
@@ -405,7 +660,7 @@ pub async fn run_tui(
         }
     }
 
-    // Restore terminal
+    // restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
