@@ -956,6 +956,7 @@ dependencies = [
 [[package]]
 name = "faad2"
 version = "2.11.2"
+source = "git+https://github.com/ohrstrom/faad2-rs.git?tag=v2.11.2#fe3b51f15160b4892c8ae2b4f00f6196cd90a412"
 dependencies = [
  "faad2-sys",
 ]
@@ -963,6 +964,7 @@ dependencies = [
 [[package]]
 name = "faad2-sys"
 version = "2.11.2"
+source = "git+https://github.com/ohrstrom/faad2-rs.git?tag=v2.11.2#fe3b51f15160b4892c8ae2b4f00f6196cd90a412"
 dependencies = [
  "cc",
 ]
