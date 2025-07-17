@@ -15,7 +15,10 @@ faad2 = { path = "../../../rs/faad2-rs" }
 #fdk-aac-sys = "0.5.0"
 futures = "0.3.31"
 log = "0.4.26"
-rodio = "0.20.1"
+#rodio = "0.21.1"
+#cpal = "0.16.0"
+rodio = { version = "0.21.1", default_features = false, features = ["playback"] }
+cpal = { version = "0.16.0", features = ["jack"] }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "time", "sync"] }
 ratatui = { version = "0.29.0", features = ["palette", "scrolling-regions"] }
 humansize = "2.1.3"

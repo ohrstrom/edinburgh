@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use faad2::{version, Decoder};
 use log;
-use rodio::{buffer::SamplesBuffer, OutputStream, Sink};
+use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamBuilder, Sink};
 use shared::edi::msc::{AACPResult, AudioFormat};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
@@ -142,17 +142,20 @@ impl AudioDecoder {
         let asc = initial_audio_format.asc.clone();
         let decoder = Decoder::new(&asc).expect("Failed to create initial decoder");
 
-        let (stream, handle) = OutputStream::try_default().expect("Error creating output stream");
-        let sink = Arc::new(Mutex::new(
-            Sink::try_new(&handle).expect("Error creating sink"),
-        ));
+        for host_id in cpal::available_hosts() {
+            log::debug!("CPAL host: {:?}", host_id);
+        }
+
+        let stream_handle =
+            OutputStreamBuilder::open_default_stream().expect("Error creating output stream");
+        let sink = Arc::new(Mutex::new(Sink::connect_new(stream_handle.mixer())));
 
         Self {
             scid,
             asc,
             audio_format: initial_audio_format,
             decoder,
-            _stream: stream,
+            _stream: stream_handle,
             sink,
             tx,
             levels: AudioLevels::new(),
