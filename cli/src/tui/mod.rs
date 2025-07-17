@@ -65,10 +65,8 @@ pub struct TuiState {
     pub dl_objects: Vec<(u8, Option<DLObject>)>,
     pub sls_images: Vec<(u8, Option<SLSImage>)>,
     pub edi_stats: EDISStats,
-    //
     pub show_meter: bool,
     pub show_sls: bool,
-    //
     pub levels: AudioLevels,
 }
 
@@ -86,10 +84,8 @@ impl TuiState {
             dl_objects: Vec::new(),
             sls_images: Vec::new(),
             edi_stats: EDISStats::new(), // NOTE: should we rather use option & none here?
-            //
             show_meter: false,
             show_sls: false,
-            //
             levels: AudioLevels::new(),
         }
     }
@@ -190,7 +186,6 @@ pub async fn run_tui(
     cmd_tx: UnboundedSender<TUICommand>,
     mut audio_rx: UnboundedReceiver<AudioEvent>,
 ) -> io::Result<()> {
-    // term init
     enable_raw_mode()?;
     let mut stdout = io::stdout();
 
@@ -199,7 +194,6 @@ pub async fn run_tui(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // state
     let mut state = TuiState::new(addr, scid);
 
     loop {
@@ -207,16 +201,25 @@ pub async fn run_tui(
             let area = frame.area();
 
             let layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Min(0), // main content (vertical)
+                    Constraint::Length(if state.show_meter { 17 } else { 0 }), // fixed width for meter on the right
+                ])
+                .split(area);
+
+            // Now split layout[0] vertically as before:
+            let content_layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(4),
                     Constraint::Length(1),
                     Constraint::Min(0),
                     Constraint::Length(4),
-                    // level meter: 4 if state.show_meter on,. else 0
-                    Constraint::Length(if state.show_meter { 4 } else { 0 }),
                 ])
-                .split(area);
+                .split(layout[0]);
+
+            let meter_area = layout[1];
 
             ///////////////////////////////////////////////////////////
             // ensemble info
@@ -262,7 +265,7 @@ pub async fn run_tui(
             let ensemble_layout = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Fill(1), Constraint::Length(64)])
-                .split(layout[0]);
+                .split(content_layout[0]);
 
             frame.render_widget(ensemble_left, ensemble_layout[0]);
             frame.render_widget(ensemble_right, ensemble_layout[1]);
@@ -280,7 +283,7 @@ pub async fn run_tui(
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
 
-            frame.render_widget(input_paragraph, layout[1]);
+            frame.render_widget(input_paragraph, content_layout[1]);
 
             ///////////////////////////////////////////////////////////
             // service table
@@ -407,7 +410,7 @@ pub async fn run_tui(
                     .add_modifier(Modifier::BOLD),
             );
 
-            frame.render_stateful_widget(table, layout[2], &mut state.table_state);
+            frame.render_stateful_widget(table, content_layout[2], &mut state.table_state);
 
             ///////////////////////////////////////////////////////////
             // player
@@ -527,7 +530,7 @@ pub async fn run_tui(
                     Constraint::Min(30),
                     Constraint::Length(48),
                 ])
-                .split(layout[3]);
+                .split(content_layout[3]);
 
             frame.render_widget(player_left, player_layout[0]);
             frame.render_widget(player_right, player_layout[1]);
@@ -599,7 +602,7 @@ pub async fn run_tui(
             ///////////////////////////////////////////////////////////
             if state.show_meter {
                 let level_meter = LevelMeterWidget::new(state.levels.clone());
-                frame.render_widget(level_meter, layout[4]);
+                frame.render_widget(level_meter, meter_area);
             }
         })?;
 

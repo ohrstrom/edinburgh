@@ -9,27 +9,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
-fn calc_rms(samples: &[f32], channels: usize) -> (f32, f32) {
-    let mut sum_l = 0.0;
-    let mut sum_r = 0.0;
-    let mut count_l = 0;
-    let mut count_r = 0;
-
-    for (i, sample) in samples.iter().enumerate() {
-        if i % channels == 0 {
-            sum_l += sample * sample;
-            count_l += 1;
-        } else {
-            sum_r += sample * sample;
-            count_r += 1;
-        }
-    }
-
-    let rms_l = (sum_l / count_l as f32).sqrt();
-    let rms_r = (sum_r / count_r as f32).sqrt();
-    (rms_l, rms_r)
-}
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub enum AudioEvent {
@@ -87,7 +66,7 @@ impl AudioLevels {
 
     pub fn feed(&mut self, channels: usize, samples: &[f32]) {
         let count = samples.len() / channels;
-        let top_n = 16;
+        let top_n = 64;
 
         let mut peaks_l = Vec::with_capacity(count);
         let mut peaks_r = Vec::with_capacity(count);
@@ -109,8 +88,10 @@ impl AudioLevels {
         peaks_l.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
         peaks_r.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
 
-        let peak_l = peaks_l.iter().take(top_n).copied().sum::<f32>() / peaks_l.len().min(top_n) as f32;
-        let peak_r = peaks_r.iter().take(top_n).copied().sum::<f32>() / peaks_r.len().min(top_n) as f32;
+        let peak_l =
+            peaks_l.iter().take(top_n).copied().sum::<f32>() / peaks_l.len().min(top_n) as f32;
+        let peak_r =
+            peaks_r.iter().take(top_n).copied().sum::<f32>() / peaks_r.len().min(top_n) as f32;
 
         let rms_l = (sum_l / count as f32).sqrt();
         let rms_r = (sum_r / count as f32).sqrt();
@@ -126,7 +107,7 @@ impl AudioLevels {
         self.peak_smooth = Self::smooth(self.peak, self.peak_smooth, dt, 0.05);
         self.rms_smooth = Self::smooth(self.rms, self.rms_smooth, dt, 0.1);
 
-        log::debug!("{:?}", self);
+        // log::debug!("{:?}", self);
     }
 }
 
@@ -261,8 +242,6 @@ impl AudioDecoder {
                 ));
 
                 self.levels.feed(r.channels, &r.samples);
-
-                let (l, r) = calc_rms(&r.samples, r.channels as usize);
 
                 if let Err(e) = self.tx.send(AudioEvent::LevelsUpdated(self.levels.clone())) {
                     log::warn!("Could not send AudioEvent update: {:?}", e);
