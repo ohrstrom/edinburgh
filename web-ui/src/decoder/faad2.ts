@@ -1,4 +1,5 @@
-import Faad2Module from '@/lib/faad2.js'
+// import Faad2Module from '@/lib/faad2.js'
+import Faad2Module from '@/lib/faad2_wasm.mjs'
 
 const SAMPLE_RATE = {
   1: 8000,
@@ -54,8 +55,8 @@ class FAAD2Decoder {
     try {
       if (!this.module) {
         this.module = await Faad2Module()
-        // console.debug('FAAD2: module loaded')
-        // console.debug('FAAD2: capabilities', this.module._get_faad_capabilities())
+        console.debug('FAAD2: module loaded')
+        console.debug('FAAD2: capabilities', this.module._get_faad_capabilities())
       }
 
       const ascPtr = this.module._malloc(asc.length)

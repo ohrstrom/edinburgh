@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ComputedRef, Ref, ref, watch } from 'vue'
+import type { Ref, ComputedRef } from 'vue'
+import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useStorage } from '@vueuse/core'
 

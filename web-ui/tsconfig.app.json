@@ -9,8 +9,7 @@
       "@/*": ["./src/*"]
     },
 
-    // ✅ Global type definitions
-    "baseUrl": ".", // required for `paths`
+    "baseUrl": ".",
     "typeRoots": ["./src/types", "./node_modules/@types"]
   }
 }
