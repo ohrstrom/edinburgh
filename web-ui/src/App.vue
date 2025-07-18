@@ -15,7 +15,6 @@ import { usePlayerStore } from '@/stores/player'
 
 import Panel from '@/components/ui/Panel.vue'
 import Connection from '@/components/edi/connection/Connection.vue'
-import Scanner from '@/components/edi/connection/Scanner.vue'
 import Settings from '@/components/edi/settings/Settings.vue'
 import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
 import ServiceTable from '@/components/edi/ensemble/ServiceTable.vue'
