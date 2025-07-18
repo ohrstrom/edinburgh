@@ -35,9 +35,11 @@ build:
 	cargo build --package edinburgh-wasm --target wasm32-unknown-unknown
 	cargo build --package edinburgh
 	cargo build --package edinburgh-frame-forwarder
+	cargo build --package edinburgh-ensemble-directory
 
 .PHONY: release
 release:
 	cargo build --release --package edinburgh-wasm --target wasm32-unknown-unknown
 	cargo build --release --package edinburgh
 	cargo build --release --package edinburgh-frame-forwarder
+	cargo build --release --package edinburgh-ensemble-directory

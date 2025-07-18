@@ -40,6 +40,9 @@ jobs:
       - name: Build edinburgh-frame-forwarder
         run: cargo build --package edinburgh-frame-forwarder
 
+      - name: Build edinburgh-ensemble-directory
+        run: cargo build --package edinburgh-ensemble-directory
+
       - name: Install wasm-pack
         run: cargo install wasm-pack
 

@@ -1,8 +1,3 @@
 [workspace]
 resolver = "2"
 members = ["cli", "wasm", "frame-forwarder", "ensemble-directory", "shared"]
-
-
-# [patch.crates-io]
-# # faad2 = { path = "./faad2-local" }
-# faad2 = { path = "/Users/ohrstrom/code/rs/faad2-rs" }
