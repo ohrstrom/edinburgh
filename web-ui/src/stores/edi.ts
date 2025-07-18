@@ -1,7 +1,7 @@
-import { computed, shallowRef, ref, watch } from 'vue'
+import { computed, shallowRef, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useIDBKeyval } from '@vueuse/integrations/useIDBKeyval'
-import { defineStore } from 'pinia' // adjust the path as needed
+import { defineStore } from 'pinia'
 
 import type * as Types from '@/types'
 
@@ -45,55 +45,6 @@ export const useEDIStore = defineStore('edi', () => {
   const sls = ref<Types.SLS[]>([])
 
   const selectedSid = ref(0)
-
-  /*
-  const services = computed(() => {
-    if (!ensemble.value) {
-      return []
-    }
-  
-    return ensemble.value.services
-      .filter((svc) => svc.label !== undefined)
-      .map((svc) => {
-        const components = svc.components.map((comp) => ({
-          ...comp,
-          dl: dls.value.find((dl) => dl.scid === comp.scid),
-          sls: sls.value.find((slsItem) => slsItem.scid === comp.scid),
-        }))
-  
-        return {
-          ...svc,
-          components,
-          isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
-        }
-      })
-      .sort((a, b) => a.label!.localeCompare(b.label!))
-  })
-  */
-
-  const __services = computed(() => {
-    if (!ensemble.value) {
-      return []
-    }
-
-    return ensemble.value.services
-      .flatMap((svc) => {
-        return svc.components.map((component) => {
-          const scid = component.scid
-          return {
-            ...svc,
-            ...component,
-            scid,
-            dl: dls.value.find((v) => v.scid === scid),
-            sls: sls.value.find((v) => v.scid === scid),
-            isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
-            // isPlaying: playerStore.state === 'playing',
-          }
-        })
-      })
-      .filter((entry) => entry.label !== undefined)
-      .sort((a, b) => a.label!.localeCompare(b.label!))
-  })
 
   const services = computed(() => {
     if (!ensemble.value) return []
@@ -189,6 +140,7 @@ export const useEDIStore = defineStore('edi', () => {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const saveSLS = async (val: Types.SLS) => {
     const svc = services.value.find((s) => s.scid === val.scid)
     if (!svc) {
@@ -217,6 +169,7 @@ export const useEDIStore = defineStore('edi', () => {
       // })
 
       const blob = new Blob([new Uint8Array(val.data)], { type: val.mimetype })
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, ...rest } = val
       val = { ...rest, url: URL.createObjectURL(blob) }
     }

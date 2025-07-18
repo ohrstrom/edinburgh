@@ -217,6 +217,28 @@ class EDInburgh {
     )
   }
 
+  private wsOnMessage = (event: MessageEvent) => {
+    this.edi.feed(new Uint8Array(event.data))
+  }
+
+  private wsOnMClose = () => {
+    console.info('WebSocket closed')
+    this.connected.value = false
+    this.ws = null
+    this.wsReset()
+  }
+
+  private wsOnError = (e: Event) => {
+    console.error('WebSocket error:', e)
+  }
+
+  private wsReset(): void {
+    if (!this.ws) return
+    this.ws.removeEventListener('message', this.wsOnMessage)
+    this.ws.removeEventListener('close', this.wsOnMClose)
+    this.ws.removeEventListener('error', this.wsOnError)
+  }
+
   async connect(conn: { host: string; port: number }): Promise<void> {
     const uri = `ws://localhost:9000/ws/${conn.host}/${conn.port}/`
     console.log('EDInburgh:connect', conn.host, conn.port, uri)
@@ -225,22 +247,9 @@ class EDInburgh {
 
     ws.binaryType = 'arraybuffer'
 
-    /******************************************************************
-    Websocket Events
-    ******************************************************************/
-    ws.onmessage = (event) => {
-      this.edi.feed(new Uint8Array(event.data))
-    }
-
-    ws.onclose = () => {
-      console.info('WebSocket closed')
-      this.connected.value = false
-      this.ws = undefined
-    }
-
-    ws.onerror = (e) => {
-      console.error('WebSocket error:', e)
-    }
+    ws.addEventListener('message', this.wsOnMessage)
+    ws.addEventListener('close', this.wsOnMClose)
+    ws.addEventListener('error', this.wsOnError)
 
     this.ws = ws
     this.connected.value = true
@@ -254,21 +263,19 @@ class EDInburgh {
     console.log('EDInburgh:reset')
 
     if (this.ws) {
-      this.ws.onopen = this.ws.onmessage = this.ws.onerror = undefined
+      this.wsReset()
 
       try {
         this.ws.close(1000, 'Client disconnecting')
 
         await new Promise<void>((resolve) => {
-          this.ws!.onclose = () => {
-            resolve()
-          }
+          this.ws!.addEventListener('close', () => resolve(), { once: true })
         })
       } catch (err) {
         console.warn('WebSocket close error:', err)
       }
 
-      this.ws = undefined
+      this.ws = null
     }
 
     await this.edi.reset()
@@ -409,9 +416,11 @@ class EDInburgh {
       description: asc.buffer,
     })
 
+    /* eslint-disable unicorn/require-post-message-target-origin */
     this.workletNode.port.postMessage({
       type: 'reset',
     })
+    /* eslint-enable unicorn/require-post-message-target-origin */
 
     // NOTE: is this a good idea?
     await new Promise<void>((resolve) => {
@@ -487,10 +496,13 @@ class EDInburgh {
 
     this.setPlayerState('playing')
 
+
+    /* eslint-disable unicorn/require-post-message-target-origin */
     this.workletNode.port.postMessage({
       type: 'audio',
       samples: pcmData,
     })
+    /* eslint-enable unicorn/require-post-message-target-origin */
   }
 
   async fadeTo(value: number = 1.0, time: number = 1.0): Promise<void> {
