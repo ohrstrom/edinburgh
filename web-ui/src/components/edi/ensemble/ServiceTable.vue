@@ -16,29 +16,36 @@ defineEmits<{
 const services = computed(() => {
   if (!ensemble.value) return []
 
-  return ensemble.value.services.flatMap((svc) => {
-    return svc.components.map((comp) => {
-      const subchannel = ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id)
+  return ensemble.value.services
+    .flatMap((svc) => {
+      return svc.components.map((comp) => {
+        const subchannel = ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id)
 
-      return {
-        sid: svc.sid,
-        label: svc.label,
-        short_label: svc.short_label,
-        scid: comp.scid,
-        language: comp.language,
-        user_apps: comp.user_apps,
-        audioFormat: audioFormats.value.get(comp.scid),
-        subchannel,
-      }
+        return {
+          sid: svc.sid,
+          label: svc.label,
+          short_label: svc.short_label,
+          scid: comp.scid,
+          language: comp.language,
+          user_apps: comp.user_apps,
+          audioFormat: audioFormats.value.get(comp.scid),
+          subchannel,
+        }
+      })
     })
-  }).sort((a, b) => a.scid - b.scid)
+    .sort((a, b) => a.scid - b.scid)
 })
 </script>
 
 <template>
   <div class="service-table">
     <div v-if="services.length" class="table">
-      <div class="service" v-for="(svc, index) in services ?? []" :key="`table-svc-${index}`" @click.prevent="$emit('select', svc.sid)">
+      <div
+        class="service"
+        v-for="(svc, index) in services ?? []"
+        :key="`table-svc-${index}`"
+        @click.prevent="$emit('select', svc.sid)"
+      >
         <span class="scid">{{ svc.scid }}</span>
         <HexValue class="sid" :value="svc.sid" />
         <span class="label">{{ svc?.label ?? '-' }}</span>
@@ -46,7 +53,7 @@ const services = computed(() => {
         <span class="language">{{ svc?.language ?? '-' }}</span>
         <span class="user-apps">
           <span v-if="svc?.user_apps">
-          {{ svc.user_apps.join(', ') }}
+            {{ svc.user_apps.join(', ') }}
           </span>
         </span>
         <span class="audio-format">
@@ -61,9 +68,8 @@ const services = computed(() => {
         </span>
         <span class="subchannel">
           <span v-if="svc?.subchannel">
-            SA: {{ String(svc.subchannel.start).padStart(3, '0') }}
-            CU: {{ svc.subchannel.size }}
-            • {{ svc.subchannel.pl }}
+            SA: {{ String(svc.subchannel.start).padStart(3, '0') }} CU: {{ svc.subchannel.size }} •
+            {{ svc.subchannel.pl }}
           </span>
         </span>
       </div>

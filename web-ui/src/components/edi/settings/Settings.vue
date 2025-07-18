@@ -12,9 +12,7 @@ const emit = defineEmits<{
   (event: 'reset'): void
 }>()
 
-const connect = () => {
-
-}
+const connect = () => {}
 </script>
 
 <template>

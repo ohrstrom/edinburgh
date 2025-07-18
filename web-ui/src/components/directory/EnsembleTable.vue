@@ -1,34 +1,34 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed } from 'vue'
 
 import HexValue from '@/components/ui/HexValue.vue'
 
-const directoryUrl = ref<string>('http://localhost:9001/ensembles');
+const directoryUrl = ref<string>('http://localhost:9001/ensembles')
 
 defineEmits<{
   (event: 'select', payload: { host: string; port: number }): void
 }>()
 
 onMounted(async () => {
-    try {
-        errors.value = [];
-        const response = await fetch(directoryUrl.value);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        ensembleList.value = data;
-    } catch (error) {
-        console.error('Error fetching ensemble directory:', error);
-        errors.value.push(error);
+  try {
+    errors.value = []
+    const response = await fetch(directoryUrl.value)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
-});
+    const data = await response.json()
+    ensembleList.value = data
+  } catch (error) {
+    console.error('Error fetching ensemble directory:', error)
+    errors.value.push(error)
+  }
+})
 
-const errors = ref<any[]>([]);
-const ensembleList = ref<any[]>([]);
+const errors = ref<any[]>([])
+const ensembleList = ref<any[]>([])
 
 const ensembleListSorted = computed(() => {
-    return ensembleList.value.sort((a, b) => {
+  return ensembleList.value.sort((a, b) => {
     const hostC = a.host.localeCompare(b.host)
     if (hostC !== 0) {
       return hostC
@@ -38,31 +38,36 @@ const ensembleListSorted = computed(() => {
 })
 
 const ensembles = computed(() => {
-    return ensembleListSorted.value.map((ensemble: any) => {
-        const cus = ensemble.subchannels.reduce( (t: number, c: number) => t + c.size, 0);
-        return {
-            ...ensemble,
-            cus,
-            services: ensemble.services || []
-        }
-    })
+  return ensembleListSorted.value.map((ensemble: any) => {
+    const cus = ensemble.subchannels.reduce((t: number, c: number) => t + c.size, 0)
+    return {
+      ...ensemble,
+      cus,
+      services: ensemble.services || [],
+    }
+  })
 })
 </script>
 
 <template>
-    <div class="ensemble-table">
+  <div class="ensemble-table">
     <div v-if="ensembles.length" class="table">
-        <div class="ensemble" v-for="(ensemble, index) in ensembles" :key="`table-ensemble-${index}`" @click.prevent="$emit('select', {host: ensemble.host, port: ensemble.port})">
-            <HexValue class="eid" :value="ensemble.eid" />
-            <span class="label">{{ ensemble?.label ?? '-' }}</span>
-            <span class="host">{{ ensemble.host }}:{{ ensemble.port }}</span>
-            <span class="cus">
-                <span>{{ ensemble.cus }} CUs</span>
-            </span>
-            <span class="services">
-                <span>{{ (ensemble?.services ?? []).length }} SVCs</span>
-            </span>
-        </div>
+      <div
+        class="ensemble"
+        v-for="(ensemble, index) in ensembles"
+        :key="`table-ensemble-${index}`"
+        @click.prevent="$emit('select', { host: ensemble.host, port: ensemble.port })"
+      >
+        <HexValue class="eid" :value="ensemble.eid" />
+        <span class="label">{{ ensemble?.label ?? '-' }}</span>
+        <span class="host">{{ ensemble.host }}:{{ ensemble.port }}</span>
+        <span class="cus">
+          <span>{{ ensemble.cus }} CUs</span>
+        </span>
+        <span class="services">
+          <span>{{ (ensemble?.services ?? []).length }} SVCs</span>
+        </span>
+      </div>
     </div>
     <div v-else class="table table--skeleton">
       <div class="info">
@@ -71,7 +76,7 @@ const ensembles = computed(() => {
         <pre v-if="errors.length" class="errors" v-text="errors" />
       </div>
     </div>
-    </div>
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -85,18 +90,18 @@ const ensembles = computed(() => {
   max-height: 25vh;
   cursor: pointer;
 
-    /* scrollbar */
-    &::-webkit-scrollbar {
-      width: 4px;
-      background: hsl(var(--c-muted));
-    }
+  /* scrollbar */
+  &::-webkit-scrollbar {
+    width: 4px;
+    background: hsl(var(--c-muted));
+  }
 
-    &::-webkit-scrollbar-thumb {
-      background: hsl(var(--c-fg));
-      border-radius: 0;
-    }
+  &::-webkit-scrollbar-thumb {
+    background: hsl(var(--c-fg));
+    border-radius: 0;
+  }
 
-  >.ensemble {
+  > .ensemble {
     display: grid;
     grid-template-columns: 80px 2fr 1fr 80px 80px;
     gap: 8px;

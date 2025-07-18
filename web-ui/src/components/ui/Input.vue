@@ -41,8 +41,6 @@ function onInput(e: Event) {
   font-size: 0.875rem;
   align-items: center;
 
-
-
   &.default {
     background: white;
     color: currentColor;
@@ -81,7 +79,7 @@ function onInput(e: Event) {
       left: 0px;
       right: 0px;
       height: 14px;
-      background: rgba(0, 0, 0, 0.0);
+      background: rgba(0, 0, 0, 0);
     }
     &::after {
       content: '';

@@ -1,11 +1,11 @@
 import { computed, shallowRef, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useIDBKeyval } from '@vueuse/integrations/useIDBKeyval'
-import { defineStore } from 'pinia'// adjust the path as needed
+import { defineStore } from 'pinia' // adjust the path as needed
 
 import type * as Types from '@/types'
 
-import { usePlayerStore } from './player' 
+import { usePlayerStore } from './player'
 
 // SLS cache
 const keyFor = (sid: number) => `edi:sls:${sid}`
@@ -28,7 +28,6 @@ export function useSLSCache(sid: number) {
 }
 
 export const useEDIStore = defineStore('edi', () => {
-
   const playerStore = usePlayerStore()
 
   const connected = ref(false)
@@ -76,7 +75,7 @@ export const useEDIStore = defineStore('edi', () => {
     if (!ensemble.value) {
       return []
     }
-  
+
     return ensemble.value.services
       .flatMap((svc) => {
         return svc.components.map((component) => {
@@ -98,23 +97,26 @@ export const useEDIStore = defineStore('edi', () => {
 
   const services = computed(() => {
     if (!ensemble.value) return []
-  
-    return ensemble.value.services.filter((svc) => svc.label !== undefined).flatMap((svc) =>
-      svc.components.map((comp) => ({
-        sid: svc.sid,
-        scid: comp.scid,
-        label: svc.label,
-        short_label: svc.short_label,
-        language: comp.language,
-        user_apps: comp.user_apps ?? [],
-        subchannel: ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id),
-        audioFormat: audioFormats.value.get(comp.scid),
-        dl: dls.value.find((v) => v.scid === comp.scid),
-        sls: sls.value.find((v) => v.scid === comp.scid),
-        isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
-        // isPlaying: playerStore.state === 'playing',
-      }))
-    ).sort((a, b) => a.label!.localeCompare(b.label!))
+
+    return ensemble.value.services
+      .filter((svc) => svc.label !== undefined)
+      .flatMap((svc) =>
+        svc.components.map((comp) => ({
+          sid: svc.sid,
+          scid: comp.scid,
+          label: svc.label,
+          short_label: svc.short_label,
+          language: comp.language,
+          user_apps: comp.user_apps ?? [],
+          subchannel: ensemble.value.subchannels.find((sc) => sc.id === comp.subchannel_id),
+          audioFormat: audioFormats.value.get(comp.scid),
+          dl: dls.value.find((v) => v.scid === comp.scid),
+          sls: sls.value.find((v) => v.scid === comp.scid),
+          isPlaying: svc.sid === selectedSid.value && playerStore.state === 'playing',
+          // isPlaying: playerStore.state === 'playing',
+        })),
+      )
+      .sort((a, b) => a.label!.localeCompare(b.label!))
   })
 
   const selectedService = computed(() => {
@@ -207,7 +209,6 @@ export const useEDIStore = defineStore('edi', () => {
 
     // create a Blob URL
     if (val.data && val.mimetype) {
-
       // store the blob in IndexedDB
       // await saveSLS(val) // TODO: re-enable once fixed
 

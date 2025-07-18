@@ -14,7 +14,6 @@ import Subchannel from './Subchannel.vue'
 const ediStore = useEDIStore()
 const { selectedService: service } = storeToRefs(ediStore)
 
-
 const af = computed(() => {
   if (!service.value) return null
 
@@ -57,9 +56,7 @@ defineProps<{ level: Types.Level }>()
           <span v-if="service?.short_label">&nbsp;•&nbsp;</span>
           <HexValue :value="service.sid" />
 
-          <span v-if="service?.language">
-            • {{ service.language }}
-          </span>
+          <span v-if="service?.language"> • {{ service.language }} </span>
         </div>
       </div>
       <div class="info-section format">

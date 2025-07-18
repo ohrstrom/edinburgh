@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{
-  size?: number
-  colorVar?: string
-}>(), {
-  size: 32,
-  colorVar: '--c-fg',
-})
+const props = withDefaults(
+  defineProps<{
+    size?: number
+    colorVar?: string
+  }>(),
+  {
+    size: 32,
+    colorVar: '--c-fg',
+  },
+)
 
 const color = computed(() => `hsl(var(${props.colorVar}))`)
 

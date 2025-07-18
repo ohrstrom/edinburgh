@@ -24,43 +24,42 @@ import ServiceList from '@/components/edi/service-list/Services.vue'
 import EnsembleTable from '@/components/directory/EnsembleTable.vue'
 import CodecSupport from '@/components/dev/CodecSupport.vue'
 
-
 const resample = async (
   buffer: Float32Array,
   sourceRate: number,
-  targetRate: number
+  targetRate: number,
 ): Promise<Float32Array> => {
   if (sourceRate === targetRate) {
-    return buffer; // no resampling needed
+    return buffer // no resampling needed
   }
 
-  const numFrames = buffer.length;
+  const numFrames = buffer.length
 
   // Calculate target length
-  const targetLength = Math.ceil(numFrames * targetRate / sourceRate);
+  const targetLength = Math.ceil((numFrames * targetRate) / sourceRate)
 
   // Create OfflineAudioContext
   const offlineContext = new OfflineAudioContext({
     numberOfChannels: 1,
     length: targetLength,
     sampleRate: targetRate,
-  });
+  })
 
   // Create buffer in source rate
-  const audioBuffer = offlineContext.createBuffer(1, numFrames, sourceRate);
-  audioBuffer.copyToChannel(buffer, 0);
+  const audioBuffer = offlineContext.createBuffer(1, numFrames, sourceRate)
+  audioBuffer.copyToChannel(buffer, 0)
 
   // Buffer source
-  const sourceNode = offlineContext.createBufferSource();
-  sourceNode.buffer = audioBuffer;
-  sourceNode.connect(offlineContext.destination);
-  sourceNode.start();
+  const sourceNode = offlineContext.createBufferSource()
+  sourceNode.buffer = audioBuffer
+  sourceNode.connect(offlineContext.destination)
+  sourceNode.start()
 
   // Render
-  const resampledBuffer = await offlineContext.startRendering();
+  const resampledBuffer = await offlineContext.startRendering()
 
-  return resampledBuffer.getChannelData(0);
-};
+  return resampledBuffer.getChannelData(0)
+}
 
 interface Analyser {
   l: AnalyserNode
@@ -154,19 +153,19 @@ class EDInburgh {
 
     const edi = new EDI()
 
-    edi.addEventListener("ensemble_updated", async (e: CustomEvent) => {
+    edi.addEventListener('ensemble_updated', async (e: CustomEvent) => {
       await this.updateEnsemble(e.detail as Types.Ensemble)
     })
 
-    edi.addEventListener("mot_image", async (e: CustomEvent) => {
+    edi.addEventListener('mot_image', async (e: CustomEvent) => {
       await this.updateSLS(e.detail as Types.SLS)
     })
 
-    edi.addEventListener("dl_object", async (e: CustomEvent) => {
+    edi.addEventListener('dl_object', async (e: CustomEvent) => {
       await this.updateDL(e.detail as Types.DL)
     })
 
-    edi.addEventListener("aac_segment", async (e: CustomEvent) => {
+    edi.addEventListener('aac_segment', async (e: CustomEvent) => {
       const aacSegment = e.detail as Types.AACSegment
 
       this.setAudioFormat(aacSegment.scid, aacSegment.audio_format)
@@ -187,14 +186,13 @@ class EDInburgh {
       aacSegment.frames.forEach((frame) => {
         this.processAACSegment(new Uint8Array(frame))
       })
-
     })
 
     this.edi = edi
 
     // Watch for selected SID changes
     watch(
-    () => this.selectedService.value?.scid,
+      () => this.selectedService.value?.scid,
       async (newScid, oldScid) => {
         if (newScid !== oldScid) {
           await this.resetAudioDecoder(this.selectedService.value?.audioFormat)
@@ -203,19 +201,19 @@ class EDInburgh {
         }
         // this.decodeAudio = true
       },
-      { immediate: true }
+      { immediate: true },
     )
 
     // Watch settings
     watch(
-    () => this.playerVolume.value,
+      () => this.playerVolume.value,
       async (val) => {
         this.volume = val
         if (this.gainNode) {
           this.gainNode.gain.value = val
         }
       },
-      { immediate: true }
+      { immediate: true },
     )
   }
 
@@ -274,12 +272,11 @@ class EDInburgh {
     }
 
     await this.edi.reset()
-  
+
     this.connected.value = false
   }
 
   async initializeAudioDecoder(): Promise<void> {
-
     console.log('EDInburgh: initializeAudioDecoder')
 
     if (this.decoder) {
@@ -325,9 +322,9 @@ class EDInburgh {
     gainNode.gain.value = this.volume
 
     // Fade in/out control
-    const gainFadeNode = audioContext.createGain();
+    const gainFadeNode = audioContext.createGain()
     // gainFadeNode.gain.value = 1.0;
-    gainFadeNode.gain.setValueAtTime(0.0, audioContext.currentTime);
+    gainFadeNode.gain.setValueAtTime(0.0, audioContext.currentTime)
 
     workletNode.connect(gainNode)
     gainNode.connect(gainFadeNode)
@@ -403,7 +400,6 @@ class EDInburgh {
     let codec = 'mp4a.40.5'
     const asc = new Uint8Array(audioFormat?.asc ?? [])
 
-
     await this.decoder.configure({
       codec,
       // codec: 'mp4a.40.5', // HE-AAV v1
@@ -413,17 +409,15 @@ class EDInburgh {
       description: asc.buffer,
     })
 
-    this.workletNode.port.postMessage(
-      {
-        type: 'reset',
-      }
-    )
+    this.workletNode.port.postMessage({
+      type: 'reset',
+    })
 
     // NOTE: is this a good idea?
     await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-            resolve()
-        }, 10)
+      const timeout = setTimeout(() => {
+        resolve()
+      }, 10)
     })
   }
 
@@ -465,7 +459,6 @@ class EDInburgh {
 
     // console.debug('EDInburgh: AD', audioData)
 
-
     const numChannels = audioData.numberOfChannels
     const numFrames = audioData.numberOfFrames
 
@@ -485,53 +478,41 @@ class EDInburgh {
     if (sampleRate !== this.audioContext.sampleRate) {
       // console.warn('EDInburgh: sample rate mismatch', audioData.sampleRate, this.audioContext.sampleRate)
 
-      pcmData[0] = await resample(
-        pcmData[0],
-        sampleRate,
-        this.audioContext.sampleRate
-      )
+      pcmData[0] = await resample(pcmData[0], sampleRate, this.audioContext.sampleRate)
 
-      pcmData[1] = await resample(
-        pcmData[1],
-        sampleRate,
-        this.audioContext.sampleRate
-      )
-
+      pcmData[1] = await resample(pcmData[1], sampleRate, this.audioContext.sampleRate)
     }
 
     // console.debug("pcmData", pcmData)
 
     this.setPlayerState('playing')
 
-    this.workletNode.port.postMessage(
-      {
-        type: 'audio',
-        samples: pcmData,
-      }
-    )
+    this.workletNode.port.postMessage({
+      type: 'audio',
+      samples: pcmData,
+    })
   }
 
   async fadeTo(value: number = 1.0, time: number = 1.0): Promise<void> {
-
     if (!this.decoder || !this.gainFadeNode || !this.audioContext) {
       return
     }
 
     console.debug('EDInburgh: fade in', time)
 
-    const startTime = this.audioContext.currentTime;
-    const endTime = startTime + time;
+    const startTime = this.audioContext.currentTime
+    const endTime = startTime + time
 
-    this.gainFadeNode.gain.cancelScheduledValues(startTime);
-    this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime);
-    this.gainFadeNode.gain.linearRampToValueAtTime(value, endTime);
+    this.gainFadeNode.gain.cancelScheduledValues(startTime)
+    this.gainFadeNode.gain.setValueAtTime(this.gainFadeNode.gain.value, startTime)
+    this.gainFadeNode.gain.linearRampToValueAtTime(value, endTime)
 
     // Wait until the fade completes using wall clock
-    const now = this.audioContext.currentTime;
-    const remaining = Math.max(0, endTime - now);
+    const now = this.audioContext.currentTime
+    const remaining = Math.max(0, endTime - now)
     await new Promise<void>((resolve) => {
-      setTimeout(resolve, remaining * 1000);
-    });
+      setTimeout(resolve, remaining * 1000)
+    })
   }
 
   async fadeIn(time: number = 0.5): Promise<void> {
@@ -612,7 +593,14 @@ const ediStore = useEDIStore()
 
 const playerStore = usePlayerStore()
 
-const { updateEnsemble, updateDL, updateSLS, selectService, setAudioFormat, reset: resetStore } = ediStore
+const {
+  updateEnsemble,
+  updateDL,
+  updateSLS,
+  selectService,
+  setAudioFormat,
+  reset: resetStore,
+} = ediStore
 
 const { setState: setPlayerState } = playerStore
 
@@ -648,7 +636,6 @@ const reset = async () => {
   await resetStore()
 }
 
-
 const { ediHost, ediPort } = storeToRefs(useEDIStore())
 
 const selectEnsemble = async (conn: { host: string; port: number }) => {
@@ -659,9 +646,7 @@ const selectEnsemble = async (conn: { host: string; port: number }) => {
   await connect(conn)
 }
 
-
 // ui states - maybe place somewhere else ;)
-
 
 const serviceTableExpanded = useStorage('edi/ensemble/service-table/expanded', false)
 const ensembleTableExpanded = useStorage('edi/ensemble/ensemble-table/expanded', false)
@@ -674,7 +659,6 @@ const toggleEnsembleTable = () => {
   serviceTableExpanded.value = false
   ensembleTableExpanded.value = !ensembleTableExpanded.value
 }
-
 </script>
 
 <template>
@@ -718,7 +702,11 @@ const toggleEnsembleTable = () => {
     </Panel>
 
     <Panel class="service-list">
-      <ServiceList @play="(sid) => edinburgh.playService(sid)" @select="(sid) => edinburgh.playService(sid)" @stop="() => edinburgh.stopService()" />
+      <ServiceList
+        @play="(sid) => edinburgh.playService(sid)"
+        @select="(sid) => edinburgh.playService(sid)"
+        @stop="() => edinburgh.stopService()"
+      />
     </Panel>
   </main>
 </template>
@@ -774,7 +762,6 @@ main {
         }
       }
     }
-
   }
 
   .service-detail {
