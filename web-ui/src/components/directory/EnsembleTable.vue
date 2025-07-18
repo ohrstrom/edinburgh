@@ -24,11 +24,13 @@ onMounted(async () => {
   }
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const errors = ref<any[]>([])
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ensembleList = ref<any[]>([])
 
 const ensembleListSorted = computed(() => {
-  return ensembleList.value.sort((a, b) => {
+  return [...ensembleList.value].sort((a, b) => {
     const hostC = a.host.localeCompare(b.host)
     if (hostC !== 0) {
       return hostC
@@ -38,6 +40,7 @@ const ensembleListSorted = computed(() => {
 })
 
 const ensembles = computed(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ensembleListSorted.value.map((ensemble: any) => {
     const cus = ensemble.subchannels.reduce((t: number, c: number) => t + c.size, 0)
     return {

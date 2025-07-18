@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { usePlayerStore } from '@/stores/player'
 
@@ -7,12 +6,14 @@ import Input from '@/components/ui/Input.vue'
 
 const { volume } = storeToRefs(usePlayerStore())
 
+/*
 const emit = defineEmits<{
   (event: 'connect', payload: { host: host; port: number }): void
   (event: 'reset'): void
 }>()
 
 const connect = () => {}
+*/
 </script>
 
 <template>

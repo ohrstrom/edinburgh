@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useStorage } from '@vueuse/core'
 import { useEDIStore } from '@/stores/edi'
 
 import HexValue from '@/components/ui/HexValue.vue'

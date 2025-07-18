@@ -3,7 +3,6 @@ import type * as Types from '@/types'
 
 import HexValue from '@/components/ui/HexValue.vue'
 import IconPlay from '@/components/icons/IconPlay.vue'
-import IconStop from '@/components/icons/IconStop.vue'
 import IconPause from '@/components/icons/IconPause.vue'
 import { computed } from 'vue'
 

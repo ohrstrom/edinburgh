@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ComputedRef, Ref, ref, watch } from 'vue'
+import { ref } from 'vue'
 
 const codecs = [
   {
@@ -57,13 +57,14 @@ const probeDecoder = async (codec) => {
 
   try {
     await decoder.configure(config)
-    // console.log('Configured decoder:', kind)
+    console.log('Configured decoder:', kind)
   } catch (err) {
-    // console.error('Error configuring decoder:', err)
+    console.error('Error configuring decoder:', err)
     error = 'Error configuring decoder'
   }
 
   await new Promise<void>((resolve) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const timeout = setTimeout(() => {
       resolve()
     }, 10)

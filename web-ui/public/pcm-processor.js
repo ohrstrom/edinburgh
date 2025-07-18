@@ -9,7 +9,7 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.maxQueueSize = 32;
         this.maxBufferSize = 48_000 * 2;
 
-          // eslint-disable-next-line unicorn/prefer-add-event-listener
+        // oxlint-disable-next-line unicorn/prefer-add-event-listener
         this.port.onmessage = (event) => {
             if (event.data && "reset" === event.data.type) {
                 console.debug("PCMProcessor: reset");

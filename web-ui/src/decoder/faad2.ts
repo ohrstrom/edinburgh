@@ -12,8 +12,17 @@ const SAMPLE_RATE = {
   9: 96000,
 }
 
+interface Faad2ModuleInstance {
+  _malloc(size: number): number
+  _free(ptr: number): void
+  _init_decoder(ptr: number, len: number): number
+  _decode_frame(inputPtr: number, inputLen: number, outputPtr: number, outputSize: number): number
+  _get_faad_capabilities?: () => number
+  HEAPU8: Uint8Array
+}
+
 class FAAD2Decoder {
-  private module: any = null
+  private module: Faad2ModuleInstance | null = null
   private initialized = false
   private output: (audioData: AudioData) => void
   private error: (error: DOMException) => void

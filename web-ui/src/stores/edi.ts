@@ -140,7 +140,7 @@ export const useEDIStore = defineStore('edi', () => {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // oxlint-disable-next-line @typescript-eslint/no-unused-vars
   const saveSLS = async (val: Types.SLS) => {
     const svc = services.value.find((s) => s.scid === val.scid)
     if (!svc) {
@@ -169,7 +169,7 @@ export const useEDIStore = defineStore('edi', () => {
       // })
 
       const blob = new Blob([new Uint8Array(val.data)], { type: val.mimetype })
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      // oxlint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, ...rest } = val
       val = { ...rest, url: URL.createObjectURL(blob) }
     }

@@ -404,7 +404,7 @@ class EDInburgh {
     //     codec = 'mp4a.40.29'
     // }
 
-    let codec = 'mp4a.40.5'
+    const codec = 'mp4a.40.5'
     const asc = new Uint8Array(audioFormat?.asc ?? [])
 
     await this.decoder.configure({
@@ -416,14 +416,15 @@ class EDInburgh {
       description: asc.buffer,
     })
 
-    /* eslint-disable unicorn/require-post-message-target-origin */
+    /* oxlint-disable unicorn/require-post-message-target-origin */
     this.workletNode.port.postMessage({
       type: 'reset',
     })
-    /* eslint-enable unicorn/require-post-message-target-origin */
+    /* oxlint-enable unicorn/require-post-message-target-origin */
 
     // NOTE: is this a good idea?
     await new Promise<void>((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const timeout = setTimeout(() => {
         resolve()
       }, 10)
@@ -471,7 +472,7 @@ class EDInburgh {
     const numChannels = audioData.numberOfChannels
     const numFrames = audioData.numberOfFrames
 
-    let pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
+    const pcmData = [new Float32Array(numFrames), new Float32Array(numFrames)]
 
     for (let channel = 0; channel < numChannels; channel++) {
       audioData.copyTo(pcmData[channel], { planeIndex: channel })
@@ -496,13 +497,12 @@ class EDInburgh {
 
     this.setPlayerState('playing')
 
-
-    /* eslint-disable unicorn/require-post-message-target-origin */
+    /* oxlint-disable unicorn/require-post-message-target-origin */
     this.workletNode.port.postMessage({
       type: 'audio',
       samples: pcmData,
     })
-    /* eslint-enable unicorn/require-post-message-target-origin */
+    /* oxlint-enable unicorn/require-post-message-target-origin */
   }
 
   async fadeTo(value: number = 1.0, time: number = 1.0): Promise<void> {
