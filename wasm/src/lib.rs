@@ -114,26 +114,4 @@ impl EDI {
             .remove_event_listener_with_callback(event, cb)
             .unwrap();
     }
-
-    /*
-    #[wasm_bindgen]
-    pub fn on_ensemble_update(&self, callback: web_sys::js_sys::Function) {
-        *self.on_ensemble_update_cb.borrow_mut() = Some(callback);
-    }
-
-    #[wasm_bindgen]
-    pub fn on_aac_segment(&self, callback: web_sys::js_sys::Function) {
-        *self.on_aac_segment_cb.borrow_mut() = Some(callback);
-    }
-
-    #[wasm_bindgen]
-    pub fn on_mot_image_received(&self, callback: web_sys::js_sys::Function) {
-        *self.on_mot_image_received_cb.borrow_mut() = Some(callback);
-    }
-
-    #[wasm_bindgen]
-    pub fn on_dl_object_received(&self, callback: web_sys::js_sys::Function) {
-        *self.on_dl_object_received_cb.borrow_mut() = Some(callback);
-    }
-    */
 }

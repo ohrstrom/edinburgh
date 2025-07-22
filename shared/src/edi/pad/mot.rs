@@ -37,7 +37,10 @@ impl MOTImage {
     }
 
     pub fn md5_hex(&self) -> String {
-        self.md5.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        self.md5
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
     }
 
     fn serialize_md5<S>(md5: &[u8; 16], serializer: S) -> Result<S::Ok, S::Error>

@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!(
         "# Starting server on:\n\
          # ws://{addr}/\n\
-         # connect to: ws://{addr}/<edi-host>/<edi-port>",
+         # connect to: ws://{addr}/ws/<edi-host>/<edi-port>",
         addr = addr
     );
 
