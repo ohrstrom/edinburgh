@@ -1,0 +1,13 @@
+[package]
+name = "edinburgh-pyo3"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+name = "edinburgh"
+crate-type = ["cdylib"]
+
+[dependencies]
+shared = { path = "../shared" }
+pyo3 = { version = "0.25", features = ["extension-module"] }
+tokio = { version = "1.46.1", features = ["rt-multi-thread", "sync"] }
