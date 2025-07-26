@@ -6,9 +6,9 @@ Cargo.lock
 .idea/
 .vscode/
 
+.envrc
+
 __ref/
 __src/
 
 docs/local/*
-
-python/

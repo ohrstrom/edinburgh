@@ -68,19 +68,9 @@ impl Serialize for DLObject {
         let mut s = serializer.serialize_struct("DLObject", 5)?;
         s.serialize_field("scid", &self.scid)?;
         s.serialize_field("charset", &self.charset)?;
-        // s.serialize_field("dl_plus_tags", &self.dl_plus_tags)?;
 
         // derived fields
         s.serialize_field("label", &self.decode_label())?;
-
-        // let dl_plus: std::collections::HashMap<_, _> = self
-        //     .get_dl_plus()
-        //     .into_iter()
-        //     .map(|(kind, text)| (format!("{:?}", kind), text))
-        //     .collect();
-
-        // s.serialize_field("dl_plus", &dl_plus)?;
-
         s.serialize_field("dl_plus", &self.get_dl_plus())?;
 
         s.end()
@@ -224,33 +214,12 @@ impl DLDecoder {
             return None;
         }
 
-        // log::debug!(
-        //     "DL: toggle = {:?} - first = {} - last = {} - chars = {} - {}",
-        //     toggle,
-        //     is_first,
-        //     is_last,
-        //     num_chars,
-        //     data.len(),
-        // );
-
         // log::debug!("DL current chars: {:?}", self.current.chars.len());
-
-        // log::debug!("🔤 DL UTF-8: {:?}", String::from_utf8_lossy(&self.current.chars));
 
         if is_last {
             // log::debug!("DL: {}", self.current.decode_label());
             // self.reset();
         }
-
-        // log::debug!("DL: {}", self.current.decode_label());
-
-        // log::debug!(
-        //     "DL: first = {} - last = {} - charset = {} - seg_no = {}",
-        //     is_first,
-        //     is_last,
-        //     charset.unwrap_or(0),
-        //     seg_no,
-        // );
 
         None
     }
@@ -260,6 +229,8 @@ impl DLDecoder {
             log::warn!("DL+: empty command");
             return;
         }
+
+        // NOTE: there is a bug when pad is short (6 or 8)
 
         let cid = (data[0] >> 4) & 0x0F;
 
@@ -321,39 +292,6 @@ impl DLDecoder {
             }
         }
     }
-
-    /*
-    pub fn flush(&mut self) {
-
-        if !self.current.chars.is_empty() {
-
-            // log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current);
-            // emit_event(EDIEvent::DLObjectReceived(self.current.clone()));
-
-            if self.last_toggle != Some(self.current.toggle) {
-                log::debug!("DL: {} - {:?}", self.current.decode_label(), self.current);
-                emit_event(EDIEvent::DLObjectReceived(self.current.clone()));
-                self.last_toggle = Some(self.current.toggle);
-            }
-
-
-        }
-
-        self.current = None;
-    }
-    */
-
-    /*
-    pub fn feed(&mut self, dg: &MSCDataGroup) {
-
-        let data = &dg.data_field;
-
-        log::debug!("DL: DG: {:?}", dg);
-
-        log::debug!("DL: data: {:?}", data);
-
-    }
-    */
 }
 
 static EBU_LATIN_TO_UNICODE: [u16; 256] = [
