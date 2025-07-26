@@ -40,9 +40,10 @@ function onInput(e: Event) {
   padding: 0 0 0 1em;
   font-size: 0.875rem;
   align-items: center;
+  border-radius: var(--b-r-s);
 
   &.default {
-    background: white;
+    background: hsl(var(--c-bg));
     color: currentColor;
     border: 1px solid currentColor;
   }

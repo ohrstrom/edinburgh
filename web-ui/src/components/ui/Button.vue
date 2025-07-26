@@ -37,25 +37,27 @@ defineEmits<{
   font-size: 0.875rem;
   cursor: pointer;
   border: none;
+  border-radius: var(--b-r-s);
   transition: background 0.2s ease;
 
   &.default {
-    background: white;
+    background: hsl(var(--c-bg));
     color: currentColor;
     border: 1px solid currentColor;
-    box-shadow: 2px 2px currentColor;
+    box-shadow: 2px 2px hsl(var(--c-shadow));
   }
 
   &.primary {
-    background: #ffeb00;
+    background: hsl(var(--c-cta));
+    color: hsl(var(--c-cta-fg));
     border: 1px solid currentColor;
-    box-shadow: 2px 2px currentColor;
+    box-shadow: 2px 2px hsl(var(--c-shadow));
   }
 
   &.danger {
     background: #f36d57;
     border: 1px solid currentColor;
-    box-shadow: 2px 2px currentColor;
+    box-shadow: 2px 2px hsl(var(--c-shadow));
   }
 
   &:disabled {

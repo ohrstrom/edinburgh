@@ -83,13 +83,13 @@ const services = computed(() => {
 
 <style lang="scss" scoped>
 .service-table {
-  border-top: 1px solid black;
+  border-top: 1px solid hsl(var(--c-fg));
 }
 
 .table {
   padding-top: 8px;
   padding-bottom: 8px;
-  font-size: 0.75rem;
+  font-size: var(--t-fs-s);
   .service {
     display: grid;
     grid-template-columns: 32px 48px 2fr 1fr 1fr 48px 3fr 3fr;
@@ -102,7 +102,7 @@ const services = computed(() => {
     }
 
     &:hover {
-      background: hsl(var(--c-muted));
+      background: hsl(var(--c-fg) / 0.05);
     }
 
     > .scid {
@@ -124,9 +124,9 @@ const services = computed(() => {
     > .info {
       .message {
         display: inline-flex;
-        color: black;
+        color: hsl(var(--c-fg));
         padding: 2px 4px;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
     }
   }

@@ -8,6 +8,7 @@ import { useStorage } from '@vueuse/core'
 import { EDI } from '../../wasm/pkg'
 
 import FAAD2Decoder from '@/decoder/faad2'
+// import FAAD2Decoder from '@ohrstrom/faad2-wasm/faad2_decoder.js'
 
 import type * as Types from '@/types'
 
@@ -74,7 +75,6 @@ class EDInburgh {
   workletNode: AudioWorkletNode | null = null
   gainNode: GainNode | null = null
   gainFadeNode: GainNode | null = null
-  // decoder: AudioDecoder | null = null
   decoder: FAAD2Decoder | AudioDecoder | null = null
   useFAAD2Decoder: boolean = true
   analyser: Analyser | null = null
@@ -86,10 +86,6 @@ class EDInburgh {
 
   decodeAudio: boolean = false
   volume: number = 0
-
-  // "local" subchannel state
-  // not used: at the moment directly calls ediStore - check performance...
-  // subchannels: Map<number, Types.Subchannel> = new Map()
 
   // Store methods
   updateEnsemble: typeof useEDIStore.prototype.updateEnsemble
@@ -331,21 +327,12 @@ class EDInburgh {
 
     // Fade in/out control
     const gainFadeNode = audioContext.createGain()
-    // gainFadeNode.gain.value = 1.0;
     gainFadeNode.gain.setValueAtTime(0.0, audioContext.currentTime)
 
     workletNode.connect(gainNode)
     gainNode.connect(gainFadeNode)
 
     gainFadeNode.connect(audioContext.destination)
-
-    // const decoder = new AudioDecoder({
-    // const decoder = new FAAD2Decoder({
-    //   output: (audioData) => {
-    //     this.playDecodedAudio(audioData)
-    //   },
-    //   error: (e) => console.error('Decoder error:', e),
-    // })
 
     let decoder: FAAD2Decoder | AudioDecoder | null = null
 
@@ -392,26 +379,11 @@ class EDInburgh {
 
     this.decoder.reset()
 
-    // const asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
-    // const asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]); // HE-AAV v2 24 kHz
-    // const asc = new Uint8Array([0x14, 0x0C, 0x56, 0xE5, 0xAD, 0x48, 0x80]); // HE-AAV v2 16 kHz
-
-    // NOTE: this is just for testing...
-    // let asc = new Uint8Array([0x13, 0x14, 0x56, 0xe5, 0x98]) // HE-AAV v1
-    // let codec = 'mp4a.40.5'
-
-    // if (audioFormat.codec === "HE-AACv2") {
-    //     asc = new Uint8Array([0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80]) // HE-AAV v2 24 kHz
-    //     codec = 'mp4a.40.29'
-    // }
-
     const codec = 'mp4a.40.5'
     const asc = new Uint8Array(audioFormat?.asc ?? [])
 
     await this.decoder.configure({
       codec,
-      // codec: 'mp4a.40.5', // HE-AAV v1
-      // codec: 'mp4a.40.29', // HE-AAV
       sampleRate: 48_000,
       numberOfChannels: 2,
       description: asc.buffer,
@@ -732,7 +704,6 @@ main {
   margin-inline: auto;
   display: flex;
   flex-direction: column;
-  background: hsl(var(--c-bg-muted));
 
   > .header {
     display: grid;
@@ -745,14 +716,14 @@ main {
     padding-bottom: 0;
 
     .settings {
-      border-bottom: 1px solid black;
+      border-bottom: 1px solid hsl(var(--c-fg));
     }
 
     .sub-navigation {
       display: flex;
       gap: 8px;
       padding: 0 8px;
-      border-top: 1px solid black;
+      border-top: 1px solid hsl(var(--c-fg));
       justify-content: space-between;
       .toggle {
         display: flex;
@@ -762,7 +733,7 @@ main {
         cursor: pointer;
 
         > .label {
-          font-size: 0.75rem;
+          font-size: var(--t-fs-s);
         }
 
         > .icon {
@@ -790,7 +761,7 @@ main {
     /* scrollbar */
     &::-webkit-scrollbar {
       width: 4px;
-      background: hsl(var(--c-muted));
+      background: hsl(var(--c-fg) / 0.5);
     }
 
     &::-webkit-scrollbar-thumb {

@@ -1,12 +1,41 @@
 @import 'lib/_reset.css';
 
 :root {
+  /**/
+  --c-body: 0 0% 95%;
   --c-bg: 0 0% 100%;
-  --c-fg: 0 0% 3.9%;
+  --c-fg: 0 0% 10%;
+  --c-shadow: 0 0% 50%;
+  
+  /*
+  --c-bg: 0 0% 10%;
+  --c-fg: 0 0% 100%;
+  */
 
-  --c-muted: 0 0% 96.1%;
-  --c-muted-fg: 0 0% 45.1%;
+  --c-cta: 55, 100%, 50%;
+  --c-cta-fg: 0 0% 10%;
+
+  --t-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", monospace;
+  --t-fs: 1rem;
+  --t-fs-s: 0.75rem;
+  --t-fs-l: 1.25rem;
+
+  --b-r: 4px;
+  --b-r-s: 2px;
+  --b-r-l: 8px;
 }
+
+/*
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-body: 0 0% 15%;
+    --c-bg: 0 0% 10%;
+    --c-fg: 0 0% 100%;
+    --c-shadow: 0 0% 50%;
+    --c-cta-fg: 0 0% 10%;
+  }
+}
+*/
 
 html,
 body {
@@ -16,9 +45,12 @@ body {
 }
 
 body {
-  font-family: monospace, Times, serif;
+  font-family: var(--t-family);
+  font-size: var(--t-fs);
   display: flex;
   flex-direction: column;
+  background-color: hsl(var(--c-body));
+  color: hsl(var(--c-fg));
 }
 
 #app {

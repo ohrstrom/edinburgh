@@ -116,18 +116,16 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 60px 1fr;
 
-  background: white;
+  background: hsl(var(--c-bg));
 
   .legend {
-    background: #efefef;
-    //color: #fff;
-    font-size: 0.75rem;
+    background: hsl(var(--c-fg) / 0.1);
+    font-size: var(--t-fs-s);
     line-height: 12px;
     .unit {
       height: 22px;
       display: flex;
       align-items: center;
-      //justify-content: center;
       padding-left: 4px;
       padding-right: 4px;
     }
@@ -135,7 +133,6 @@ onUnmounted(() => {
       height: 18px;
       display: flex;
       align-items: center;
-      //justify-content: center;
       padding-left: 4px;
       padding-right: 4px;
     }
@@ -147,11 +144,11 @@ onUnmounted(() => {
       display: grid;
       grid-template-columns: repeat(13, 1fr);
       height: 22px;
-      font-size: 0.75rem;
+      font-size: var(--t-fs-s);
       line-height: 12px;
       align-items: center;
       .tick {
-        color: #000;
+        color: hsl(var(--c-fg));
         position: absolute;
         height: 22px;
         width: 28px;
@@ -204,7 +201,7 @@ onUnmounted(() => {
     }
     .bar {
       height: 18px;
-      background: #efefef;
+      background: hsl(var(--c-fg) / 0.1);
       border-left: 1px solid currentColor;
       .level {
         height: 18px;

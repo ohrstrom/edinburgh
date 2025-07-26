@@ -84,10 +84,10 @@ const ensembles = computed(() => {
 
 <style lang="scss" scoped>
 .ensemble-table {
-  border-top: 1px solid black;
+  border-top: 1px solid hsl(var(--c-fg));
 }
 .table {
-  font-size: 0.75rem;
+  font-size: var(--t-fs-s);
   padding: 8px;
   overflow-y: auto;
   max-height: 25vh;
@@ -96,7 +96,7 @@ const ensembles = computed(() => {
   /* scrollbar */
   &::-webkit-scrollbar {
     width: 4px;
-    background: hsl(var(--c-muted));
+    background: hsl(var(--c-fg) / 0.1);
   }
 
   &::-webkit-scrollbar-thumb {
@@ -111,7 +111,7 @@ const ensembles = computed(() => {
     padding: 2px 8px;
 
     &:hover {
-      background: hsl(var(--c-muted));
+      background: hsl(var(--c-fg) / 0.05);
     }
 
     > .eid {
@@ -129,9 +129,9 @@ const ensembles = computed(() => {
     > .info {
       .message {
         display: inline-flex;
-        color: black;
+        color: hsl(var(--c-fg));
         padding: 2px 4px;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
     }
   }

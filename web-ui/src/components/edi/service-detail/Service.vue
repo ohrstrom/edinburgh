@@ -132,12 +132,12 @@ defineProps<{ level: Types.Level }>()
     > .format {
       margin-bottom: 4px;
       .subchannel {
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
       .audio-format {
         display: flex;
         gap: 8px;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
 
         .flags {
           &::before {
@@ -166,18 +166,18 @@ defineProps<{ level: Types.Level }>()
         align-items: center;
 
         > .__has-dl-plus-flag {
-          font-size: 0.75rem;
+          font-size: var(--t-fs-s);
           margin-right: 4px;
-          color: #fff;
-          background: #000;
+          color: hsl(var(--c-bg));
+          background: hsl(var(--c-fg));
           padding: 2px;
         }
 
         > .has-dl-plus-flag {
-          font-size: 0.75rem;
+          font-size: var(--t-fs-s);
           margin-right: 6px;
-          color: #000;
-          background: #fff;
+          color: hsl(var(--c-fg));
+          background: hsl(var(--c-bg));
           padding: 2px 4px;
           border: 1px solid currentColor;
         }
@@ -197,7 +197,7 @@ defineProps<{ level: Types.Level }>()
         > .item {
           display: grid;
           grid-template-columns: 100px 1fr;
-          font-size: 0.75rem;
+          font-size: var(--t-fs-s);
           //line-height: 0.75rem;
           > .kind {
             //color: #666;
@@ -218,7 +218,7 @@ defineProps<{ level: Types.Level }>()
   }
   > .sls {
     > .container {
-      background: hsl(var(--c-muted));
+      background: hsl(var(--c-fg) / 0.05);
       width: 324px;
       height: 244px;
       aspect-ratio: 4/3;
@@ -242,9 +242,8 @@ defineProps<{ level: Types.Level }>()
     > .info {
       .message {
         display: inline-flex;
-        color: black;
         padding: 2px 4px;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
     }
   }

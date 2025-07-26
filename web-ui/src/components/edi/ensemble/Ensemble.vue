@@ -38,12 +38,12 @@ const { ensemble } = storeToRefs(ediStore)
       margin-bottom: 16px;
       > .label {
         margin-bottom: 8px;
-        font-size: 1.25rem;
+        font-size: var(--t-fs-l);
       }
     }
     .services {
       display: none;
-      font-size: 0.75rem;
+      font-size: var(--t-fs-s);
       background: transparent;
     }
   }
@@ -51,9 +51,9 @@ const { ensemble } = storeToRefs(ediStore)
     > .info {
       .message {
         display: inline-flex;
-        color: black;
+        color: hsl(var(--c-fg));
         padding: 2px 4px;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
     }
   }

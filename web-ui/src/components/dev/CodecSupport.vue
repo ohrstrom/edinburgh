@@ -102,7 +102,7 @@ codecs.forEach(async (c) => {
 
 <style lang="scss" scoped>
 .table {
-  font-size: 0.75rem;
+  font-size: var(--t-fs-s);
   padding: 8px;
 
   > .codec {

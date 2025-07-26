@@ -37,9 +37,6 @@ const hasDlPlus = computed(() => {
         <span class="label">{{ service?.label ?? '-' }}</span>
         <small class="sid">
           <HexValue :value="service.sid" />
-          <!--
-          <span> / {{ service.sid }}</span>
-          -->
         </small>
       </div>
       <div class="dl">
@@ -84,7 +81,7 @@ const hasDlPlus = computed(() => {
         align-items: center;
       }
       > .sid {
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
         display: flex;
         align-items: center;
       }
@@ -98,21 +95,14 @@ const hasDlPlus = computed(() => {
       min-width: 0; /* allow text shrinking in flexbox */
       align-items: center;
 
-      > .__has-dl-plus-flag {
-        font-size: 0.75rem;
-        margin-right: 4px;
-        color: #fff;
-        background: #000;
-        padding: 2px;
-      }
-
       > .has-dl-plus-flag {
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
         margin-right: 6px;
-        color: #000;
-        background: #fff;
+        color: hsl(var(--c-fg));
+        background: hsl(var(--c-bg));
         padding: 2px 4px;
         border: 1px solid currentColor;
+        border-radius: var(--b-r-s);
       }
 
       > .label {
@@ -120,13 +110,13 @@ const hasDlPlus = computed(() => {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        font-size: 0.75rem;
+        font-size: var(--t-fs-s);
       }
     }
   }
   > .sls {
     > .container {
-      background: hsl(var(--c-muted));
+      background: hsl(var(--c-fg) / 0.1);
       width: 72px;
       height: 54px;
       aspect-ratio: 4/3;
@@ -140,13 +130,6 @@ const hasDlPlus = computed(() => {
       }
     }
   }
-  /*
-  > div {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-  */
 }
 
 button {

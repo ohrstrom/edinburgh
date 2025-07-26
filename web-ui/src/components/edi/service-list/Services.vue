@@ -34,7 +34,7 @@ defineEmits<{
 .service {
   padding: 8px;
   &:nth-child(even) {
-    background: #fafafa;
+    background: hsl(var(--c-fg) / 0.05);
   }
 }
 </style>

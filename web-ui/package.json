@@ -15,6 +15,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@ohrstrom/faad2-wasm": "^2.11.2-rc.3",
     "@vueuse/core": "^13.0.0",
     "@vueuse/integrations": "^13.0.0",
     "idb-keyval": "^6",

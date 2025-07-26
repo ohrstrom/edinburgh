@@ -14,6 +14,7 @@ export default defineConfig({
     wasm(),
     vueDevTools(),
   ],
+  assetsInclude: ['**/*.wasm'],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))

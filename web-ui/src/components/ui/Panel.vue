@@ -19,9 +19,10 @@
 
 <style lang="scss" scoped>
 .panel {
-  border: 1px solid #000;
-  box-shadow: 4px 4px #000;
+  border: 1px solid hsl(var(--c-fg));
+  box-shadow: 4px 4px hsl(var(--c-shadow));
   background: hsl(var(--c-bg));
+  border-radius: var(--b-r-s);
   .panel-header {
     grid-column: 1 / -1;
     margin-left: -8px;
