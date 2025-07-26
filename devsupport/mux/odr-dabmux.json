@@ -1,0 +1,136 @@
+{
+  "_comment": "Generated at 2025-07-24T09:55:24.896334718+00:00 by odr-dabmux-gui",
+  "components": {
+    "comp-s1": {
+      "service": "srv-s1",
+      "subchannel": "sub-s1",
+      "user-applications": {
+        "userapp": "slideshow"
+      }
+    },
+    "comp-s2": {
+      "service": "srv-s2",
+      "subchannel": "sub-s2",
+      "user-applications": {
+        "userapp": "slideshow"
+      }
+    },
+    "comp-s3": {
+      "service": "srv-s3",
+      "subchannel": "sub-s3",
+      "user-applications": {
+        "userapp": "slideshow"
+      }
+    },
+    "comp-s4": {
+      "service": "srv-s4",
+      "subchannel": "sub-s4",
+      "user-applications": {
+        "userapp": "slideshow"
+      }
+    }
+  },
+  "ensemble": {
+    "ecc": 225,
+    "id": 20479,
+    "label": "DEV-MUX 1",
+    "local-time-offset": "auto",
+    "reconfig-counter": "hash",
+    "shortlabel": "DM1"
+  },
+  "general": {
+    "dabmode": 1,
+    "managementport": 12720,
+    "nbframes": 0,
+    "syslog": false,
+    "tist": true,
+    "tist_offset": 0
+  },
+  "outputs": {
+    "edi": {
+      "destinations": {
+        "example_tcp": {
+          "listenport": 8951,
+          "protocol": "tcp"
+        }
+      }
+    },
+    "throttle": "simul://"
+  },
+  "remotecontrol": {
+    "telnetport": 12721,
+    "zmqendpoint": "tcp://lo:12722"
+  },
+  "services": {
+    "srv-s1": {
+      "ecc": 225,
+      "id": 19713,
+      "label": "Service 1",
+      "shortlabel": "Svc1"
+    },
+    "srv-s2": {
+      "ecc": 225,
+      "id": 19714,
+      "label": "Service 2",
+      "shortlabel": "Svc2"
+    },
+    "srv-s3": {
+      "ecc": 225,
+      "id": 19715,
+      "label": "Service 3",
+      "shortlabel": "Svc3"
+    },
+    "srv-s4": {
+      "ecc": 225,
+      "id": 19716,
+      "label": "Service 4",
+      "shortlabel": "Svc4"
+    }
+  },
+  "subchannels": {
+    "sub-s1": {
+      "bitrate": 48,
+      "buffer": 40,
+      "buffer-management": "prebuffering",
+      "id": 1,
+      "inputproto": "edi",
+      "inputuri": "tcp://0.0.0.0:9001",
+      "prebuffering": 20,
+      "protection": 1,
+      "type": "dabplus"
+    },
+    "sub-s2": {
+      "bitrate": 64,
+      "buffer": 40,
+      "buffer-management": "prebuffering",
+      "id": 2,
+      "inputproto": "edi",
+      "inputuri": "tcp://0.0.0.0:9002",
+      "prebuffering": 20,
+      "protection": 2,
+      "type": "dabplus"
+    },
+    "sub-s3": {
+      "bitrate": 72,
+      "buffer": 40,
+      "buffer-management": "prebuffering",
+      "id": 3,
+      "inputproto": "edi",
+      "inputuri": "tcp://0.0.0.0:9003",
+      "prebuffering": 20,
+      "protection": 3,
+      "type": "dabplus"
+    },
+    "sub-s4": {
+      "bitrate": 80,
+      "buffer": 40,
+      "buffer-management": "prebuffering",
+      "id": 4,
+      "inputproto": "edi",
+      "inputuri": "tcp://0.0.0.0:9004",
+      "prebuffering": 20,
+      "protection": 4,
+      "type": "dabplus"
+    }
+  }
+}

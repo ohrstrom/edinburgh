@@ -1,0 +1,8 @@
+# this slide is in category #3 and slide #2 within this category
+CategoryID/SlideID=3 2
+# the used category #3 gets named
+CategoryTitle=Test category 3
+# a URL is provided where further information can be found
+ClickThroughURL=http://wiki.opendigitalradio.org/ODR-PadEnc
+# provide an alternative location for this slide
+AlternativeLocationURL=http://wiki.opendigitalradio.org/Tux2.png

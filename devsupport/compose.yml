@@ -1,0 +1,45 @@
+services:
+
+  #####################################################################
+  # mux
+  #####################################################################
+  mux:
+    build:
+      context: ${PWD}/
+      dockerfile: ${PWD}/mux/Dockerfile
+    image: edinburgh/mux:latest
+    cap_add:
+      - SYS_NICE
+    ports:
+      - "8950:3000" # UI
+      - "8951:8951" # EDI
+    volumes:
+      # NOTE: we also copy this in Dockerfile - so this is
+      #       only needed to update the file without rebuilding
+      - ${PWD}/mux/start.sh:/app/start.sh
+      - ${PWD}/mux/odr-dabmux.json:/etc/odr-dabmux.json
+    environment:
+      DEBUG: true
+    networks:
+      - edinburgh
+
+  #####################################################################
+  # encoder
+  #####################################################################
+  encoder:
+    build:
+      context: ${PWD}/
+      dockerfile: ${PWD}/encoder/Dockerfile
+    image: edinburgh/encoder:latest
+    ports:
+      - "8900:8900" # supervisord
+    volumes:
+      # NOTE: we also copy this in Dockerfile - so this is
+      #       only needed to update the file without rebuilding
+      - ${PWD}/encoder/supervisor.d/:/encoder/supervisor.d/
+      - ${PWD}/encoder/run/:/encoder/run/
+    networks:
+      - edinburgh
+
+networks:
+  edinburgh:
