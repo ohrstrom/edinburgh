@@ -7,8 +7,8 @@ import { useStorage } from '@vueuse/core'
 // TODO: how to import cross-package?
 import { EDI } from '../../wasm/pkg'
 
-import FAAD2Decoder from '@/decoder/faad2'
-// import FAAD2Decoder from '@ohrstrom/faad2-wasm/faad2_decoder.js'
+// import FAAD2Decoder from '@/decoder/faad2'
+import FAAD2Decoder from '@ohrstrom/faad2-wasm/faad2_decoder.js'
 
 import type * as Types from '@/types'
 
