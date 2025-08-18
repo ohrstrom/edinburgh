@@ -237,7 +237,8 @@ class EDInburgh {
   }
 
   async connect(conn: { host: string; port: number }): Promise<void> {
-    const uri = `ws://localhost:9000/ws/${conn.host}/${conn.port}/`
+    // const uri = `ws://localhost:9000/ws/${conn.host}/${conn.port}/`
+    const uri = `wss://edinburgh-frame-forwarder.onrender.com/ws/${conn.host}/${conn.port}/`
     console.log('EDInburgh:connect', conn.host, conn.port, uri)
 
     const ws = new WebSocket(uri)
@@ -733,10 +734,12 @@ main {
         cursor: pointer;
 
         > .label {
+          font-family: var(--t-family-mono);
           font-size: var(--t-fs-s);
         }
 
         > .icon {
+          font-family: var(--t-family-mono);
           &--open {
             margin-top: -9px;
           }

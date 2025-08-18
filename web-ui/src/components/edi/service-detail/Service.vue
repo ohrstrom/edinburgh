@@ -39,8 +39,6 @@ const formatDlPlusKind = (kind: string | Record<string, unknown>): string => {
 }
 
 defineProps<{ level: Types.Level }>()
-
-// const dummyLabel =  "ARTBAT - Love is Gonna Save And Some More Text we should scroll Us (with Benny Benassi) - radio4tng.ch"
 </script>
 
 <template>
@@ -76,13 +74,7 @@ defineProps<{ level: Types.Level }>()
       </div>
       <div class="info-section dl-container" :class="{ 'has-dl-plus': hasDlPlus }">
         <div class="dl">
-          <!--
-          <span v-if="hasDlPlus" class="has-dl-plus-flag">DL+</span>
-          -->
           <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
-          <!--
-          <span class="label">{{ dummyLabel }}</span>
-          -->
         </div>
         <div v-if="hasDlPlus" class="dl-plus">
           <div v-for="l in service?.dl?.dl_plus" :key="l.kind" class="item">
@@ -99,6 +91,10 @@ defineProps<{ level: Types.Level }>()
       <div class="container">
         <figure v-if="service.sls?.url">
           <img :src="service.sls?.url" :alt="service.sls?.md5 ?? 'SLS'" />
+          <figcaption>
+            <span class="mimetype">{{ service.sls.mimetype }}</span>
+            <span class="size">{{ ((service.sls?.len ?? 0) / 1000).toFixed(2) }} kB</span>
+          </figcaption>
         </figure>
       </div>
     </div>
@@ -225,6 +221,7 @@ defineProps<{ level: Types.Level }>()
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
       > figure {
         margin: 0;
         padding: 0;
@@ -233,6 +230,32 @@ defineProps<{ level: Types.Level }>()
         > img {
           max-width: 100%;
           object-fit: contain;
+        }
+        > figcaption {
+          color: hsl(var(--c-bg));
+          background: hsl(var(--c-fg) / 75%);
+          font-family: var(--t-family-mono);
+          font-size: var(--t-fs-s);
+          position: absolute;
+          bottom: 2px;
+          left: 2px;
+          right: 2px;
+          padding: 2px 4px;
+          display: flex;
+          justify-content: space-between;
+          opacity: 0;
+
+          transition: opacity 100ms ease-in-out;
+
+          > .mimetype {
+            text-transform: uppercase;
+          }
+        }
+
+        &:hover {
+          > figcaption {
+            opacity: 1;
+          }
         }
       }
     }

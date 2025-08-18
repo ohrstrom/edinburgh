@@ -18,5 +18,6 @@ const display = computed(() => {
 <style lang="scss" scoped>
 .hex {
   display: inline-flex;
+  font-family: var(--t-family-mono);
 }
 </style>

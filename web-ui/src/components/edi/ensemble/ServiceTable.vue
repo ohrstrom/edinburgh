@@ -84,6 +84,7 @@ const services = computed(() => {
 <style lang="scss" scoped>
 .service-table {
   border-top: 1px solid hsl(var(--c-fg));
+  font-family: var(--t-family-mono);
 }
 
 .table {

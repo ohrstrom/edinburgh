@@ -1,4 +1,5 @@
 @import 'lib/_reset.css';
+@import 'lib/_fonts.css';
 
 :root {
   /**/
@@ -6,19 +7,26 @@
   --c-bg: 0 0% 100%;
   --c-fg: 0 0% 10%;
   --c-shadow: 0 0% 50%;
-  
+
   /*
   --c-bg: 0 0% 10%;
   --c-fg: 0 0% 100%;
   */
 
-  --c-cta: 55, 100%, 50%;
+  --c-cta: 150, 100%, 50%;
   --c-cta-fg: 0 0% 10%;
 
-  --t-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", monospace;
+  --t-family:
+    'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --t-family-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --t-fs: 1rem;
   --t-fs-s: 0.75rem;
+  --t-fs-m: 0.875rem;
   --t-fs-l: 1.25rem;
+  --t-fw: 400;
+  --t-fw-b: 600;
+  --t-fw-l: 300;
 
   --b-r: 4px;
   --b-r-s: 2px;

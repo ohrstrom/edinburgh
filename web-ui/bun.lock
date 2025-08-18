@@ -4,6 +4,8 @@
     "": {
       "name": "ui",
       "dependencies": {
+        "@ibm/plex-mono": "^1.1.0",
+        "@ibm/plex-sans": "^1.1.0",
         "@ohrstrom/faad2-wasm": "^2.11.2-rc.3",
         "@vueuse/core": "^13.0.0",
         "@vueuse/integrations": "^13.0.0",
@@ -177,6 +179,12 @@
     "@humanwhocodes/module-importer": ["@humanwhocodes/module-importer@1.0.1", "", {}, "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA=="],
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.2", "", {}, "sha512-xeO57FpIu4p1Ri3Jq/EXq4ClRm86dVF2z/+kvFnyqVYRavTZmaFaUBbWCOuuTh0o/g7DSsk6kc2vrS4Vl5oPOQ=="],
+
+    "@ibm/plex-mono": ["@ibm/plex-mono@1.1.0", "", { "dependencies": { "@ibm/telemetry-js": "^1.6.1" } }, "sha512-hpsdRxR3BRJkC6wGM4MZcUFD6C8M+mmK76RtAy/hlsfPro9FzpXVdIWC+G3jeQOXof109dxlUvmeKxpeKUG68A=="],
+
+    "@ibm/plex-sans": ["@ibm/plex-sans@1.1.0", "", { "dependencies": { "@ibm/telemetry-js": "^1.6.1" } }, "sha512-WPgvO6Yfj2w5YbhyAr1tv95RUz4LRJlqN+CmYvBglabXteufP1D1E9BABMde+ZIKdRbFJDoKF5eQzfhpnbgZcQ=="],
+
+    "@ibm/telemetry-js": ["@ibm/telemetry-js@1.9.1", "", { "bin": { "ibmtelemetry": "dist/collect.js" } }, "sha512-qq8RPafUJHUQieXVCte1kbJEx6JctWzbA/YkXzopbfzIDRT2+hbR9QmgH+KH7bDDNRcDbdHWvHfwJKzThlMtPg=="],
 
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.8", "", { "dependencies": { "@jridgewell/set-array": "^1.2.1", "@jridgewell/sourcemap-codec": "^1.4.10", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-imAbBGkb+ebQyxKgzv5Hu2nmROxoDOXHh80evxdoXNOrvAnVx7zimzc1Oo5h9RlfV4vPXaE2iM5pOFbvOCClWA=="],
 

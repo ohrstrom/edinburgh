@@ -34,7 +34,9 @@ defineEmits<{
   justify-content: center;
   min-height: 32px;
   padding: 0 1em;
-  font-size: 0.875rem;
+  font-family: var(--t-family-mono);
+  font-weight: var(--t-fw-b);
+  font-size: var(--t-fs-m);
   cursor: pointer;
   border: none;
   border-radius: var(--b-r-s);

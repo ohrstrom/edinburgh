@@ -38,7 +38,8 @@ function onInput(e: Event) {
   display: inline-flex;
   min-height: 32px;
   padding: 0 0 0 1em;
-  font-size: 0.875rem;
+  font-family: var(--t-family-mono);
+  font-size: var(--t-fs-m);
   align-items: center;
   border-radius: var(--b-r-s);
 

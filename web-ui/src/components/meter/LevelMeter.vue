@@ -118,6 +118,8 @@ onUnmounted(() => {
 
   background: hsl(var(--c-bg));
 
+  font-family: var(--t-family-mono);
+
   .legend {
     background: hsl(var(--c-fg) / 0.1);
     font-size: var(--t-fs-s);

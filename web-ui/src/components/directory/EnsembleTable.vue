@@ -85,6 +85,7 @@ const ensembles = computed(() => {
 <style lang="scss" scoped>
 .ensemble-table {
   border-top: 1px solid hsl(var(--c-fg));
+  font-family: var(--t-family-mono);
 }
 .table {
   font-size: var(--t-fs-s);

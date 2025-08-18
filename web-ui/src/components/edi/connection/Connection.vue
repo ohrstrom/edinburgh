@@ -49,8 +49,10 @@ watch(
       <Input type="number" v-model="ediPort" />
     </div>
     <div class="actions">
-      <Button @click="connect" :variant="connected ? 'default' : 'primary'">Connect</Button>
-      <Button @click="reset">Reset</Button>
+      <Button @click="connect" :disabled="connected" :variant="connected ? 'default' : 'primary'"
+        >Connect</Button
+      >
+      <Button @click="reset" :disabled="!connected">Reset</Button>
     </div>
   </div>
 </template>
