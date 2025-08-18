@@ -63,12 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Json(service.get_ensembles().await)
                 }),
             )
-            .route(
-                "/ctr",
-                get(|State(service): State<Arc<DirectoryService>>| async move {
-                    Json(service.get_ctr().await)
-                }),
-            )
             .with_state(svc)
             .layer(cors);
 

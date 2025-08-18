@@ -23,12 +23,6 @@ pub struct DirectoryEnsemble {
     pub ensemble: Ensemble,
 }
 
-/*
-   - edi-ch.digris.net:8851-8866
-   - edi-fr.digris.net:8851-8880
-   - edi-uk.digris.net:8851-8860
-*/
-
 #[derive(Serialize)]
 pub struct Message {
     pub message: String,
@@ -82,7 +76,6 @@ impl std::str::FromStr for ScanTarget {
 #[derive(Clone)]
 pub struct DirectoryService {
     pub ensembles: Arc<RwLock<Vec<DirectoryEnsemble>>>,
-    pub ctr: Arc<RwLock<u32>>,
     pub scan_targets: Vec<ScanTarget>,
 }
 
@@ -90,7 +83,6 @@ impl DirectoryService {
     pub fn new(scan_targets: Vec<ScanTarget>) -> Arc<Self> {
         let svc = Arc::new(Self {
             ensembles: Arc::new(RwLock::new(Vec::new())),
-            ctr: Arc::new(RwLock::new(0)),
             scan_targets,
         });
 
@@ -113,10 +105,6 @@ impl DirectoryService {
         self.ensembles.read().await.clone()
     }
 
-    pub async fn get_ctr(&self) -> u32 {
-        *self.ctr.read().await
-    }
-
     async fn run_scan(self: Arc<Self>) {
         let mut interval = time::interval(Duration::from_secs(60));
         interval.tick().await; // eat the first tick
@@ -132,11 +120,6 @@ impl DirectoryService {
                 })
             })
             .collect();
-
-        /*
-        println!("targets:   {:?}", self.scan_targets);
-        println!("endpoints: {:?}", endpoints);
-        */
 
         let semaphore = Arc::new(Semaphore::new(8));
 
@@ -188,7 +171,6 @@ impl DirectoryService {
 }
 
 async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
-    // log::debug!("Scanning endpoint: {}", endpoint);
 
     let timeout_ms = 2000;
 

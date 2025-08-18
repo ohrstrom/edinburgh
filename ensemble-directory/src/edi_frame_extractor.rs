@@ -33,7 +33,6 @@ impl SyncMagic {
 
 #[derive(Debug, Clone)]
 pub struct AFFrame {
-    // NOTE: it looks like we only have AF frames..
     pub data: Vec<u8>,
     pub initial_size: usize,
     pub expected_size: usize,
@@ -50,9 +49,7 @@ impl AFFrame {
         }
     }
 
-    // scan the frame for a sync magic
     pub fn find_sync_magic(&self) -> Option<usize> {
-        // maximum magic length.
         let magic_len = self.sync_magic.pattern.len();
 
         for offset in 0..=self.data.len().saturating_sub(magic_len) {
@@ -67,11 +64,9 @@ impl AFFrame {
     pub fn check_completed(&mut self) -> bool {
         let d = &self.data;
         if d.len() == 0 {
-            // log::debug!("check_completed: empty frame");
             return false;
         }
         if d.len() == 8 {
-            // log::debug!("check_completed: header only");
             // header only > retrieve payload len and resize frame
             let len = (d[2] as usize) << 24
                 | (d[3] as usize) << 16
@@ -80,10 +75,8 @@ impl AFFrame {
 
             self.expected_size = len + 10 + 2;
             self.resize(10 + len + 2);
-            // log::debug!("check_completed: resize to {}", self.data.len());
             false
         } else {
-            // log::debug!("check_completed: frame {}", d.len());
             true
         }
     }
