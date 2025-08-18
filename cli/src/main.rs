@@ -1,5 +1,4 @@
 mod audio;
-mod edi_frame_extractor;
 mod tui;
 
 use log;
@@ -7,7 +6,6 @@ use std::io;
 use std::sync::Arc;
 
 use clap::Parser;
-use edi_frame_extractor::EDIFrameExtractor;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -15,6 +13,7 @@ use tokio::sync::RwLock;
 
 use shared::edi::bus::{init_event_bus, EDIEvent};
 use shared::edi::EDISource;
+use shared::edi_frame_extractor::EDIFrameExtractor;
 
 use audio::{AudioDecoder, AudioEvent};
 use tui::{TUICommand, TUIEvent};

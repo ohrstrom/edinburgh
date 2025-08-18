@@ -1,9 +1,7 @@
-mod edi_frame_extractor;
-
 use bytes::Bytes;
 use clap::Parser;
 use dashmap::DashMap;
-use edi_frame_extractor::EDIFrameExtractor;
+use shared::edi_frame_extractor::EDIFrameExtractor;
 use futures_util::{SinkExt, StreamExt};
 use log;
 use std::io;

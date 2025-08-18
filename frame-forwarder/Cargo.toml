@@ -5,6 +5,7 @@ edition = "2021"
 description = "Websocket proxy-server that extracts EDI AF-frames from TCP stream."
 
 [dependencies]
+shared = { path = "../shared" }
 bytes = "1.10.1"
 log = "0.4.26"
 tungstenite = "0.26.2"

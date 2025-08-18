@@ -11,7 +11,7 @@ use tokio::sync::Semaphore;
 use tokio::time::{self, timeout, Duration};
 use tracing as log;
 
-use crate::edi_frame_extractor::EDIFrameExtractor;
+use shared::edi_frame_extractor::EDIFrameExtractor;
 use shared::edi::EDISource;
 use shared::edi::Ensemble;
 

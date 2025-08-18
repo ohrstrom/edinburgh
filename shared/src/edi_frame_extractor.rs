@@ -1,16 +1,5 @@
 use std::fmt;
 
-#[derive(Debug)]
-pub struct FrameDecodeError(pub String);
-
-impl fmt::Display for FrameDecodeError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "FrameDecodeError: {}", self.0)
-    }
-}
-
-impl std::error::Error for FrameDecodeError {}
-
 #[derive(Debug, Clone)]
 struct SyncMagic {
     pattern: Vec<u8>,
@@ -33,7 +22,6 @@ impl SyncMagic {
 
 #[derive(Debug, Clone)]
 pub struct AFFrame {
-    // NOTE: it looks like we only have AF frames..
     pub data: Vec<u8>,
     pub initial_size: usize,
     pub expected_size: usize,
@@ -50,9 +38,7 @@ impl AFFrame {
         }
     }
 
-    // scan the frame for a sync magic
     pub fn find_sync_magic(&self) -> Option<usize> {
-        // maximum magic length.
         let magic_len = self.sync_magic.pattern.len();
 
         for offset in 0..=self.data.len().saturating_sub(magic_len) {
