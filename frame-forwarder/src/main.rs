@@ -1,9 +1,9 @@
 use bytes::Bytes;
 use clap::Parser;
 use dashmap::DashMap;
-use shared::edi_frame_extractor::EDIFrameExtractor;
 use futures_util::{SinkExt, StreamExt};
 use log;
+use shared::edi_frame_extractor::EDIFrameExtractor;
 use std::io;
 use std::sync::Arc;
 use tokio::io::Interest;

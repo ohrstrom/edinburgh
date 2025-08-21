@@ -3,6 +3,8 @@ import type { Ref, ComputedRef } from 'vue'
 import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useStorage } from '@vueuse/core'
+import { useBrowser } from './composables/browser'
+import settings from '@/settings'
 
 // TODO: how to import cross-package?
 import { EDI } from '../../wasm/pkg'
@@ -17,14 +19,17 @@ import { usePlayerStore } from '@/stores/player'
 
 import Panel from '@/components/ui/Panel.vue'
 import Connection from '@/components/edi/connection/Connection.vue'
-import Settings from '@/components/edi/settings/Settings.vue'
 import Ensemble from '@/components/edi/ensemble/Ensemble.vue'
 import ServiceTable from '@/components/edi/ensemble/ServiceTable.vue'
 import ServiceDetail from '@/components/edi/service-detail/Service.vue'
 import ServiceList from '@/components/edi/service-list/Services.vue'
 
-import EnsembleTable from '@/components/directory/EnsembleTable.vue'
-import CodecSupport from '@/components/dev/CodecSupport.vue'
+import Settings from '@/components/settings/Settings.vue'
+import EnsembleDiscovery from '@/components/directory/EnsembleDiscovery.vue'
+import BrowserSupport from '@/components/browser/BrowserSupport.vue'
+import Footer from '@/components/footer/Footer.vue'
+
+const { browser } = useBrowser()
 
 const resample = async (
   buffer: Float32Array,
@@ -236,9 +241,23 @@ class EDInburgh {
     this.ws.removeEventListener('error', this.wsOnError)
   }
 
+  private getWsUri(host: string, port: number): string {
+    const path = settings.FRAME_FORWARDER_ENDPOINT
+    // in case of an absolute URL
+    if (path.startsWith('ws://') || path.startsWith('wss://')) {
+      return `${path}/${host}/${port}/`
+    }
+
+    // build ws url depending on protocol
+    const isHttps = document.location.protocol === 'https:'
+    return `${isHttps ? 'wss://' : 'ws://'}${document.location.host}${path}/${host}/${port}/`
+  }
+
   async connect(conn: { host: string; port: number }): Promise<void> {
-    const uri = `ws://localhost:9000/ws/${conn.host}/${conn.port}/`
-    // const uri = `wss://edinburgh-frame-forwarder.onrender.com/ws/${conn.host}/${conn.port}/`
+    // const uri = `ws://localhost:9000/ws/${conn.host}/${conn.port}/`
+
+    const uri = this.getWsUri(conn.host, conn.port)
+
     console.log('EDInburgh:connect', conn.host, conn.port, uri)
 
     const ws = new WebSocket(uri)
@@ -363,7 +382,7 @@ class EDInburgh {
       r: analyserR,
     }
   }
-  async resetAudioDecoder(audioFormat): Promise<void> {
+  async resetAudioDecoder(audioFormat: Types.AudioFormat): Promise<void> {
     console.log('EDInburgh: resetAudioDecoder', audioFormat)
 
     if (!this.decoder) {
@@ -405,7 +424,7 @@ class EDInburgh {
     })
   }
 
-  async processAACSegment(aacSegment): Promise<void> {
+  async processAACSegment(aacSegment: Types.AACSegment): Promise<void> {
     if (!this.decoder) {
       console.info('decoder not initialized')
       return
@@ -512,7 +531,7 @@ class EDInburgh {
   async playService(sid: number): Promise<void> {
     console.debug('EDInburgh: play service', sid)
 
-    if (sid === this.selectedService.value?.sid) {
+    if (this.decodeAudio && sid === this.selectedService.value?.sid) {
       console.info('EDInburgh: already playing service', sid)
       return
     }
@@ -634,26 +653,27 @@ const selectEnsemble = async (conn: { host: string; port: number }) => {
 
 // ui states - maybe place somewhere else ;)
 
+// const { system, store } = useColorMode()
+
+// const colorMode = computed(() => store.value === 'auto' ? system.value : store.value)
+
 const serviceTableExpanded = useStorage('edi/ensemble/service-table/expanded', false)
-const ensembleTableExpanded = useStorage('edi/ensemble/ensemble-table/expanded', false)
+const ensembleDiscoveryExpanded = useStorage('edi/ensemble/ensemble-discovery/expanded', false)
 
 const toggleServiceTable = () => {
-  ensembleTableExpanded.value = false
+  ensembleDiscoveryExpanded.value = false
   serviceTableExpanded.value = !serviceTableExpanded.value
 }
-const toggleEnsembleTable = () => {
+const toggleEnsembleDiscovery = () => {
   serviceTableExpanded.value = false
-  ensembleTableExpanded.value = !ensembleTableExpanded.value
+  ensembleDiscoveryExpanded.value = !ensembleDiscoveryExpanded.value
 }
 </script>
 
 <template>
-  <!--
-  <pre v-text="edinburgh" />
-  -->
   <main>
-    <Panel v-if="false">
-      <CodecSupport />
+    <Panel v-if="!browser.isSupported" class="browser-support" variant="warning">
+      <BrowserSupport :browser="browser" />
     </Panel>
     <Panel class="header">
       <template #header>
@@ -670,16 +690,16 @@ const toggleEnsembleTable = () => {
             <span v-if="serviceTableExpanded" class="icon icon--close">⌃</span>
             <span v-else class="icon icon--open">⌄</span>
           </div>
-          <div @click.prevent="toggleEnsembleTable()" class="toggle">
+          <div @click.prevent="toggleEnsembleDiscovery()" class="toggle">
             <span class="label">Ensemble Discovery</span>
-            <span v-if="ensembleTableExpanded" class="icon icon--close">⌃</span>
+            <span v-if="ensembleDiscoveryExpanded" class="icon icon--close">⌃</span>
             <span v-else class="icon icon--open">⌄</span>
           </div>
         </div>
       </template>
       <template #sub-content>
         <ServiceTable v-if="serviceTableExpanded" @select="(sid) => edinburgh.playService(sid)" />
-        <EnsembleTable v-if="ensembleTableExpanded" @select="selectEnsemble" />
+        <EnsembleDiscovery v-if="ensembleDiscoveryExpanded" @select="selectEnsemble" />
       </template>
     </Panel>
 
@@ -694,6 +714,10 @@ const toggleEnsembleTable = () => {
         @stop="() => edinburgh.stopService()"
       />
     </Panel>
+
+    <Panel class="footer" variant="transparent">
+      <Footer />
+    </Panel>
   </main>
 </template>
 
@@ -701,10 +725,16 @@ const toggleEnsembleTable = () => {
 main {
   width: 100%;
   height: 100vh;
-  max-width: 1024px;
+  max-width: calc(1024px + 2rem);
+  padding-left: 1rem;
+  padding-right: 1rem;
   margin-inline: auto;
   display: flex;
   flex-direction: column;
+
+  > .browser-support {
+    margin-top: 20px;
+  }
 
   > .header {
     display: grid;
@@ -717,6 +747,7 @@ main {
     padding-bottom: 0;
 
     .settings {
+      margin-top: -8px;
       border-bottom: 1px solid hsl(var(--c-fg));
     }
 
@@ -759,7 +790,7 @@ main {
   .service-list {
     flex-grow: 1;
     overflow-y: auto;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 
     /* scrollbar */
     &::-webkit-scrollbar {
@@ -771,6 +802,10 @@ main {
       background: hsl(var(--c-fg));
       border-radius: 0;
     }
+  }
+
+  > .footer {
+    margin-bottom: 0.5rem;
   }
 }
 

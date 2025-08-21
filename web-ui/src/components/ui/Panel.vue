@@ -1,5 +1,16 @@
+<script setup lang="ts">
+withDefaults(
+  defineProps<{
+    variant?: 'default' | 'cta' | 'warning' | 'transparent'
+  }>(),
+  {
+    variant: 'default',
+  },
+)
+</script>
+
 <template>
-  <div class="panel">
+  <div :class="['panel', variant]">
     <div class="panel-header">
       <slot name="header" />
     </div>
@@ -23,6 +34,19 @@
   box-shadow: 4px 4px hsl(var(--c-shadow));
   background: hsl(var(--c-bg));
   border-radius: var(--b-r-s);
+
+  &.warning {
+    background: hsl(var(--c-warning));
+    color: hsl(var(--c-warning-fg));
+    border-color: hsl(var(--c-warning));
+  }
+
+  &.transparent {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .panel-header {
     grid-column: 1 / -1;
     margin-left: -8px;

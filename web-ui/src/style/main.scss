@@ -13,19 +13,32 @@
   --c-fg: 0 0% 100%;
   */
 
-  --c-cta: 150, 100%, 50%;
+  --c-cta: 150 100% 50%;
   --c-cta-fg: 0 0% 10%;
+
+  --c-mark: 55 100% 50%;
+  --c-mark-fg: 0 0% 10%;
+
+  --c-warning: 340 100% 50%;
+  --c-warning-fg: 0 0% 100%;
+
+  --c-error: 340 100% 50%;
+  --c-error-fg: 0 0% 100%;
 
   --t-family:
     'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     sans-serif;
   --t-family-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
   --t-fs: 1rem;
+  --t-fs-xs: 0.625rem;
   --t-fs-s: 0.75rem;
   --t-fs-m: 0.875rem;
   --t-fs-l: 1.25rem;
+  --t-fs-xl: 1.5rem;
+
   --t-fw: 400;
-  --t-fw-b: 600;
+  --t-fw-b: 500;
   --t-fw-l: 300;
 
   --b-r: 4px;
@@ -44,6 +57,14 @@
   }
 }
 */
+
+[data-theme='dark'] {
+  --c-body: 0 0% 15%;
+  --c-bg: 0 0% 10%;
+  --c-fg: 0 0% 100%;
+  --c-shadow: 0 0% 50%;
+  --c-cta-fg: 0 0% 10%;
+}
 
 html,
 body {

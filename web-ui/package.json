@@ -1,8 +1,13 @@
 {
   "name": "ui",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ohrstrom/edinburgh.git"
+  },
+  "homepage": "https://github.com/ohrstrom/edinburgh",
   "scripts": {
     "dev": "vite --port 3001",
     "build": "run-p type-check \"build-only {@}\" --",
@@ -20,6 +25,7 @@
     "@ohrstrom/faad2-wasm": "^2.11.2-rc.3",
     "@vueuse/core": "^13.0.0",
     "@vueuse/integrations": "^13.0.0",
+    "bowser": "^2.12.0",
     "idb-keyval": "^6",
     "lodash.debounce": "^4.0.8",
     "pinia": "^3.0.1",

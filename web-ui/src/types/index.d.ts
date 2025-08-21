@@ -28,7 +28,7 @@ export interface Service {
   // subchannel?: Subchannel
   components: ServiceComponent[]
   audioFormat?: AudioFormat
-  isPlayting: boolean
+  isPlaying: boolean
   dl?: DL
   sls?: SLS
 }
@@ -50,6 +50,14 @@ export interface SLS {
   data?: Byte[]
   md5?: string
   url?: string
+  width?: number
+  height?: number
+}
+
+export interface AACSegment {
+  scid: number
+  audio_format: AudioFormat,
+  frames: ArrayBuffer[]
 }
 
 export interface AudioFormat {
@@ -60,6 +68,7 @@ export interface AudioFormat {
   samplerate: number
   bitrate: number
   channels: number
+  asc: ArrayBuffer | Uint8Array
 }
 
 //
@@ -70,3 +79,13 @@ export interface Level {
 
 //
 export type PlayerState = 'stopped' | 'playing' | 'paused'
+
+//
+export interface Browser {
+  isSupported: boolean
+  os: string
+  platform: string
+  name: string
+  version: string
+  missing: Array<string>
+}

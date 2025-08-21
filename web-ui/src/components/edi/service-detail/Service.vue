@@ -93,6 +93,7 @@ defineProps<{ level: Types.Level }>()
           <img :src="service.sls?.url" :alt="service.sls?.md5 ?? 'SLS'" />
           <figcaption>
             <span class="mimetype">{{ service.sls.mimetype }}</span>
+            <span class="dimensions">{{ service.sls.width }}x{{ service.sls.height }} px</span>
             <span class="size">{{ ((service.sls?.len ?? 0) / 1000).toFixed(2) }} kB</span>
           </figcaption>
         </figure>
@@ -119,14 +120,15 @@ defineProps<{ level: Types.Level }>()
     flex-direction: column;
     min-width: 0;
     .svc {
-      margin-bottom: 8px;
+      margin-bottom: 4px;
       > .label {
         margin-bottom: 8px;
         font-size: 1.25rem;
       }
     }
     > .format {
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+      font-family: var(--t-family-mono);
       .subchannel {
         font-size: var(--t-fs-s);
       }
@@ -159,15 +161,6 @@ defineProps<{ level: Types.Level }>()
         max-width: 100%;
         overflow: hidden;
         min-width: 0; /* allow text shrinking in flexbox */
-        align-items: center;
-
-        > .__has-dl-plus-flag {
-          font-size: var(--t-fs-s);
-          margin-right: 4px;
-          color: hsl(var(--c-bg));
-          background: hsl(var(--c-fg));
-          padding: 2px;
-        }
 
         > .has-dl-plus-flag {
           font-size: var(--t-fs-s);
@@ -193,6 +186,7 @@ defineProps<{ level: Types.Level }>()
         > .item {
           display: grid;
           grid-template-columns: 100px 1fr;
+          font-family: var(--t-family-mono);
           font-size: var(--t-fs-s);
           //line-height: 0.75rem;
           > .kind {
@@ -227,6 +221,7 @@ defineProps<{ level: Types.Level }>()
         padding: 0;
         width: 320px;
         height: 240px;
+        background: #ff00ff; /* mark bad ratio */
         > img {
           max-width: 100%;
           object-fit: contain;
@@ -262,6 +257,7 @@ defineProps<{ level: Types.Level }>()
   }
   &--skeleton {
     min-height: 180px;
+    font-family: var(--t-family-mono);
     > .info {
       .message {
         display: inline-flex;

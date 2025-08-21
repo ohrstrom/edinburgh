@@ -48,6 +48,7 @@ const { ensemble } = storeToRefs(ediStore)
     }
   }
   &--skeleton {
+    font-family: var(--t-family-mono);
     > .info {
       .message {
         display: inline-flex;

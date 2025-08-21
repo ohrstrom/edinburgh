@@ -25,23 +25,24 @@ const hasDlPlus = computed(() => {
 <template>
   <div @click.prevent="$emit('select', service.sid)" class="service">
     <div class="controls">
-      <button v-if="!isPlaying" @click.prevent.stop="$emit('play', service.sid)">
+      <button class="play" v-if="!isPlaying" @click.prevent.stop="$emit('play', service.sid)">
         <IconPlay />
       </button>
-      <button v-else @click.prevent.stop="$emit('stop')">
+      <button class="pause" v-else @click.prevent.stop="$emit('stop')">
         <IconPause />
       </button>
     </div>
-    <div class="info">
-      <div class="svc">
-        <span class="label">{{ service?.label ?? '-' }}</span>
-        <small class="sid">
-          <HexValue :value="service.sid" />
-        </small>
+    <div class="svc">
+      <div class="label">
+        <span>{{ service?.label ?? '-' }}</span>
       </div>
       <div class="dl">
         <span v-if="hasDlPlus" class="has-dl-plus-flag">DL+</span>
         <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
+      </div>
+      <div class="details">
+        <HexValue class="sid" :value="service.sid" />
+        <span v-text="service.audioFormat?.codec ?? '-'" />
       </div>
     </div>
     <div class="sls">
@@ -65,43 +66,56 @@ const hasDlPlus = computed(() => {
     display: flex;
     flex-direction: column;
     justify-content: center;
-  }
-  > .info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-width: 0;
 
-    > .svc {
+    > button {
+      background: hsl(var(--c-fg) / 0.05);
+      border-radius: 50%;
+
+      &.play {
+        &:hover {
+          background: hsl(var(--c-cta));
+        }
+      }
+
+      &.pause {
+        background: hsl(var(--c-cta) / 0.05);
+        &:hover {
+          background: hsl(var(--c-cta));
+        }
+      }
+    }
+  }
+  > .svc {
+    display: grid;
+    min-width: 0;
+    grid-template-areas:
+      'label details'
+      'dl    details';
+
+    > .label {
+      grid-area: label;
       display: flex;
-      flex-grow: 1;
-      > .label {
-        flex-grow: 1;
-        display: flex;
-        align-items: center;
-      }
-      > .sid {
-        font-size: var(--t-fs-s);
-        display: flex;
-        align-items: center;
-      }
+      align-items: center;
     }
 
     > .dl {
+      grid-area: dl;
       display: flex;
       flex: 1 1 auto;
       max-width: 100%;
       overflow: hidden;
       min-width: 0; /* allow text shrinking in flexbox */
-      align-items: center;
+      align-items: flex-start;
 
       > .has-dl-plus-flag {
-        font-size: var(--t-fs-s);
+        font-size: var(--t-fs-xs);
+        font-family: var(--t-family-mono);
         margin-right: 6px;
-        color: hsl(var(--c-fg));
-        background: hsl(var(--c-bg));
+        // color: hsl(var(--c-bg));
+        // background: hsl(var(--c-fg));
+        background: hsl(var(--c-mark));
+        color: hsl(var(--c-mark-fg));
         padding: 2px 4px;
-        border: 1px solid currentColor;
         border-radius: var(--b-r-s);
       }
 
@@ -113,10 +127,18 @@ const hasDlPlus = computed(() => {
         font-size: var(--t-fs-s);
       }
     }
+
+    > .details {
+      grid-area: details;
+      font-size: var(--t-fs-s);
+      display: flex;
+      align-items: flex-end;
+      flex-direction: column;
+    }
   }
   > .sls {
     > .container {
-      background: hsl(var(--c-fg) / 0.1);
+      background: hsl(var(--c-fg) / 0.05);
       width: 72px;
       height: 54px;
       aspect-ratio: 4/3;

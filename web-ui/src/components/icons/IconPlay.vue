@@ -15,9 +15,9 @@ const props = withDefaults(
 const color = computed(() => `hsl(var(${props.colorVar}))`)
 
 const style = computed(() => ({
-  fill: 'transparent',
+  fill: color.value,
   stroke: color.value,
-  strokeWidth: 3,
+  strokeWidth: 2,
   strokeMiterlimit: 10,
   width: `${props.size}px`,
   height: `${props.size}px`,
@@ -32,6 +32,6 @@ const style = computed(() => ({
     viewBox="0 0 48 48"
     :style="style"
   >
-    <polygon points="34.7,24 17.3,32.7 17.3,15.3 " />
+    <polygon points="17.3,32.7 17.3,15.3 33,24" />
   </svg>
 </template>

@@ -93,7 +93,7 @@ const services = computed(() => {
   font-size: var(--t-fs-s);
   .service {
     display: grid;
-    grid-template-columns: 32px 48px 2fr 1fr 1fr 48px 3fr 3fr;
+    grid-template-columns: 32px 48px 2fr 1fr 1fr 40px 3fr 3fr;
     gap: 8px;
     padding: 2px 8px;
     cursor: pointer;
@@ -115,7 +115,7 @@ const services = computed(() => {
         display: flex;
         gap: 4px;
         > .codec {
-          min-width: 60px;
+          min-width: 66px;
         }
       }
     }

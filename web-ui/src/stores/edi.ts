@@ -161,17 +161,25 @@ export const useEDIStore = defineStore('edi', () => {
 
     // create a Blob URL
     if (val.data && val.mimetype) {
-      // store the blob in IndexedDB
-      // await saveSLS(val) // TODO: re-enable once fixed
-
-      // saveSLS(val).then(() => {}).catch((err) => {
-      //   console.error('Failed to save SLS to IndexedDB', err)
-      // })
-
       const blob = new Blob([new Uint8Array(val.data)], { type: val.mimetype })
+      const url = URL.createObjectURL(blob)
+
+      // get image dimensions (check if this has any implications as we need to load/decode the image here)
+      const getImageSize = (url: string): Promise<{ width: number; height: number }> =>
+        new Promise((resolve) => {
+          const img = new window.Image()
+          // oxlint-disable-next-line prefer-add-event-listener
+          img.onload = () => {
+            resolve({ width: img.naturalWidth, height: img.naturalHeight })
+          }
+          img.src = url
+        })
+
+      const { width, height } = await getImageSize(url)
+
       // oxlint-disable-next-line @typescript-eslint/no-unused-vars
       const { data, ...rest } = val
-      val = { ...rest, url: URL.createObjectURL(blob) }
+      val = { ...rest, url, width, height }
     }
 
     if (-1 !== index) {

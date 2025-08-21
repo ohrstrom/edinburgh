@@ -62,16 +62,19 @@ function onInput(e: Event) {
     padding-left: 0;
     padding-right: 0;
     position: relative;
+    background: transparent;
 
-    -webkit-appearance: none;
     appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
 
     &::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       background: currentColor;
+      border-radius: var(--b-r-s);
       cursor: pointer;
     }
 
@@ -80,18 +83,38 @@ function onInput(e: Event) {
       position: absolute;
       left: 0px;
       right: 0px;
-      height: 14px;
+      height: 12px;
       background: rgba(0, 0, 0, 0);
     }
+
     &::after {
       content: '';
       position: absolute;
       top: 50%;
-      left: 7px;
-      right: 7px;
-      height: 4px;
+      left: 6px;
+      right: 6px;
+      height: 1px;
       background: currentColor;
       transform: translateY(-50%);
+    }
+
+    &::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      background: currentColor;
+      border-radius: var(--b-r-s);
+      cursor: pointer;
+      border: none;
+    }
+
+    &::-moz-range-track {
+      height: 1px;
+      background: currentColor;
+      border-radius: var(--b-r-s);
+    }
+
+    &::-moz-focus-outer {
+      border: 0;
     }
   }
 }

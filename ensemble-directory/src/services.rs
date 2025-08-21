@@ -11,9 +11,9 @@ use tokio::sync::Semaphore;
 use tokio::time::{self, timeout, Duration};
 use tracing as log;
 
-use shared::edi_frame_extractor::EDIFrameExtractor;
 use shared::edi::EDISource;
 use shared::edi::Ensemble;
+use shared::edi_frame_extractor::EDIFrameExtractor;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct DirectoryEnsemble {
@@ -171,8 +171,7 @@ impl DirectoryService {
 }
 
 async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
-
-    let timeout_ms = 2000;
+    let timeout_ms = 5000;
 
     let uri = format!("{}:{}", endpoint.host, endpoint.port);
 

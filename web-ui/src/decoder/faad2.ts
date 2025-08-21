@@ -1,4 +1,3 @@
-// import Faad2Module from '@/lib/faad2.js'
 import Faad2Module from '@/lib/faad2_wasm.mjs'
 
 const SAMPLE_RATE = {

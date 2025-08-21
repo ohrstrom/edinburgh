@@ -6,8 +6,8 @@ defineProps<{ subchannel: Types.Subchannel }>()
 
 <template>
   <!--
-    SCID: 17 - Start: 123 - CU: 16 - EEP 3-A
-    -->
+  SCID: 17 - Start: 123 - CU: 16 - EEP 3-A
+  -->
   <div class="subchannel">
     <span>SCID: {{ subchannel.id }}</span>
     <span>Start: {{ subchannel.start }}</span>

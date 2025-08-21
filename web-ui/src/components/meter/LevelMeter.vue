@@ -208,7 +208,9 @@ onUnmounted(() => {
       .level {
         height: 18px;
         width: 20%;
-        background: #2cf54e;
+        // background: #2cf54e;
+        background: #00e372;
+        // background: hsl(var(--c-cta));
       }
     }
   }
