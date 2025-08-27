@@ -299,7 +299,7 @@ impl MOTDecoder {
                     obj.body_complete = dg.last_flag;
 
                     if obj.is_complete() {
-                        log::info!(
+                        log::debug!(
                             "MOT complete: Header = {} bytes, Body = {} bytes",
                             obj.header.len(),
                             obj.body.len()

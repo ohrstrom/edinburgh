@@ -3,7 +3,7 @@ mod tui;
 
 use log;
 use std::io;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use clap::Parser;
 use tokio::io::Interest;
@@ -12,13 +12,11 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 
 use shared::edi::bus::{init_event_bus, EDIEvent};
-use shared::edi::EDISource;
+use shared::edi::{EDISource, Ensemble};
 use shared::edi_frame_extractor::EDIFrameExtractor;
 
 use audio::{AudioDecoder, AudioEvent};
 use tui::{TUICommand, TUIEvent};
-
-// use tui::sls;
 
 /// EDInburgh
 #[derive(Parser, Debug)]
@@ -53,8 +51,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     env_logger::builder().format_timestamp(None).init();
-
-    log::debug!("{:?}", args);
 
     let scid = Arc::new(RwLock::new(args.scid));
 
@@ -91,7 +87,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut extractor = EDIFrameExtractor::new();
 
-    let mut source = EDISource::new(args.scid, None, None);
+    let on_ensemble_updated_callback: Option<Box<dyn FnMut(&Ensemble) + Send>> = if args.tui {
+        None
+    } else {
+        Some(Box::new(|e: &Ensemble| print_ensemble(e)))
+    };
+
+    let mut source = EDISource::new(args.scid, on_ensemble_updated_callback, None);
 
     let event_handler =
         EDIHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone(), audio_tx.clone());
@@ -242,4 +244,63 @@ impl EDIHandler {
             }
         }
     }
+}
+
+// NOTE: the print once logic here seems to be very ugly. think about a better way...
+static PRINT_ENSEMBLE_ONCE: Once = Once::new();
+
+fn print_ensemble(ensemble: &Ensemble) {
+    if !ensemble.complete {
+        return;
+    }
+
+    PRINT_ENSEMBLE_ONCE.call_once(|| {
+        println!(
+            "### Ensemble: {} (EID 0x{:04x})",
+            ensemble.label.as_deref().unwrap_or("<no label>"),
+            ensemble.eid.unwrap_or(0)
+        );
+
+        let mut sorted_subchannels = ensemble.subchannels.iter().collect::<Vec<_>>();
+        sorted_subchannels.sort_by_key(|svc| svc.id);
+
+        for sc in sorted_subchannels {
+            println!(
+                "    SubCh {:4}   start {:4}   CUs {:3}   {}   {:3} kbps ",
+                sc.id,
+                sc.start.unwrap_or(0),
+                sc.size.unwrap_or(0),
+                sc.pl.as_deref().unwrap_or(""),
+                sc.bitrate.unwrap_or(0),
+            );
+        }
+
+        let mut sorted_services = ensemble.services.iter().collect::<Vec<_>>();
+        sorted_services.sort_by_key(|svc| svc.label.as_deref().unwrap_or("").to_lowercase());
+
+        for service in sorted_services {
+            let comp = service.components.first();
+
+            let (codec, bitrate, scid) = if let Some(c) = comp {
+                let af = c.audio_format.as_ref();
+                (
+                    af.map(|a| a.codec.as_str()).unwrap_or("-"),
+                    af.map(|a| a.bitrate).unwrap_or(0),
+                    c.scid,
+                )
+            } else {
+                ("-", 0, 0)
+            };
+
+            println!(
+                "    SubCh {:4}   0x{:4X}   {:<16} ({})\t   {:<10}   {:3} kbps",
+                scid,
+                service.sid,
+                service.label.as_deref().unwrap_or("<no label>"),
+                service.short_label.as_deref().unwrap_or(""),
+                codec,
+                bitrate
+            );
+        }
+    });
 }
