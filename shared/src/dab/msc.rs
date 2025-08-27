@@ -1,7 +1,7 @@
-use super::bus::{emit_event, EDIEvent};
-use super::pad::PADDecoder;
+use super::bus::{emit_event, DabEvent};
+use super::pad::PadDecoder;
 use crate::utils;
-use derivative::Derivative;
+use derive_more::Debug;
 use log;
 use serde::Serialize;
 use std::fmt;
@@ -108,16 +108,15 @@ impl fmt::Display for AudioFormat {
     }
 }
 
-#[derive(Derivative, Clone, Serialize)]
-#[derivative(Debug)]
-pub struct AACPResult {
+#[derive(Debug, Clone, Serialize)]
+pub struct AacpResult {
     pub scid: u8,
     pub audio_format: Option<AudioFormat>,
-    #[derivative(Debug(format_with = "AACPResult::debug_frames"))]
+    #[debug("{}", frames.len())]
     pub frames: Vec<Vec<u8>>,
 }
 
-impl AACPResult {
+impl AacpResult {
     pub fn new(scid: u8, audio_format: Option<AudioFormat>, frames: Vec<Vec<u8>>) -> Self {
         Self {
             scid,
@@ -125,25 +124,18 @@ impl AACPResult {
             frames,
         }
     }
-    fn debug_frames(frames: &Vec<Vec<u8>>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", frames.len())
-    }
 }
 
-#[derive(Derivative, Clone, Serialize)]
-#[derivative(Debug)]
-pub struct PADResult {
+#[derive(Debug, Clone, Serialize)]
+pub struct PadResult {
     pub fpad: Vec<u8>,
-    #[derivative(Debug(format_with = "PADResult::debug_xpad"))]
+    #[debug("{} bytes", xpad.len())]
     pub xpad: Vec<u8>,
 }
 
-impl PADResult {
+impl PadResult {
     pub fn new(fpad: Vec<u8>, xpad: Vec<u8>) -> Self {
         Self { fpad, xpad }
-    }
-    fn debug_xpad(xpad: &Vec<u8>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} bytes", xpad.len())
     }
 }
 
@@ -158,13 +150,12 @@ pub enum FeedError {
 
 #[derive(Debug)]
 pub enum FeedResult {
-    Complete(AACPResult),
+    Complete(AacpResult),
     Buffering,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct AACPExctractor {
+#[derive(Debug)]
+pub struct AacpExctractor {
     scid: u8,
     f_len: usize,
     f_count: usize,
@@ -176,12 +167,12 @@ pub struct AACPExctractor {
     au_start: Vec<usize>,
     audio_format: Option<AudioFormat>,
     au_frames: Vec<Vec<u8>>,
-    pad_decoder: PADDecoder,
+    pad_decoder: PadDecoder,
     //
     pub extract_pad: bool,
 }
 
-impl AACPExctractor {
+impl AacpExctractor {
     pub fn new(scid: u8) -> Self {
         Self {
             scid,
@@ -195,7 +186,7 @@ impl AACPExctractor {
             au_start: vec![0; 7],
             audio_format: None,
             au_frames: Vec::new(),
-            pad_decoder: PADDecoder::new(scid),
+            pad_decoder: PadDecoder::new(scid),
             //
             extract_pad: false,
         }
@@ -353,13 +344,13 @@ impl AACPExctractor {
             }
         }
 
-        let result: AACPResult =
-            AACPResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
+        let result: AacpResult =
+            AacpResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
-        emit_event(EDIEvent::AACPFramesExtracted(result.clone()));
+        emit_event(DabEvent::AacpFramesExtracted(result.clone()));
 
         if self.scid == DEBUG_SCID {
-            log::info!("AACP: SCID: {}\n{:?}", self.scid, result.frames);
+            log::info!("Aacp: SCID: {}\n{:?}", self.scid, result.frames);
         }
 
         self.f_count = 0;
@@ -456,9 +447,9 @@ impl AACPExctractor {
             }
         }
 
-        return true;
+        true
     }
-    fn extract_pad(au_data: &[u8]) -> Option<PADResult> {
+    fn extract_pad(au_data: &[u8]) -> Option<PadResult> {
         if au_data.len() < 3 {
             return None;
         }
@@ -487,7 +478,7 @@ impl AACPExctractor {
         let xpad_data = &au_data[pad_start..pad_start + pad_len - FPAD_LEN];
         let fpad_data = &au_data[pad_start + pad_len - FPAD_LEN..pad_start + pad_len];
 
-        let pad = PADResult::new(fpad_data.to_vec(), xpad_data.to_vec());
+        let pad = PadResult::new(fpad_data.to_vec(), xpad_data.to_vec());
 
         // log::debug!("PAD: {:?}", pad);
 
@@ -501,6 +492,6 @@ impl AACPExctractor {
         //     pad.xpad.len()
         // );
 
-        return Some(pad);
+        Some(pad)
     }
 }

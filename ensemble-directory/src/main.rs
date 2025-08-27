@@ -5,7 +5,6 @@ use axum::{extract::State, routing::get, Json, Router};
 use clap::Parser;
 use tower_http::cors::{Any, CorsLayer};
 use tracing as log;
-use tracing_subscriber;
 
 use services::{DirectoryService, ScanTarget};
 
@@ -46,10 +45,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     let args = Args::parse();
 
-    let log_level = if args.verbose { "debug" } else { "info"};
+    let log_level = if args.verbose { "debug" } else { "info" };
 
     tracing_subscriber::fmt()
         .with_env_filter(log_level)
@@ -61,13 +59,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // validate that timeout is less than interval
     if args.scan_timeout >= args.scan_interval {
-        log::error!("scan timeout ({}) must be less than scan interval ({})", args.scan_timeout, args.scan_interval);
+        log::error!(
+            "scan timeout ({}) must be less than scan interval ({})",
+            args.scan_timeout,
+            args.scan_interval
+        );
         std::process::exit(1);
     }
 
     log::info!("Starting API on http://{}/", addr);
 
-    let svc = services::DirectoryService::new(args.scan_targets, args.scan_interval, args.scan_timeout, args.scan_num_parallel);
+    let svc = services::DirectoryService::new(
+        args.scan_targets,
+        args.scan_interval,
+        args.scan_timeout,
+        args.scan_num_parallel,
+    );
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

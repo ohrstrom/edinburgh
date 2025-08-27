@@ -1,4 +1,3 @@
-use anyhow;
 use futures::stream::{FuturesUnordered, StreamExt};
 use regex::Regex;
 use serde::Serialize;
@@ -11,9 +10,9 @@ use tokio::sync::Semaphore;
 use tokio::time::{self, timeout, Duration};
 use tracing as log;
 
-use shared::edi::EDISource;
-use shared::edi::Ensemble;
-use shared::edi_frame_extractor::EDIFrameExtractor;
+use shared::dab::DabSource;
+use shared::dab::Ensemble;
+use shared::edi_frame_extractor::EdiFrameExtractor;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct DirectoryEnsemble {
@@ -83,7 +82,12 @@ pub struct DirectoryService {
 }
 
 impl DirectoryService {
-    pub fn new(scan_targets: Vec<ScanTarget>, scan_interval: u64, scan_timeout: u64, scan_num_parallel: usize) -> Arc<Self> {
+    pub fn new(
+        scan_targets: Vec<ScanTarget>,
+        scan_interval: u64,
+        scan_timeout: u64,
+        scan_num_parallel: usize,
+    ) -> Arc<Self> {
         let svc = Arc::new(Self {
             ensembles: Arc::new(RwLock::new(Vec::new())),
             scan_targets,
@@ -138,7 +142,7 @@ impl DirectoryService {
                 let scan_timeout = self.scan_timeout;
 
                 scans.push(tokio::spawn(async move {
-                    let result = scan(endpoint,scan_timeout).await;
+                    let result = scan(endpoint, scan_timeout).await;
                     drop(permit); // release slot for next scan
                     result
                 }));
@@ -194,12 +198,12 @@ async fn scan(endpoint: Endpoint, scan_timeout: u64) -> anyhow::Result<Directory
     };
 
     let mut filled = 0;
-    let mut extractor = EDIFrameExtractor::new();
+    let mut extractor = EdiFrameExtractor::new();
 
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<Ensemble>();
     let done_tx = Arc::new(Mutex::new(Some(done_tx)));
 
-    let mut source = EDISource::new(
+    let mut source = DabSource::new(
         None,
         Some(Box::new({
             let done_tx = Arc::clone(&done_tx);

@@ -1,14 +1,14 @@
 pub mod dl;
 pub mod mot;
 
-use derivative::Derivative;
+use derive_more::Debug;
 use log;
 
-use dl::DLDecoder;
-use mot::MOTDecoder;
+use dl::DlDecoder;
+use mot::MotDecoder;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum XPADIndicator {
+pub enum XPadIndicator {
     Short,
     Variable,
     Extended,
@@ -16,22 +16,22 @@ pub enum XPADIndicator {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FPAD {
+pub struct FPad {
     pub ci_flag: bool,
-    pub xpad_indicator: XPADIndicator,
+    pub xpad_indicator: XPadIndicator,
 }
 
-impl From<u8> for FPAD {
+impl From<u8> for FPad {
     fn from(byte: u8) -> Self {
         let ci_flag = byte & 0b1000_0000 != 0;
         let indicator_bits = (byte >> 5) & 0b11;
         let xpad_indicator = match indicator_bits {
-            0b00 => XPADIndicator::Short,
-            0b01 => XPADIndicator::Variable,
-            0b10 => XPADIndicator::Extended,
-            _ => XPADIndicator::Reserved,
+            0b00 => XPadIndicator::Short,
+            0b01 => XPadIndicator::Variable,
+            0b10 => XPadIndicator::Extended,
+            _ => XPadIndicator::Reserved,
         };
-        FPAD {
+        FPad {
             ci_flag,
             xpad_indicator,
         }
@@ -41,12 +41,12 @@ impl From<u8> for FPAD {
 const XPADCI_LEN_LOOKUP: [usize; 8] = [4, 6, 8, 12, 16, 24, 32, 48];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct XPADCI {
+pub struct XPadCI {
     pub kind: i8,
     pub len: usize,
 }
 
-impl XPADCI {
+impl XPadCI {
     pub fn new(len: usize, kind: u8) -> Self {
         Self {
             len,
@@ -69,9 +69,8 @@ impl XPADCI {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct MSCDataGroup {
+#[derive(Debug)]
+pub struct MscDataGroup {
     pub is_valid: bool,
     pub extension_flag: bool,
     pub segment_flag: bool,
@@ -86,13 +85,13 @@ pub struct MSCDataGroup {
     pub length_indicator: u8,
     pub transport_id: Option<u16>,
     pub end_user_addr_field: Vec<u8>,
-    #[derivative(Debug(format_with = "MSCDataGroup::debug_data_field"))]
+    #[debug("{} bytes", data_field.len())]
     pub data_field: Vec<u8>,
 }
 
-impl MSCDataGroup {
+impl MscDataGroup {
     pub fn from_bytes(data: &[u8]) -> Self {
-        let mut dg = MSCDataGroup {
+        let mut dg = MscDataGroup {
             is_valid: false,
             extension_flag: false,
             segment_flag: false,
@@ -186,24 +185,21 @@ impl MSCDataGroup {
 
             dg.data_field = data[idx..idx + data_field_len].to_vec();
         } else {
-            log::warn!("MSCDataGroup: Not enough data for data field");
+            log::warn!("MscDataGroup: Not enough data for data field");
         }
 
         dg.is_valid = true; // NOTE: this should be checked ;)
         dg
     }
-    fn debug_data_field(data: &Vec<u8>, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} bytes", data.len())
-    }
 }
 
 #[derive(Debug)]
-pub struct DLDataGroup {
+pub struct DlDataGroup {
     pub size_needed: usize,
     pub data: Vec<u8>,
 }
 
-impl DLDataGroup {
+impl DlDataGroup {
     fn new() -> Self {
         Self {
             size_needed: 2 + 2, // default minimum: header + CRC
@@ -215,7 +211,7 @@ impl DLDataGroup {
 
         // let last = payload[0] & 0x20 != 0;  // THIS DOES NOT WORK..
         //
-        // // log::debug!("DLDataGroup: last = {}", last);
+        // // log::debug!("DlDataGroup: last = {}", last);
         //
         // if last {
         //     let mut complete = Vec::new();
@@ -241,12 +237,12 @@ impl DLDataGroup {
 }
 
 #[derive(Debug)]
-pub struct MOTDataGroup {
+pub struct MotDataGroup {
     pub size_needed: usize,
     pub data: Vec<u8>,
 }
 
-impl MOTDataGroup {
+impl MotDataGroup {
     fn new() -> Self {
         Self {
             size_needed: 0,
@@ -258,13 +254,13 @@ impl MOTDataGroup {
         self.data.clear();
     }
 
-    fn feed(&mut self, data: &[u8]) -> Option<MSCDataGroup> {
+    fn feed(&mut self, data: &[u8]) -> Option<MscDataGroup> {
         let remaining = self.size_needed.saturating_sub(self.data.len());
         self.data
             .extend_from_slice(&data[..data.len().min(remaining)]);
 
         if self.data.len() == self.size_needed {
-            let dg = MSCDataGroup::from_bytes(&self.data);
+            let dg = MscDataGroup::from_bytes(&self.data);
             self.data.clear();
             Some(dg)
         } else {
@@ -274,32 +270,32 @@ impl MOTDataGroup {
 }
 
 #[derive(Debug)]
-pub struct PADDecoder {
+pub struct PadDecoder {
     #[allow(dead_code)]
     scid: u8,
-    last_xpad_ci: Option<XPADCI>,
+    last_xpad_ci: Option<XPadCI>,
     next_dg_size: usize,
-    dl_dg: DLDataGroup,
-    mot_dg: MOTDataGroup,
-    dl_decoder: DLDecoder,
-    mot_decoder: MOTDecoder,
+    dl_dg: DlDataGroup,
+    mot_dg: MotDataGroup,
+    dl_decoder: DlDecoder,
+    mot_decoder: MotDecoder,
 }
 
-impl PADDecoder {
+impl PadDecoder {
     pub fn new(scid: u8) -> Self {
         Self {
             scid,
             last_xpad_ci: None,
             next_dg_size: 0,
-            dl_dg: DLDataGroup::new(),
-            mot_dg: MOTDataGroup::new(),
-            dl_decoder: DLDecoder::new(scid),
-            mot_decoder: MOTDecoder::new(scid),
+            dl_dg: DlDataGroup::new(),
+            mot_dg: MotDataGroup::new(),
+            dl_decoder: DlDecoder::new(scid),
+            mot_decoder: MotDecoder::new(scid),
         }
     }
     pub fn feed(&mut self, fpad_bytes: &[u8], xpad_bytes: &[u8]) {
         if fpad_bytes.len() < 2 {
-            log::warn!("PADDecoder: Missing FPAD bytes");
+            log::warn!("PadDecoder: Missing FPAD bytes");
             return;
         }
 
@@ -349,7 +345,7 @@ impl PADDecoder {
 
         if announced_len != xpad.len() {
             log::warn!(
-                "PADDecoder: Announced X-PAD length mismatch ({} vs {}) — discarding",
+                "PadDecoder: Announced X-PAD length mismatch ({} vs {}) — discarding",
                 announced_len,
                 xpad.len()
             );
@@ -361,7 +357,7 @@ impl PADDecoder {
 
         // log::debug!("NUM CIs: {}", ci_list.len());
 
-        for (_i, ci) in ci_list.iter().enumerate() {
+        for ci in ci_list.iter() {
             // log::debug!("CI = type {:2}, len {:2}", ci.kind, ci.len);
             self.process_ci(false, ci, &xpad[offset..offset + ci.len]);
             offset += ci.len;
@@ -376,7 +372,7 @@ impl PADDecoder {
 
         // Set up last_xpad_ci for continuation next time:
         if let Some(kind) = ci_kind_continued {
-            self.last_xpad_ci = Some(XPADCI {
+            self.last_xpad_ci = Some(XPadCI {
                 kind,
                 len: announced_len,
             });
@@ -386,7 +382,7 @@ impl PADDecoder {
         }
     }
 
-    fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPADCI>, usize) {
+    fn build_ci_list(xpad: &[u8], fpad: &[u8]) -> (Vec<XPadCI>, usize) {
         let mut ci_list = Vec::new();
         let mut ci_header_len = 0;
 
@@ -405,10 +401,10 @@ impl PADDecoder {
         match xpad_ind {
             0b01 => {
                 // short format: 1 byte
-                if xpad.len() >= 1 {
+                if !xpad.is_empty() {
                     let kind = xpad[0] & 0x1F;
                     if kind != 0 {
-                        ci_list.push(XPADCI::new(3, kind));
+                        ci_list.push(XPadCI::new(3, kind));
                         ci_header_len = 1;
                     }
                 }
@@ -421,7 +417,7 @@ impl PADDecoder {
                     if kind == 0 {
                         break;
                     }
-                    ci_list.push(XPADCI::from_raw(raw));
+                    ci_list.push(XPadCI::from_raw(raw));
                 }
             }
             _ => {}
@@ -430,7 +426,7 @@ impl PADDecoder {
         (ci_list, ci_header_len)
     }
 
-    fn process_ci(&mut self, is_continuation: bool, ci: &XPADCI, payload: &[u8]) {
+    fn process_ci(&mut self, is_continuation: bool, ci: &XPadCI, payload: &[u8]) {
         // log::debug!("CI: kind: {}", ci.kind);
         match ci.kind {
             1 => {
@@ -459,7 +455,7 @@ impl PADDecoder {
                 //     self.dl_dg.init();
                 // }
 
-                if let Some(data) = self.dl_dg.feed(&payload) {
+                if let Some(data) = self.dl_dg.feed(payload) {
                     // log::debug!(
                     //     "DL: DG: {:?}",
                     //     String::from_utf8_lossy(&data[..]),
@@ -478,7 +474,7 @@ impl PADDecoder {
                     self.next_dg_size = 0;
                 }
 
-                if let Some(dg) = self.mot_dg.feed(&payload) {
+                if let Some(dg) = self.mot_dg.feed(payload) {
                     self.mot_decoder.feed(&dg);
                 }
             }

@@ -38,9 +38,9 @@ pub struct Fig0_0 {
 impl Fig0_0 {
     // FIG 0/0 - Ensemble information (MCI)
     // EID and alarm flag only
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 4 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         // Extract 16-bit Ensemble ID (Big-Endian)
@@ -63,13 +63,13 @@ pub struct Fig0_1 {
 
 impl Fig0_1 {
     // FIG 0/1 - Sub-channel organization (MCI)
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         let mut offset = 0;
         let mut subchannels = Vec::new();
 
         while offset < data.len() {
             if offset + 2 > data.len() {
-                return Err(FIGError::InvalidSize { l: data.len() });
+                return Err(FigError::InvalidSize { l: data.len() });
             }
 
             let id = data[offset] >> 2;
@@ -85,7 +85,7 @@ impl Fig0_1 {
             if short_long_form {
                 // Long form
                 if offset + 1 >= data.len() {
-                    return Err(FIGError::InvalidSize { l: data.len() });
+                    return Err(FigError::InvalidSize { l: data.len() });
                 }
 
                 let option = (data[offset] & 0x70) >> 4;
@@ -157,7 +157,7 @@ pub struct ServiceComponent {
 
 impl Fig0_2 {
     // FIG 0/2 - Service organization (MCI)
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         let mut offset = 0;
         let mut services = Vec::new();
 
@@ -168,7 +168,7 @@ impl Fig0_2 {
 
             // Check remaining bytes
             if offset >= data.len() {
-                return Err(FIGError::InvalidSize { l: data.len() });
+                return Err(FigError::InvalidSize { l: data.len() });
             }
 
             let num_components = data[offset] & 0x0F; // Number of service components
@@ -176,7 +176,7 @@ impl Fig0_2 {
 
             for _ in 0..num_components {
                 if offset + 1 >= data.len() {
-                    return Err(FIGError::InvalidSize { l: data.len() });
+                    return Err(FigError::InvalidSize { l: data.len() });
                 }
 
                 let tmid = (data[offset] & 0xC0) >> 6; // Transport Mechanism ID
@@ -213,21 +213,21 @@ impl Fig0_2 {
 #[derive(Debug, Serialize)]
 pub struct Fig0_3 {
     base: Fig0,
-    pub scid: u16,            // 12 bits
-    pub rfa: u8,              // 3 bits
-    pub scca_flag: bool,      // 1 bit
-    pub dg_flag: bool,        // 1 bit
-    pub rfu: bool,            // 1 bit
-    pub dscty: u8,            // 6 bits
-    pub subchid: u8,          // 6 bits
-    pub packet_address: u16,  // 10 bits
-    pub scca: Option<u16>,    // present if scca_flag
+    pub scid: u16,           // 12 bits
+    pub rfa: u8,             // 3 bits
+    pub scca_flag: bool,     // 1 bit
+    pub dg_flag: bool,       // 1 bit
+    pub rfu: bool,           // 1 bit
+    pub dscty: u8,           // 6 bits
+    pub subchid: u8,         // 6 bits
+    pub packet_address: u16, // 10 bits
+    pub scca: Option<u16>,   // present if scca_flag
 }
 
 impl Fig0_3 {
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 5 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         let b0 = data[0];
@@ -237,25 +237,39 @@ impl Fig0_3 {
         let b4 = data[4];
 
         let scid = ((b0 as u16) << 4) | ((b1 as u16) >> 4);
-        let rfa  = (b1 & 0x0E) >> 1;
+        let rfa = (b1 & 0x0E) >> 1;
         let scca_flag = (b1 & 0x01) != 0;
 
         let dg_flag = (b2 & 0x80) != 0;
-        let rfu     = (b2 & 0x40) != 0;
-        let dscty   =  b2 & 0x3F;
+        let rfu = (b2 & 0x40) != 0;
+        let dscty = b2 & 0x3F;
 
         let subchid = (b3 >> 2) & 0x3F;
         let packet_address = (((b3 & 0x03) as u16) << 8) | (b4 as u16);
 
         let scca = if scca_flag {
-            if data.len() < 7 { return Err(FIGError::InvalidSize { l: data.len() }); }
+            if data.len() < 7 {
+                return Err(FigError::InvalidSize { l: data.len() });
+            }
             Some(u16::from_be_bytes([data[5], data[6]]))
-        } else { None };
+        } else {
+            None
+        };
 
-        Ok(Self { base, scid, rfa, scca_flag, dg_flag, rfu, dscty, subchid, packet_address, scca })
+        Ok(Self {
+            base,
+            scid,
+            rfa,
+            scca_flag,
+            dg_flag,
+            rfu,
+            dscty,
+            subchid,
+            packet_address,
+            scca,
+        })
     }
 }
-
 
 #[derive(Debug, Serialize)]
 pub struct Fig0_5 {
@@ -271,9 +285,9 @@ pub struct ServiceLanguage {
 
 impl Fig0_5 {
     // FIG 0/5 - Service component language (SI)
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 3 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         let mut services = Vec::new();
@@ -320,9 +334,9 @@ pub struct Fig0_9 {
 
 impl Fig0_9 {
     // FIG 0/9 - Country, LTO & International table (SI)
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 3 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         // log::debug!("FIG0/9: {:?} - SVC: {:?} - {} bytes", base, data, data.len());
@@ -351,13 +365,13 @@ impl Fig0_9 {
                 let _ecc = data
                     .get(idx + 1)
                     .copied()
-                    .ok_or(FIGError::InvalidSize { l: data.len() })?;
+                    .ok_or(FigError::InvalidSize { l: data.len() })?;
 
                 let mut sids = Vec::new();
                 for i in 0..num_services {
                     let sid_offset = idx + 2 + (i as usize) * 2;
                     if sid_offset + 1 >= data.len() {
-                        return Err(FIGError::InvalidSize { l: data.len() });
+                        return Err(FigError::InvalidSize { l: data.len() });
                     }
                     let sid = u16::from_be_bytes([data[sid_offset], data[sid_offset + 1]]);
                     sids.push(sid);
@@ -414,9 +428,9 @@ pub enum DateTimeUTC {
 
 impl Fig0_10 {
     // FIG 0/10 - Date & time (SI)
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 4 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         // log::debug!("FIG0/10: {:?} - SVC: {:?}", base, data);
@@ -444,7 +458,7 @@ impl Fig0_10 {
                     "FIG0/10: Invalid size for long form UTC: {} bytes",
                     data.len()
                 );
-                return Err(FIGError::InvalidSize { l: data.len() });
+                return Err(FigError::InvalidSize { l: data.len() });
             }
 
             let hour = ((data[2] & 0x07) << 2) | (data[3] >> 6);
@@ -467,7 +481,7 @@ impl Fig0_10 {
                     "FIG0/10: Invalid size for short form UTC: {} bytes",
                     data.len()
                 );
-                return Err(FIGError::InvalidSize { l: data.len() });
+                return Err(FigError::InvalidSize { l: data.len() });
             }
 
             let b4 = data[4];
@@ -509,7 +523,7 @@ pub struct ServiceUA {
 }
 
 impl Fig0_13 {
-    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FigError> {
         let mut services = Vec::new();
         let mut offset = 0;
 
@@ -575,9 +589,9 @@ pub struct Fig1_0 {
     pub short_label: String,
 }
 impl Fig1_0 {
-    pub fn from_bytes(base: Fig1, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig1, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 18 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         let eid = u16::from_be_bytes([data[0], data[1]]);
@@ -611,9 +625,9 @@ pub struct Fig1_1 {
 }
 
 impl Fig1_1 {
-    pub fn from_bytes(base: Fig1, data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig1, data: &[u8]) -> Result<Self, FigError> {
         if data.len() < 18 {
-            return Err(FIGError::InvalidSize { l: data.len() });
+            return Err(FigError::InvalidSize { l: data.len() });
         }
 
         let sid = u16::from_be_bytes([data[0], data[1]]);
@@ -654,7 +668,7 @@ pub struct Fig1_4 {
     base: Fig1,
 }
 impl Fig1_4 {
-    pub fn from_bytes(base: Fig1, _data: &[u8]) -> Result<Self, FIGError> {
+    pub fn from_bytes(base: Fig1, _data: &[u8]) -> Result<Self, FigError> {
         // implement decoding here
 
         Ok(Self { base })
@@ -662,7 +676,7 @@ impl Fig1_4 {
 }
 
 #[derive(Debug, Serialize)]
-pub enum FIG {
+pub enum Fig {
     F0_0(Fig0_0),
     F0_1(Fig0_1),
     F0_2(Fig0_2),
@@ -678,7 +692,7 @@ pub enum FIG {
 }
 
 #[derive(Debug, Error)]
-pub enum FIGError {
+pub enum FigError {
     #[error("Unsupported FIG: {kind}")]
     Unsupported { kind: u8 },
 
@@ -690,27 +704,27 @@ pub enum FIGError {
 }
 
 #[derive(Debug, Error)]
-pub enum FICError {
+pub enum FicError {
     #[error("Invalid FIC size: {l}")]
     SizeInvalid { l: usize },
 
     #[error("FIG error: {0}")]
-    FigError(#[from] FIGError), // converts FIGError to FICError
+    FigError(#[from] FigError), // converts FigError to FicError
 }
 
 #[derive(Debug)]
-pub struct FICDecoder {
+pub struct FicDecoder {
     #[allow(dead_code)]
     eid: Option<String>,
 }
 
-impl FICDecoder {
-    pub fn from_bytes(data: &[u8]) -> Result<Vec<FIG>, FICError> {
+impl FicDecoder {
+    pub fn from_bytes(data: &[u8]) -> Result<Vec<Fig>, FicError> {
         if (data.len() % 32) != 0 {
-            return Err(FICError::SizeInvalid { l: data.len() });
+            return Err(FicError::SizeInvalid { l: data.len() });
         }
 
-        let mut figs: Vec<FIG> = Vec::new();
+        let mut figs: Vec<Fig> = Vec::new();
 
         for chunk in data.chunks(32) {
             figs.extend(Self::decode_fib(chunk)?);
@@ -719,15 +733,15 @@ impl FICDecoder {
         Ok(figs)
     }
 
-    fn decode_fib(data: &[u8]) -> Result<Vec<FIG>, FICError> {
+    fn decode_fib(data: &[u8]) -> Result<Vec<Fig>, FicError> {
         let crc_stored = u16::from_be_bytes([data[30], data[31]]);
         let crc_calculated = utils::calc_crc16_ccitt(&data[..30]);
 
         if crc_stored != crc_calculated {
-            log::warn!("FICDecoder: Discarding FIB due to CRC mismatch");
+            log::warn!("FicDecoder: Discarding FIB due to CRC mismatch");
         }
 
-        let mut figs: Vec<FIG> = Vec::new();
+        let mut figs: Vec<Fig> = Vec::new();
 
         let mut offset = 0;
 
@@ -759,14 +773,14 @@ impl FICDecoder {
             offset += fig_length;
         }
 
-        // log::debug!("FICDecoder: {} figs", figs.len());
+        // log::debug!("FicDecoder: {} figs", figs.len());
 
         Ok(figs)
     }
 
-    fn decode_fig0(data: &[u8]) -> Result<FIG, FIGError> {
+    fn decode_fig0(data: &[u8]) -> Result<Fig, FigError> {
         if data.is_empty() {
-            return Err(FIGError::NoData);
+            return Err(FigError::NoData);
         }
 
         let header = data[0];
@@ -781,21 +795,21 @@ impl FICDecoder {
         let base = Fig0 { cn, oe, pd, ext };
 
         match ext {
-            0 => Ok(FIG::F0_0(Fig0_0::from_bytes(base, &data[1..])?)),
-            1 => Ok(FIG::F0_1(Fig0_1::from_bytes(base, &data[1..])?)),
-            2 => Ok(FIG::F0_2(Fig0_2::from_bytes(base, &data[1..])?)),
-            3 => Ok(FIG::F0_3(Fig0_3::from_bytes(base, &data[1..])?)),
-            5 => Ok(FIG::F0_5(Fig0_5::from_bytes(base, &data[1..])?)),
-            9 => Ok(FIG::F0_9(Fig0_9::from_bytes(base, &data[1..])?)),
-            10 => Ok(FIG::F0_10(Fig0_10::from_bytes(base, &data[1..])?)),
-            13 => Ok(FIG::F0_13(Fig0_13::from_bytes(base, &data[1..])?)),
-            _ => Err(FIGError::Unsupported { kind: ext }),
+            0 => Ok(Fig::F0_0(Fig0_0::from_bytes(base, &data[1..])?)),
+            1 => Ok(Fig::F0_1(Fig0_1::from_bytes(base, &data[1..])?)),
+            2 => Ok(Fig::F0_2(Fig0_2::from_bytes(base, &data[1..])?)),
+            3 => Ok(Fig::F0_3(Fig0_3::from_bytes(base, &data[1..])?)),
+            5 => Ok(Fig::F0_5(Fig0_5::from_bytes(base, &data[1..])?)),
+            9 => Ok(Fig::F0_9(Fig0_9::from_bytes(base, &data[1..])?)),
+            10 => Ok(Fig::F0_10(Fig0_10::from_bytes(base, &data[1..])?)),
+            13 => Ok(Fig::F0_13(Fig0_13::from_bytes(base, &data[1..])?)),
+            _ => Err(FigError::Unsupported { kind: ext }),
         }
     }
 
-    fn decode_fig1(data: &[u8]) -> Result<FIG, FIGError> {
+    fn decode_fig1(data: &[u8]) -> Result<Fig, FigError> {
         if data.is_empty() {
-            return Err(FIGError::NoData);
+            return Err(FigError::NoData);
         }
 
         let header = data[0];
@@ -809,10 +823,10 @@ impl FICDecoder {
         let base = Fig1 { charset, oe, ext };
 
         match ext {
-            0 => Ok(FIG::F1_0(Fig1_0::from_bytes(base, &data[1..])?)),
-            1 => Ok(FIG::F1_1(Fig1_1::from_bytes(base, &data[1..])?)),
-            4 => Ok(FIG::F1_4(Fig1_4::from_bytes(base, &data[1..])?)),
-            _ => Err(FIGError::Unsupported { kind: ext }),
+            0 => Ok(Fig::F1_0(Fig1_0::from_bytes(base, &data[1..])?)),
+            1 => Ok(Fig::F1_1(Fig1_1::from_bytes(base, &data[1..])?)),
+            4 => Ok(Fig::F1_4(Fig1_4::from_bytes(base, &data[1..])?)),
+            _ => Err(FigError::Unsupported { kind: ext }),
         }
     }
 }

@@ -1,21 +1,21 @@
 use serde::Serialize;
 
 use super::ensemble::Ensemble;
-use super::msc::AACPResult;
-use super::pad::dl::DLObject;
-use super::pad::mot::MOTImage;
-use super::EDISStats;
+use super::msc::AacpResult;
+use super::pad::dl::DlObject;
+use super::pad::mot::MotImage;
+use super::DabStats;
 
 #[derive(Debug, Serialize)]
-pub enum EDIEvent {
+pub enum DabEvent {
     //
     EnsembleUpdated(Ensemble),
-    AACPFramesExtracted(AACPResult),
+    AacpFramesExtracted(AacpResult),
     //
-    MOTImageReceived(MOTImage),
-    DLObjectReceived(DLObject),
+    MotImageReceived(MotImage),
+    DlObjectReceived(DlObject),
     //
-    EDISStatsUpdated(EDISStats),
+    DabStatsUpdated(DabStats),
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -27,11 +27,11 @@ mod platform {
     use std::rc::Rc;
 
     thread_local! {
-        static EVENT_TX: OnceCell<Rc<RefCell<UnboundedSender<EDIEvent>>>> = OnceCell::new();
+        static EVENT_TX: OnceCell<Rc<RefCell<UnboundedSender<DabEvent>>>> = OnceCell::new();
     }
 
-    pub fn init_event_bus() -> UnboundedReceiver<EDIEvent> {
-        let (tx, rx) = unbounded::<EDIEvent>();
+    pub fn init_event_bus() -> UnboundedReceiver<DabEvent> {
+        let (tx, rx) = unbounded::<DabEvent>();
         EVENT_TX.with(|cell| {
             cell.set(Rc::new(RefCell::new(tx)))
                 .expect("Already initialized");
@@ -39,7 +39,7 @@ mod platform {
         rx
     }
 
-    pub fn emit_event(event: EDIEvent) {
+    pub fn emit_event(event: DabEvent) {
         EVENT_TX.with(|cell| {
             if let Some(tx) = cell.get() {
                 let _ = tx.borrow_mut().unbounded_send(event);
@@ -55,17 +55,17 @@ mod platform {
     use std::sync::Mutex;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-    static EVENT_TX: OnceCell<Mutex<UnboundedSender<EDIEvent>>> = OnceCell::new();
+    static EVENT_TX: OnceCell<Mutex<UnboundedSender<DabEvent>>> = OnceCell::new();
 
-    pub fn init_event_bus() -> UnboundedReceiver<EDIEvent> {
-        let (tx, rx) = unbounded_channel::<EDIEvent>();
+    pub fn init_event_bus() -> UnboundedReceiver<DabEvent> {
+        let (tx, rx) = unbounded_channel::<DabEvent>();
         EVENT_TX
             .set(Mutex::new(tx))
             .expect("Event bus already initialized");
         rx
     }
 
-    pub fn emit_event(event: EDIEvent) {
+    pub fn emit_event(event: DabEvent) {
         if let Some(tx) = EVENT_TX.get() {
             let _ = tx.lock().unwrap().send(event);
         }

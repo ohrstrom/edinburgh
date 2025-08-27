@@ -1,5 +1,5 @@
-use crate::edi::bus::{emit_event, EDIEvent};
-use derivative::Derivative;
+use crate::dab::bus::{emit_event, DabEvent};
+use derive_more::Debug;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::fmt;
 
@@ -15,19 +15,18 @@ fn decode_chars(chars: &[u8], charset: u8) -> String {
     }
 }
 
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
-pub struct DLObject {
+#[derive(Debug, Clone)]
+pub struct DlObject {
     pub scid: u8,
     toggle: u8,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     chars: Vec<u8>,
     charset: u8,
-    dl_plus_tags: Vec<DLPlusTag>,
+    dl_plus_tags: Vec<DlPlusTag>,
     pub seg_count: u8,
 }
 
-impl DLObject {
+impl DlObject {
     pub fn new(scid: u8, toggle: u8, charset: u8) -> Self {
         Self {
             scid,
@@ -41,7 +40,7 @@ impl DLObject {
     pub fn decode_label(&self) -> String {
         decode_chars(&self.chars, self.charset)
     }
-    pub fn get_dl_plus(&self) -> Vec<DLPlusTagDecoded> {
+    pub fn get_dl_plus(&self) -> Vec<DlPlusTagDecoded> {
         let label = self.decode_label();
         let label_chars: Vec<char> = label.chars().collect();
 
@@ -51,8 +50,8 @@ impl DLObject {
                 let start = tag.start as usize;
                 let end = (start + tag.len as usize).min(label_chars.len());
                 let value: String = label_chars[start..end].iter().collect();
-                DLPlusTagDecoded {
-                    kind: DLPlusContentType::from(tag.kind),
+                DlPlusTagDecoded {
+                    kind: DlPlusContentType::from(tag.kind),
                     value,
                 }
             })
@@ -60,12 +59,12 @@ impl DLObject {
     }
 }
 
-impl Serialize for DLObject {
+impl Serialize for DlObject {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut s = serializer.serialize_struct("DLObject", 5)?;
+        let mut s = serializer.serialize_struct("DlObject", 5)?;
         s.serialize_field("scid", &self.scid)?;
         s.serialize_field("charset", &self.charset)?;
 
@@ -78,28 +77,28 @@ impl Serialize for DLObject {
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct DLPlusTag {
+pub struct DlPlusTag {
     pub kind: u8,
     pub start: u8,
     pub len: u8,
 }
 
-impl DLPlusTag {
+impl DlPlusTag {
     pub fn new(kind: u8, start: u8, len: u8) -> Self {
         Self { kind, start, len }
     }
 }
 
 #[derive(Serialize, Debug)]
-pub struct DLPlusTagDecoded {
-    pub kind: DLPlusContentType,
+pub struct DlPlusTagDecoded {
+    pub kind: DlPlusContentType,
     pub value: String,
 }
 
 #[derive(Debug, Serialize, Clone, Copy)]
 #[repr(u8)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum DLPlusContentType {
+pub enum DlPlusContentType {
     ItemTitle = 1,
     ItemArtist = 4,
     ItemAlbum = 2,
@@ -107,36 +106,36 @@ pub enum DLPlusContentType {
     Unknown(u8),
 }
 
-impl From<u8> for DLPlusContentType {
+impl From<u8> for DlPlusContentType {
     fn from(value: u8) -> Self {
         match value {
-            1 => DLPlusContentType::ItemTitle,
-            2 => DLPlusContentType::ItemAlbum,
-            4 => DLPlusContentType::ItemArtist,
-            _ => DLPlusContentType::Unknown(value),
+            1 => DlPlusContentType::ItemTitle,
+            2 => DlPlusContentType::ItemAlbum,
+            4 => DlPlusContentType::ItemArtist,
+            _ => DlPlusContentType::Unknown(value),
         }
     }
 }
 
-impl fmt::Display for DLPlusContentType {
+impl fmt::Display for DlPlusContentType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DLPlusContentType::ItemTitle => write!(f, "ITEM_TITLE"),
-            DLPlusContentType::ItemArtist => write!(f, "ITEM_ARTIST"),
-            DLPlusContentType::ItemAlbum => write!(f, "ITEM_ALBUM"),
-            DLPlusContentType::Unknown(v) => write!(f, "UNKNOWN_{}", v),
+            DlPlusContentType::ItemTitle => write!(f, "ITEM_TITLE"),
+            DlPlusContentType::ItemArtist => write!(f, "ITEM_ARTIST"),
+            DlPlusContentType::ItemAlbum => write!(f, "ITEM_ALBUM"),
+            DlPlusContentType::Unknown(v) => write!(f, "UNKNOWN_{}", v),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct DLDecoder {
+pub struct DlDecoder {
     scid: u8,
-    current: Option<DLObject>,
+    current: Option<DlObject>,
     last_toggle: Option<u8>,
 }
 
-impl DLDecoder {
+impl DlDecoder {
     pub fn new(scid: u8) -> Self {
         Self {
             scid,
@@ -195,7 +194,7 @@ impl DLDecoder {
         if is_first {
             self.flush();
 
-            self.current = Some(DLObject::new(self.scid, toggle, charset.unwrap_or(0)));
+            self.current = Some(DlObject::new(self.scid, toggle, charset.unwrap_or(0)));
         }
 
         let start = 2;
@@ -263,7 +262,7 @@ impl DLDecoder {
             let start = data[base + 1] & 0x7F;
             let len = (data[base + 2] & 0x7F) + 1;
 
-            let tag = DLPlusTag::new(content_type, start, len);
+            let tag = DlPlusTag::new(content_type, start, len);
 
             // log::debug!(
             //     "DL+ tag: {:?}", tag
@@ -287,7 +286,7 @@ impl DLDecoder {
                 // let json = serde_json::to_string_pretty(&current).unwrap();
                 // println!("{}", json);
 
-                emit_event(EDIEvent::DLObjectReceived(current.clone()));
+                emit_event(DabEvent::DlObjectReceived(current.clone()));
                 self.last_toggle = Some(current.toggle);
             }
         }

@@ -1,7 +1,6 @@
 mod audio;
 mod tui;
 
-use log;
 use std::io;
 use std::sync::{Arc, Once};
 
@@ -11,12 +10,12 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::RwLock;
 
-use shared::edi::bus::{init_event_bus, EDIEvent};
-use shared::edi::{EDISource, Ensemble};
-use shared::edi_frame_extractor::EDIFrameExtractor;
+use shared::dab::bus::{init_event_bus, DabEvent};
+use shared::dab::{DabSource, Ensemble};
+use shared::edi_frame_extractor::EdiFrameExtractor;
 
 use audio::{AudioDecoder, AudioEvent};
-use tui::{TUICommand, TUIEvent};
+use tui::{TuiCommand, TuiEvent};
 
 /// EDInburgh
 #[derive(Parser, Debug)]
@@ -56,10 +55,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // TUI
     // TUI main -> TUI
-    let (tui_tx, tui_rx) = unbounded_channel::<TUIEvent>();
+    let (tui_tx, tui_rx) = unbounded_channel::<TuiEvent>();
 
     // TUI -> main
-    let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TUICommand>();
+    let (tui_cmd_tx, mut tui_cmd_rx) = unbounded_channel::<TuiCommand>();
 
     // TUI audio -> TUI
     let (audio_tx, audio_rx) = unbounded_channel::<AudioEvent>();
@@ -85,18 +84,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut filled = 0;
 
-    let mut extractor = EDIFrameExtractor::new();
+    let mut extractor = EdiFrameExtractor::new();
 
+    #[allow(clippy::type_complexity)]
     let on_ensemble_updated_callback: Option<Box<dyn FnMut(&Ensemble) + Send>> = if args.tui {
         None
     } else {
         Some(Box::new(|e: &Ensemble| print_ensemble(e)))
     };
 
-    let mut source = EDISource::new(args.scid, on_ensemble_updated_callback, None);
+    let mut source = DabSource::new(args.scid, on_ensemble_updated_callback, None);
 
     let event_handler =
-        EDIHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone(), audio_tx.clone());
+        DabEventHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone(), audio_tx.clone());
 
     tokio::spawn(async move {
         event_handler.run().await;
@@ -143,11 +143,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // TUI command handler
             Some(cmd) = tui_cmd_rx.recv() => {
                 match cmd {
-                    TUICommand::ScIDSelected(scid_val) => {
+                    TuiCommand::ScIDSelected(scid_val) => {
                         let mut scid = scid.write().await;
                         *scid = Some(scid_val);
                     }
-                    TUICommand::Shutdown => {
+                    TuiCommand::Shutdown => {
                         break;
                     }
                 }
@@ -158,22 +158,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-struct EDIHandler {
-    edi_rx: UnboundedReceiver<EDIEvent>,
+struct DabEventHandler {
+    edi_rx: UnboundedReceiver<DabEvent>,
     scid: Arc<RwLock<Option<u8>>>,
     audio_decoder: Option<AudioDecoder>,
     // tui
-    tui_tx: UnboundedSender<TUIEvent>,
+    tui_tx: UnboundedSender<TuiEvent>,
     audio_tx: UnboundedSender<AudioEvent>,
 }
 
-// hm - this is kind of verbose. theoretically EDIEvents could be consumed directly in TUI
+// hm - this is kind of verbose. theoretically DabEvents could be consumed directly in TUI
 // but this does not work with the current edi_rx implementation
-impl EDIHandler {
+impl DabEventHandler {
     pub fn new(
         scid: Arc<RwLock<Option<u8>>>,
-        edi_rx: UnboundedReceiver<EDIEvent>,
-        tui_tx: UnboundedSender<TUIEvent>,
+        edi_rx: UnboundedReceiver<DabEvent>,
+        tui_tx: UnboundedSender<TuiEvent>,
         audio_tx: UnboundedSender<AudioEvent>,
     ) -> Self {
         Self {
@@ -188,19 +188,19 @@ impl EDIHandler {
     pub async fn run(mut self) {
         while let Some(event) = self.edi_rx.recv().await {
             match event {
-                EDIEvent::EnsembleUpdated(ensemble) => {
+                DabEvent::EnsembleUpdated(ensemble) => {
                     if ensemble.complete {
                         log::debug!(
                             "Ensemble updated: 0x{:4x} - complete: {}",
                             ensemble.eid.unwrap_or(0),
                             ensemble.complete
                         );
-                        if let Err(e) = self.tui_tx.send(TUIEvent::EnsembleUpdated(ensemble)) {
+                        if let Err(e) = self.tui_tx.send(TuiEvent::EnsembleUpdated(ensemble)) {
                             log::warn!("Could not send TUI update: {:?}", e);
                         }
                     }
                 }
-                EDIEvent::AACPFramesExtracted(r) => {
+                DabEvent::AacpFramesExtracted(r) => {
                     let scid = *self.scid.read().await;
                     if r.scid == scid.unwrap_or(0) {
                         if r.audio_format.is_none() {
@@ -226,18 +226,18 @@ impl EDIHandler {
                         }
                     }
                 }
-                EDIEvent::MOTImageReceived(m) => {
-                    if let Err(e) = self.tui_tx.send(TUIEvent::MOTImageReceived(m)) {
+                DabEvent::MotImageReceived(m) => {
+                    if let Err(e) = self.tui_tx.send(TuiEvent::MotImageReceived(m)) {
                         log::warn!("Could not send TUI update: {:?}", e);
                     }
                 }
-                EDIEvent::DLObjectReceived(d) => {
-                    if let Err(e) = self.tui_tx.send(TUIEvent::DLObjectReceived(d)) {
+                DabEvent::DlObjectReceived(d) => {
+                    if let Err(e) = self.tui_tx.send(TuiEvent::DlObjectReceived(d)) {
                         log::warn!("Could not send TUI update: {:?}", e);
                     }
                 }
-                EDIEvent::EDISStatsUpdated(s) => {
-                    if let Err(e) = self.tui_tx.send(TUIEvent::EDISStatsUpdated(s)) {
+                DabEvent::DabStatsUpdated(s) => {
+                    if let Err(e) = self.tui_tx.send(TuiEvent::DabStatsUpdated(s)) {
                         log::warn!("Could not send TUI update: {:?}", e);
                     }
                 }

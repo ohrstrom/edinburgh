@@ -12,7 +12,7 @@ fmt:
 
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --no-deps --all-targets -- -D warnings
 
 .PHONY: clean
 clean:
@@ -22,6 +22,6 @@ clean:
 build:
 	cargo build
 
-.PHONY: release
-release:
+.PHONY: build-release
+build-release:
 	cargo build --release

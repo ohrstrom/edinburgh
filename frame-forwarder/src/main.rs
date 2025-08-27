@@ -2,8 +2,7 @@ use bytes::Bytes;
 use clap::Parser;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use log;
-use shared::edi_frame_extractor::EDIFrameExtractor;
+use shared::edi_frame_extractor::EdiFrameExtractor;
 use std::io;
 use std::sync::Arc;
 use tokio::io::Interest;
@@ -219,7 +218,7 @@ async fn start_edi_extractor(
             // Notify successful connection
             let _ = conn_status_tx.send(Ok(()));
 
-            let extractor = Arc::new(Mutex::new(EDIFrameExtractor::new()));
+            let extractor = Arc::new(Mutex::new(EdiFrameExtractor::new()));
             let mut filled = 0;
 
             loop {

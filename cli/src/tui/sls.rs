@@ -1,5 +1,5 @@
 use artem::{config::ConfigBuilder, convert};
-use derivative::Derivative;
+use derive_more::Debug;
 use humansize::{format_size, DECIMAL};
 use std::num::NonZeroU32;
 
@@ -90,8 +90,7 @@ impl Widget for SLSWidget {
     }
 }
 
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Debug, Clone)]
 pub struct SLSImage {
     pub mimetype: String,
     pub len: usize,

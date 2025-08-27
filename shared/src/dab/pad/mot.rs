@@ -1,19 +1,20 @@
-use super::MSCDataGroup;
-use crate::edi::bus::{emit_event, EDIEvent};
+use super::MscDataGroup;
+use crate::dab::bus::{emit_event, DabEvent};
 use md5::compute;
 use serde::Serialize;
+use std::fmt::Write;
 
 #[derive(Debug, Serialize)]
-pub struct MOTImage {
+pub struct MotImage {
     pub scid: u8,
     pub mimetype: String,
-    #[serde(serialize_with = "MOTImage::serialize_md5")]
+    #[serde(serialize_with = "MotImage::serialize_md5")]
     pub md5: [u8; 16],
     pub len: usize,
     pub data: Vec<u8>,
 }
 
-impl MOTImage {
+impl MotImage {
     pub fn new(scid: u8, kind: u16, data: Vec<u8>) -> Self {
         let mimetype = match kind {
             1 => "image/jpeg",
@@ -37,23 +38,27 @@ impl MOTImage {
     }
 
     pub fn md5_hex(&self) -> String {
-        self.md5
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>()
+        let mut s = String::with_capacity(self.md5.len() * 2);
+        for b in &self.md5 {
+            write!(&mut s, "{:02x}", b).unwrap();
+        }
+        s
     }
 
     fn serialize_md5<S>(md5: &[u8; 16], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let hex = md5.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+        let mut hex = String::with_capacity(32);
+        for b in md5 {
+            write!(&mut hex, "{:02x}", b).unwrap();
+        }
         serializer.serialize_str(&hex)
     }
 }
 
 #[derive(Debug)]
-pub struct MOTObject {
+pub struct MotObject {
     #[allow(dead_code)]
     scid: u8,
     // raw values
@@ -72,7 +77,7 @@ pub struct MOTObject {
     pub content_name: Option<String>,
 }
 
-impl MOTObject {
+impl MotObject {
     pub fn new(scid: u8, transport_id: u16) -> Self {
         Self {
             scid,
@@ -236,19 +241,19 @@ impl MOTObject {
 }
 
 #[derive(Debug)]
-pub struct MOTDecoder {
+pub struct MotDecoder {
     scid: u8,
-    pub current: Option<MOTObject>,
+    pub current: Option<MotObject>,
 }
 
-impl MOTDecoder {
+impl MotDecoder {
     pub fn new(scid: u8) -> Self {
         Self {
             scid,
             current: None,
         }
     }
-    pub fn feed(&mut self, dg: &MSCDataGroup) {
+    pub fn feed(&mut self, dg: &MscDataGroup) {
         if !dg.is_valid || !dg.segment_flag {
             return;
         }
@@ -271,7 +276,7 @@ impl MOTDecoder {
                 // Start new MOT object on header
                 // log::debug!("MOT: header: {} bytes", data.len());
 
-                let mut obj = MOTObject::new(self.scid, transport_id);
+                let mut obj = MotObject::new(self.scid, transport_id);
                 obj.header.extend_from_slice(data);
                 obj.header_complete = dg.last_flag;
 
@@ -309,13 +314,13 @@ impl MOTDecoder {
 
                         match obj.content_type {
                             Some(2) => {
-                                let mot_image = MOTImage::new(
+                                let mot_image = MotImage::new(
                                     self.scid,
                                     obj.content_subtype.unwrap_or(0),
                                     obj.body.clone(),
                                 );
                                 // log::debug!("MOT image: {:?}", mot_image);
-                                emit_event(EDIEvent::MOTImageReceived(mot_image));
+                                emit_event(DabEvent::MotImageReceived(mot_image));
                             }
                             _ => {
                                 log::warn!(

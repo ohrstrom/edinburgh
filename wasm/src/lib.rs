@@ -1,36 +1,29 @@
-/* NOTE: check implimentatios...
-use wee_alloc::WeeAlloc;
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-*/
-
 use log::{self, Level};
-use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys;
 
 use serde_wasm_bindgen::to_value;
 use wasm_bindgen::JsValue;
 
+use futures::lock::Mutex;
 use futures::StreamExt;
 
-use console_log;
-use shared::edi::bus::{init_event_bus, EDIEvent};
-use shared::edi::EDISource;
+use shared::dab::bus::{init_event_bus, DabEvent};
+use shared::dab::DabSource;
 use shared::utils;
 
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct EDI {
-    inner: Rc<RefCell<EDISource>>,
+    inner: Rc<Mutex<DabSource>>,
     event_target: web_sys::EventTarget,
 }
 
 #[wasm_bindgen]
 impl EDI {
     #[wasm_bindgen(constructor)]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> EDI {
         utils::set_panic_hook();
         let _ = console_log::init_with_level(Level::Info);
@@ -38,7 +31,7 @@ impl EDI {
         let mut event_rx = init_event_bus();
         log::info!("EDI:init");
 
-        let edi_source = Rc::new(RefCell::new(EDISource::new(None, None, None)));
+        let edi_source = Rc::new(Mutex::new(DabSource::new(None, None, None)));
 
         let event_target: web_sys::EventTarget =
             web_sys::EventTarget::new().unwrap().unchecked_into();
@@ -48,25 +41,24 @@ impl EDI {
             event_target,
         };
 
-        // Clone the edi instance for the async task.
         let edi_clone = edi.clone();
 
         spawn_local(async move {
             while let Some(event) = event_rx.next().await {
                 let js_event = match &event {
-                    EDIEvent::EnsembleUpdated(ensemble) => {
+                    DabEvent::EnsembleUpdated(ensemble) => {
                         let data = to_value(&ensemble).unwrap();
                         Some(Self::create_event("ensemble_updated", &data))
                     }
-                    EDIEvent::AACPFramesExtracted(aac) => {
+                    DabEvent::AacpFramesExtracted(aac) => {
                         let data = to_value(&aac).unwrap();
                         Some(Self::create_event("aac_segment", &data))
                     }
-                    EDIEvent::MOTImageReceived(mot) => {
+                    DabEvent::MotImageReceived(mot) => {
                         let data = to_value(&mot).unwrap();
                         Some(Self::create_event("mot_image", &data))
                     }
-                    EDIEvent::DLObjectReceived(dl) => {
+                    DabEvent::DlObjectReceived(dl) => {
                         let data = to_value(&dl).unwrap();
                         Some(Self::create_event("dl_object", &data))
                     }
@@ -89,15 +81,17 @@ impl EDI {
     }
 
     #[wasm_bindgen]
-    pub async fn feed(&mut self, data: &[u8]) -> Result<(), JsValue> {
-        let data = data.to_vec(); // copy data to avoid contention
-        self.inner.borrow_mut().feed(&data).await;
+    pub async fn feed(&self, data: &[u8]) -> Result<(), JsValue> {
+        let data = data.to_vec();
+        let mut inner = self.inner.lock().await;
+        inner.feed(&data).await;
         Ok(())
     }
 
     #[wasm_bindgen]
-    pub async fn reset(&mut self) -> Result<(), JsValue> {
-        self.inner.borrow_mut().reset();
+    pub async fn reset(&self) -> Result<(), JsValue> {
+        let mut inner = self.inner.lock().await;
+        inner.reset();
         Ok(())
     }
 

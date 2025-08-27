@@ -63,6 +63,7 @@ impl LevelMeterWidget {
                     Style::default().fg(Color::Black)
                 };
 
+                /*
                 let symbol = if i == peak_pos {
                     "██"
                 } else if i >= rms_top {
@@ -70,6 +71,9 @@ impl LevelMeterWidget {
                 } else {
                     "██"
                 };
+                */
+
+                let symbol = "██";
 
                 buf.set_string(x, y, symbol, style);
             }

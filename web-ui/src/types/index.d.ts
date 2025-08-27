@@ -33,7 +33,7 @@ export interface Service {
   sls?: SLS
 }
 
-interface DLPlusTag {
+interface DlPlusTag {
   kind: string
   value: string
 }
@@ -41,7 +41,7 @@ interface DLPlusTag {
 export interface DL {
   scid: number
   label?: string
-  dl_plus?: DLPlusTag[]
+  dl_plus?: DlPlusTag[]
 }
 
 export interface SLS {

@@ -21,16 +21,22 @@ impl SyncMagic {
 }
 
 #[derive(Debug, Clone)]
-pub struct AFFrame {
+pub struct ApplicationFrame {
     pub data: Vec<u8>,
     pub initial_size: usize,
     pub expected_size: usize,
     sync_magic: SyncMagic,
 }
 
-impl AFFrame {
+impl Default for ApplicationFrame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ApplicationFrame {
     pub fn new() -> Self {
-        AFFrame {
+        ApplicationFrame {
             data: vec![0; 8],
             initial_size: 8,
             expected_size: 0,
@@ -52,11 +58,11 @@ impl AFFrame {
 
     pub fn check_completed(&mut self) -> bool {
         let d = &self.data;
-        if d.len() == 0 {
+        if d.is_empty() {
             return false;
         }
         if d.len() == 8 {
-            // header only > retrieve payload len and resize frame
+            // header only > retrieve payload len and resize the buffer
             let len = (d[2] as usize) << 24
                 | (d[3] as usize) << 16
                 | (d[4] as usize) << 8
@@ -80,21 +86,27 @@ impl AFFrame {
     }
 }
 
-impl fmt::Display for AFFrame {
+impl fmt::Display for ApplicationFrame {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "AF ({})", self.data.len())
     }
 }
 
 #[derive(Debug)]
-pub struct EDIFrameExtractor {
-    pub frame: AFFrame,
+pub struct EdiFrameExtractor {
+    pub frame: ApplicationFrame,
 }
 
-impl EDIFrameExtractor {
+impl Default for EdiFrameExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EdiFrameExtractor {
     pub fn new() -> Self {
-        EDIFrameExtractor {
-            frame: AFFrame::new(),
+        EdiFrameExtractor {
+            frame: ApplicationFrame::new(),
         }
     }
 }

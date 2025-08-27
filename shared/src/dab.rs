@@ -6,66 +6,68 @@ pub mod msc;
 pub mod pad;
 mod tables;
 
-// use crate::meter::RateMeter;
-use derivative::Derivative;
+use derive_more::Debug;
 pub use ensemble::{Ensemble, Subchannel};
 use frame::Frame;
 use frame::Tag;
 use log;
-use msc::{AACPExctractor, FeedResult};
+use msc::{AacpExctractor, FeedResult};
 use serde::Serialize;
 
-use bus::{emit_event, EDIEvent};
+use bus::{emit_event, DabEvent};
 
 #[derive(Debug, Serialize)]
-pub struct AACPFrame {
+pub struct AacpFrame {
     pub scid: u8,
     pub data: Vec<u8>,
 }
 
-impl AACPFrame {
+impl AacpFrame {
     pub fn from_bytes(scid: u8, data: Vec<u8>) -> Self {
-        AACPFrame { scid, data }
+        AacpFrame { scid, data }
     }
 }
 
-impl Drop for AACPFrame {
+impl Drop for AacpFrame {
     fn drop(&mut self) {
         self.data.clear();
     }
 }
 
 #[derive(Debug)]
-pub struct EDISubchannel {
+pub struct DabSubchannel {
     scid: u8,
-    audio_extractor: AACPExctractor,
+    audio_extractor: AacpExctractor,
 }
 
-impl EDISubchannel {
+impl DabSubchannel {
     pub fn new(scid: u8) -> Self {
-        EDISubchannel {
+        DabSubchannel {
             scid,
-            audio_extractor: AACPExctractor::new(scid),
+            audio_extractor: AacpExctractor::new(scid),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct EDISStats {
+pub struct DabStats {
     pub rx_rate: usize,
     pub rx_bytes: u64,
     pub rx_frames: u64,
-    // #[serde(skip)]
-    // meter: RateMeter,
 }
 
-impl EDISStats {
+impl Default for DabStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DabStats {
     pub fn new() -> Self {
-        EDISStats {
+        DabStats {
             rx_rate: 0,
             rx_bytes: 0,
             rx_frames: 0,
-            // meter: RateMeter::default(),
         }
     }
     pub fn feed(&mut self, data: &[u8]) {
@@ -74,40 +76,39 @@ impl EDISStats {
         self.rx_bytes += bytes as u64;
         self.rx_frames += 1;
 
-        // self.meter.entry(bytes);
-
-        // self.rx_rate = self.meter.measure();
-
-        emit_event(EDIEvent::EDISStatsUpdated(self.clone()));
+        emit_event(DabEvent::DabStatsUpdated(self.clone()));
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct EDISource {
+pub type EnsembleUpdateCallback = Box<dyn FnMut(&Ensemble) + Send>;
+
+pub type AacpSegmentCallback = Box<dyn FnMut(&AacpFrame) + Send>;
+
+#[derive(Debug)]
+pub struct DabSource {
     ensemble: Ensemble,
-    subchannels: Vec<EDISubchannel>,
+    subchannels: Vec<DabSubchannel>,
     scid: u8,
-    #[derivative(Debug = "ignore")]
-    on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
-    #[derivative(Debug = "ignore")]
-    on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
-    stats: EDISStats,
+    #[debug(skip)]
+    on_ensemble_update: Option<EnsembleUpdateCallback>,
+    #[debug(skip)]
+    on_aac_segment: Option<AacpSegmentCallback>,
+    stats: DabStats,
 }
 
-impl EDISource {
+impl DabSource {
     pub fn new(
         scid: Option<u8>,
-        on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
-        on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
+        on_ensemble_update: Option<EnsembleUpdateCallback>,
+        on_aac_segment: Option<AacpSegmentCallback>,
     ) -> Self {
-        let stats = EDISStats::new();
-        EDISource {
+        let stats = DabStats::new();
+        DabSource {
             ensemble: Ensemble::new(),
             subchannels: Vec::new(),
             scid: scid.unwrap_or(0),
-            on_ensemble_update: on_ensemble_update,
-            on_aac_segment: on_aac_segment,
+            on_ensemble_update,
+            on_aac_segment,
             stats,
         }
     }
@@ -119,16 +120,16 @@ impl EDISource {
             Ok(frame) => {
                 for tag in &frame.tags {
                     match tag {
-                        Tag::DETI(tag) => {
+                        Tag::Deti(tag) => {
                             if self.ensemble.feed(tag).await {
                                 if let Some(ref mut callback) = self.on_ensemble_update {
-                                    let _ = callback(&self.ensemble);
+                                    callback(&self.ensemble);
                                 }
                             }
                         }
 
                         // AAC-segments
-                        Tag::EST(tag) => {
+                        Tag::Est(tag) => {
                             let scid = tag.value[0] >> 2;
 
                             let slice_data = &tag.value[3..];
@@ -149,7 +150,7 @@ impl EDISource {
                             let sc = match self.subchannels.iter_mut().find(|x| x.scid == scid) {
                                 Some(sc) => sc,
                                 None => {
-                                    let mut sc = EDISubchannel::new(scid);
+                                    let mut sc = DabSubchannel::new(scid);
                                     sc.audio_extractor.extract_pad = self.scid == scid;
                                     self.subchannels.push(sc);
                                     self.subchannels.last_mut().unwrap()
@@ -168,9 +169,9 @@ impl EDISource {
 
                                     // audio frames
                                     for frame in r.frames {
-                                        let aac_frame = AACPFrame::from_bytes(scid, frame);
+                                        let aac_frame = AacpFrame::from_bytes(scid, frame);
                                         if let Some(ref mut callback) = self.on_aac_segment {
-                                            let _ = callback(&aac_frame);
+                                            callback(&aac_frame);
                                         }
                                     }
                                 }
@@ -184,13 +185,13 @@ impl EDISource {
                         }
 
                         // ignored tags
-                        Tag::PTR(_tag) => {}
-                        Tag::DMY(_tag) => {}
+                        Tag::Ptr(_tag) => {}
+                        Tag::Dmy(_tag) => {}
 
                         // unknown tags (at least to me...)
-                        Tag::FSST(_tag) => {}
-                        Tag::FPTT(_tag) => {}
-                        Tag::FSID(_tag) => {} // unsupported tags
+                        Tag::Fsst(_tag) => {}
+                        Tag::Fptt(_tag) => {}
+                        Tag::Fsid(_tag) => {} // unsupported tags
                                               /*
                                               tag => {
                                                   log::warn!("Unsupported tag: {:?}", tag);
@@ -201,9 +202,8 @@ impl EDISource {
             }
             Err(err) => {
                 log::warn!("Error decoding frame: {:?}", err);
-                return;
             }
-        };
+        }
     }
 
     pub fn set_scid(&mut self, scid: u8) {
@@ -211,7 +211,7 @@ impl EDISource {
     }
 
     pub fn reset(&mut self) {
-        log::info!("EDISource: reset");
+        log::info!("DabSource: reset");
         self.ensemble.reset();
         self.subchannels.clear();
     }

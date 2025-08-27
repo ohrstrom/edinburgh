@@ -1,22 +1,19 @@
-use derivative::Derivative;
+use derive_more::Debug;
 use faad2::{version, Decoder};
-use log;
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamBuilder, Sink};
-use shared::edi::msc::{AACPResult, AudioFormat};
+use shared::dab::msc::{AacpResult, AudioFormat};
 use std::io::{Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub enum AudioEvent {
     LevelsUpdated(AudioLevels),
 }
 
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Debug, Clone)]
 pub struct AudioLevels {
     pub peak: (f32, f32),
     pub peak_clamped: (f32, f32),
@@ -25,7 +22,7 @@ pub struct AudioLevels {
     pub peak_smooth: (f32, f32),
     pub rms_smooth: (f32, f32),
 
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     last_update: Instant,
 }
 
@@ -111,19 +108,18 @@ impl AudioLevels {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct AudioDecoder {
     scid: u8,
     asc: Vec<u8>,
     audio_format: AudioFormat,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     decoder: Decoder,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     _stream: OutputStream,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     sink: Arc<Mutex<Sink>>,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     tx: UnboundedSender<AudioEvent>,
     levels: AudioLevels,
 }
@@ -188,13 +184,12 @@ impl AudioDecoder {
     }
     */
 
-    pub fn feed(&mut self, aac_result: &AACPResult) {
+    pub fn feed(&mut self, aac_result: &AacpResult) {
         if let Some(new_audio_format) = &aac_result.audio_format {
-            if new_audio_format != &self.audio_format {
-                if self.reconfigure(new_audio_format).is_err() {
-                    log::warn!("Decoder reconfiguration failed, skipping audio data");
-                    return;
-                }
+            if new_audio_format != &self.audio_format && self.reconfigure(new_audio_format).is_err()
+            {
+                log::warn!("Decoder reconfiguration failed, skipping audio data");
+                return;
             }
         }
 
@@ -231,12 +226,12 @@ impl AudioDecoder {
         }
 
         for frame in &aac_result.frames {
-            self.feed_au(&frame);
+            self.feed_au(frame);
         }
     }
 
     pub fn feed_au(&mut self, au_data: &[u8]) {
-        match self.decoder.decode(&au_data) {
+        match self.decoder.decode(au_data) {
             Ok(r) => {
                 self.sink.lock().unwrap().append(SamplesBuffer::new(
                     r.channels as u16,
@@ -244,7 +239,7 @@ impl AudioDecoder {
                     r.samples,
                 ));
 
-                self.levels.feed(r.channels, &r.samples);
+                self.levels.feed(r.channels, r.samples);
 
                 if let Err(e) = self.tx.send(AudioEvent::LevelsUpdated(self.levels.clone())) {
                     log::warn!("Could not send AudioEvent update: {:?}", e);
@@ -252,7 +247,6 @@ impl AudioDecoder {
             }
             Err(e) => {
                 log::error!("DEC: {}", e);
-                return;
             }
         }
     }

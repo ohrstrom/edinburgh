@@ -1,8 +1,8 @@
 use serde::Serialize;
 
-use super::bus::{emit_event, EDIEvent};
-use super::fic::FIG;
-use super::frame::DETITag;
+use super::bus::{emit_event, DabEvent};
+use super::fic::Fig;
+use super::frame::DetiTag;
 use super::msc::AudioFormat;
 use super::tables;
 
@@ -44,6 +44,12 @@ pub struct Ensemble {
     pub complete: bool,
 }
 
+impl Default for Ensemble {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ensemble {
     pub fn new() -> Self {
         Ensemble {
@@ -57,16 +63,16 @@ impl Ensemble {
         }
     }
 
-    pub async fn feed(&mut self, tag: &DETITag) -> bool {
+    pub async fn feed(&mut self, tag: &DetiTag) -> bool {
         let mut updated = false;
 
         for fig in &tag.figs {
             match fig {
-                FIG::F0_0(fig) => {
+                Fig::F0_0(fig) => {
                     updated |= self.eid.replace(fig.eid) != Some(fig.eid);
                     updated |= self.al_flag.replace(fig.al_flag) != Some(fig.al_flag);
                 }
-                FIG::F0_1(fig) => {
+                Fig::F0_1(fig) => {
                     for sc in &fig.subchannels {
                         let existing_sc = self.subchannels.iter_mut().find(|s| s.id == sc.id);
 
@@ -96,7 +102,7 @@ impl Ensemble {
                         }
                     }
                 }
-                FIG::F0_2(fig) => {
+                Fig::F0_2(fig) => {
                     for entry in &fig.services {
                         let service = self.services.iter_mut().find(|s| s.sid == entry.sid);
 
@@ -137,7 +143,7 @@ impl Ensemble {
                         }
                     }
                 }
-                FIG::F0_5(fig) => {
+                Fig::F0_5(fig) => {
                     for lang in &fig.services {
                         for service in &mut self.services {
                             if let Some(component) =
@@ -149,7 +155,7 @@ impl Ensemble {
                         }
                     }
                 }
-                FIG::F0_13(fig) => {
+                Fig::F0_13(fig) => {
                     for entry in &fig.services {
                         if let Some(service) = self.services.iter_mut().find(|s| s.sid == entry.sid)
                         {
@@ -178,12 +184,12 @@ impl Ensemble {
                         }
                     }
                 }
-                FIG::F1_0(fig) => {
+                Fig::F1_0(fig) => {
                     updated |= self.label.replace(fig.label.clone()) != Some(fig.label.clone());
                     updated |= self.short_label.replace(fig.short_label.clone())
                         != Some(fig.short_label.clone());
                 }
-                FIG::F1_1(fig) => {
+                Fig::F1_1(fig) => {
                     if let Some(service) = self.services.iter_mut().find(|s| s.sid == fig.sid) {
                         updated |=
                             service.label.replace(fig.label.clone()) != Some(fig.label.clone());
@@ -203,14 +209,9 @@ impl Ensemble {
             // this is not so nice, as complete could / will set to true
             // when subchannels are not yet completed (e.g. language)
 
-            if self.eid.is_some()
+            self.complete = self.eid.is_some()
                 && self.label.is_some()
-                && self.services.iter().all(|s| s.label.is_some())
-            {
-                self.complete = true;
-            } else {
-                self.complete = false;
-            }
+                && self.services.iter().all(|s| s.label.is_some());
 
             /*
             for s in &self.services {
@@ -223,7 +224,7 @@ impl Ensemble {
         }
 
         if updated {
-            emit_event(EDIEvent::EnsembleUpdated(self.clone()));
+            emit_event(DabEvent::EnsembleUpdated(self.clone()));
         }
 
         updated
@@ -244,7 +245,7 @@ impl Ensemble {
         }
 
         if updated {
-            emit_event(EDIEvent::EnsembleUpdated(self.clone()));
+            emit_event(DabEvent::EnsembleUpdated(self.clone()));
         }
 
         updated

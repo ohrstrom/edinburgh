@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict};
-use shared::edi::bus::{init_event_bus, EDIEvent};
-use shared::edi::EDISource;
+use pyo3::types::PyBytes;
+use shared::dab::bus::{init_event_bus, DabEvent};
+use shared::dab::DabSource;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
@@ -11,8 +11,9 @@ use tokio::sync::Mutex;
 type PyCallback = PyObject;
 
 #[pyclass]
+#[allow(clippy::upper_case_acronyms)]
 struct EDI {
-    _inner: Arc<Mutex<EDISource>>,
+    _inner: Arc<Mutex<DabSource>>,
     _callbacks: Arc<Mutex<HashMap<String, Vec<PyCallback>>>>,
     tx: Sender<Vec<u8>>,
     // keep runtime alive for the life of the object
@@ -31,7 +32,7 @@ impl EDI {
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
         );
 
-        let source = Arc::new(Mutex::new(EDISource::new(None, None, None)));
+        let source = Arc::new(Mutex::new(DabSource::new(None, None, None)));
         let callbacks = Arc::new(Mutex::new(HashMap::new()));
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
@@ -40,7 +41,7 @@ impl EDI {
         {
             let handle = rt.handle().clone();
             handle.spawn(async move {
-                let mut edisource = EDISource::new(None, None, None);
+                let mut edisource = DabSource::new(None, None, None);
                 while let Some(data) = rx.recv().await {
                     let _ = edisource.feed(&data).await;
                 }
@@ -49,7 +50,7 @@ impl EDI {
 
         // init the bus and spawn the event handler on OUR runtime
         let edi_rx = init_event_bus();
-        let event_handler = EDIHandler::new(edi_rx, callbacks.clone());
+        let event_handler = DabEventHandler::new(edi_rx, callbacks.clone());
 
         {
             let handle = rt.handle().clone();
@@ -80,14 +81,15 @@ impl EDI {
     }
 }
 
-struct EDIHandler {
-    edi_rx: UnboundedReceiver<EDIEvent>,
+struct DabEventHandler {
+    edi_rx: UnboundedReceiver<DabEvent>,
+    #[allow(dead_code)]
     callbacks: Arc<Mutex<HashMap<String, Vec<PyCallback>>>>,
 }
 
-impl EDIHandler {
+impl DabEventHandler {
     pub fn new(
-        edi_rx: UnboundedReceiver<EDIEvent>,
+        edi_rx: UnboundedReceiver<DabEvent>,
         callbacks: Arc<Mutex<HashMap<String, Vec<PyCallback>>>>,
     ) -> Self {
         Self { edi_rx, callbacks }
@@ -96,19 +98,20 @@ impl EDIHandler {
     pub async fn run(mut self) {
         while let Some(event) = self.edi_rx.recv().await {
             match event {
-                EDIEvent::EnsembleUpdated(ensemble) => {
+                DabEvent::EnsembleUpdated(ensemble) => {
                     println!("Ensemble updated: {:?}", ensemble);
                 }
-                EDIEvent::MOTImageReceived(m) => {
+                DabEvent::MotImageReceived(m) => {
                     println!("MOT Image received: {:?}", m);
                 }
-                EDIEvent::DLObjectReceived(d) => {
+                DabEvent::DlObjectReceived(d) => {
                     println!("DL Object received: {:?}", d);
                 }
                 _ => (),
             }
         }
     }
+    #[allow(dead_code)]
     fn emit<F>(&self, event: &str, build_payload: F)
     where
         F: for<'py> FnOnce(Python<'py>) -> PyObject,

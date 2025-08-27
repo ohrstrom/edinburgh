@@ -24,6 +24,49 @@ The architecture of EDInburgh is designed to be modular and extensible, allowing
 - [Frame Forwarder](frame-forwarder/): A service that extracts EDI Application Layer frames from the incoming stream and forwards them via WebSocket.
 - [Ensemble Directory](ensemble-directory/): A service that scans EDI host and port-ranges for DAB+ ensembles, providing the result as a JSON API.
 
+## Build
+
+See [Makefile](Makefile) for build details.
+
+### Individual Components
+
+Each component can be built using the instructions from the corresponding `README.md` - or using each component's `Makefile`:
+
+```shell
+make build
+# resp:
+make build-release
+```
+
+### Build all Workspace Components
+
+#### Dependencies / Tooling (WASM)
+
+```shell
+cargo install wasm-pack
+rustup target add wasm32-unknown-unknown
+```
+
+#### Building
+
+```shell
+make build
+# resp:
+make build-release
+```
+
+### Build and Install Workspace Binaries
+
+```shell
+make install
+```
+
+This builds and installs:
+
+- `edinburgh`
+- `edinburgh-frame-forwarder`
+- `edinburgh-ensemble-directory`
+
 ## Screenshots
 
 ### CLI / TUI

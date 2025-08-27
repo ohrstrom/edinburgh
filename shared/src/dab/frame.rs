@@ -1,9 +1,9 @@
-use derivative::Derivative;
+use derive_more::Debug;
 use log;
 use serde::Serialize;
 use thiserror::Error;
 
-use super::fic::{FICDecoder, FIG};
+use super::fic::{FicDecoder, Fig};
 
 #[derive(Debug, Error)]
 pub enum FrameDecodeError {
@@ -91,21 +91,21 @@ impl Frame {
 
         match kind {
             // tags we actually care
-            "deti" => match DETITag::from_bytes(data) {
-                Ok(tag) => Ok(Tag::DETI(tag)),
+            "deti" => match DetiTag::from_bytes(data) {
+                Ok(tag) => Ok(Tag::Deti(tag)),
                 Err(e) => Err(e),
             },
-            "est" => match ESTTag::from_bytes(data) {
-                Ok(tag) => Ok(Tag::EST(tag)),
+            "est" => match EstTag::from_bytes(data) {
+                Ok(tag) => Ok(Tag::Est(tag)),
                 Err(e) => Err(e),
             },
             // tags i guess we don't care
-            "*ptr" => Ok(Tag::PTR(PTRTag())),
-            "*dmy" => Ok(Tag::DMY(DMYTag())),
+            "*ptr" => Ok(Tag::Ptr(PtrTag())),
+            "*dmy" => Ok(Tag::Dmy(DmyTag())),
             // tags i don't know what they are...
-            "Fsst" => Ok(Tag::FSST(FSSTTag {})),
-            "Fptt" => Ok(Tag::FPTT(FPTTTag {})),
-            "Fsid" => Ok(Tag::FSID(FSIDTag {})),
+            "Fsst" => Ok(Tag::Fsst(FsstTag {})),
+            "Fptt" => Ok(Tag::Fptt(FpttTag {})),
+            "Fsid" => Ok(Tag::Fsid(FsidTag {})),
             _ => Err(TagError::Unsupported {
                 name: kind.to_string(),
             }),
@@ -124,34 +124,34 @@ pub enum TagError {
 
 #[derive(Debug, Serialize)]
 pub enum Tag {
-    DETI(DETITag),
-    EST(ESTTag),
+    Deti(DetiTag),
+    Est(EstTag),
     //
-    PTR(PTRTag),
-    DMY(DMYTag),
+    Ptr(PtrTag),
+    Dmy(DmyTag),
     //
-    FSST(FSSTTag),
-    FPTT(FPTTTag),
-    FSID(FSIDTag),
+    Fsst(FsstTag),
+    Fptt(FpttTag),
+    Fsid(FsidTag),
 }
 
 // tags i don't think we have to care about
 #[derive(Debug, Serialize)]
-pub struct PTRTag();
+pub struct PtrTag();
 
 #[derive(Debug, Serialize)]
-pub struct DMYTag();
+pub struct DmyTag();
 
 // tags we care about
 #[derive(Debug, Serialize)]
-pub struct DETITag {
+pub struct DetiTag {
     // DAB ETI(LI) Management
     pub atstf: Vec<u8>,
-    pub figs: Vec<FIG>,
+    pub figs: Vec<Fig>,
     pub rfudf: Vec<u8>,
 }
 
-impl DETITag {
+impl DetiTag {
     pub fn from_bytes(data: &[u8]) -> Result<Self, TagError> {
         if data.len() < 8 {
             return Err(TagError::InvalidSize { l: data.len() });
@@ -199,7 +199,7 @@ impl DETITag {
             let fic_start = 2 + 4 + if has_atstf { 8 } else { 0 };
             let fic_data = &value[fic_start..fic_start + fic_len];
 
-            match FICDecoder::from_bytes(fic_data) {
+            match FicDecoder::from_bytes(fic_data) {
                 Ok(_figs) => {
                     figs.extend(_figs);
                 }
@@ -213,16 +213,15 @@ impl DETITag {
     }
 }
 
-#[derive(Derivative, Serialize)]
-#[derivative(Debug)]
-pub struct ESTTag {
+#[derive(Debug, Serialize)]
+pub struct EstTag {
     pub len: usize,
     pub header: Vec<u8>,
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     pub value: Vec<u8>,
 }
 
-impl ESTTag {
+impl EstTag {
     pub fn from_bytes(data: &[u8]) -> Result<Self, TagError> {
         if data.len() < 8 {
             return Err(TagError::InvalidSize { l: data.len() });
@@ -234,11 +233,11 @@ impl ESTTag {
 
         // TODO: maybe add some checks?
 
-        // println!("ESTTag: len: {}, header: {:?}, value: {:?}", len, header, value);
+        // println!("EstTag: len: {}, header: {:?}, value: {:?}", len, header, value);
 
         // let scid = value[0] >> 2;
         // if scid == 13 {
-        //     println!("ESTTag: SCID: {} - header: {:?} - data: {:?}", scid, header, &value[..11]);
+        //     println!("EstTag: SCID: {} - header: {:?} - data: {:?}", scid, header, &value[..11]);
         // }
 
         Ok(Self { len, header, value })
@@ -247,10 +246,10 @@ impl ESTTag {
 
 // some tags seen on sat2edi - don't know what do do with them...
 #[derive(Debug, Serialize)]
-pub struct FSSTTag {}
+pub struct FsstTag {}
 
 #[derive(Debug, Serialize)]
-pub struct FPTTTag {}
+pub struct FpttTag {}
 
 #[derive(Debug, Serialize)]
-pub struct FSIDTag {}
+pub struct FsidTag {}

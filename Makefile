@@ -24,7 +24,16 @@ fmt:
 
 .PHONY: clippy
 clippy:
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy \
+	  --workspace \
+	  --exclude edinburgh-wasm \
+	  --exclude edinburgh-pyo3 \
+	  -- -D warnings
+	cargo clippy \
+	  --package edinburgh-wasm \
+	  --target wasm32-unknown-unknown \
+	  --no-deps \
+	  -- -D warnings
 
 .PHONY: clean
 clean:
@@ -32,14 +41,28 @@ clean:
 
 .PHONY: build
 build:
-	cargo build --package edinburgh-wasm --target wasm32-unknown-unknown
-	cargo build --package edinburgh
-	cargo build --package edinburgh-frame-forwarder
-	cargo build --package edinburgh-ensemble-directory
+	cargo build \
+	  --workspace \
+	  --exclude edinburgh-wasm \
+	  --exclude edinburgh-pyo3
+	cargo build \
+	  --package edinburgh-wasm \
+	  --target wasm32-unknown-unknown
 
-.PHONY: release
-release:
-	cargo build --release --package edinburgh-wasm --target wasm32-unknown-unknown
-	cargo build --release --package edinburgh
-	cargo build --release --package edinburgh-frame-forwarder
-	cargo build --release --package edinburgh-ensemble-directory
+.PHONY: build-release
+build-release:
+	cargo build \
+	  --release \
+	  --workspace \
+	  --exclude edinburgh-wasm \
+	  --exclude edinburgh-pyo3
+	cargo build \
+	  --release \
+	  --package edinburgh-wasm \
+	  --target wasm32-unknown-unknown
+
+.PHONY: install
+install:
+	cargo install --path cli
+	cargo install --path frame-forwarder
+	cargo install --path ensemble-directory

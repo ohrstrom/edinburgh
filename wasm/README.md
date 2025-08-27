@@ -7,6 +7,12 @@ Used by the [Web UI](../web-ui/) to process EDI in the browser.
 ## Build UI
 
 ```shell
+# build dependencies / tooling
+cargo install wasm-pack
+rustup target add wasm32-unknown-unknown
+```
+
+```shell
 make build
 ```
 

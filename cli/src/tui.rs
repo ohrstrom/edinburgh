@@ -2,12 +2,12 @@ pub mod meter;
 pub mod sls;
 
 use humansize::{format_size, DECIMAL};
-use shared::edi::pad::dl::DLObject;
-use shared::edi::pad::mot::MOTImage;
-use shared::edi::{EDISStats, Ensemble, Subchannel};
+use shared::dab::pad::dl::DlObject;
+use shared::dab::pad::mot::MotImage;
+use shared::dab::{DabStats, Ensemble, Subchannel};
 use std::{io, time::Duration};
 
-use derivative::Derivative;
+use derive_more::Debug;
 
 use crate::audio::{AudioEvent, AudioLevels};
 
@@ -42,29 +42,28 @@ fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
 }
 
 #[derive(Debug)]
-pub enum TUIEvent {
+pub enum TuiEvent {
     EnsembleUpdated(Ensemble),
-    DLObjectReceived(DLObject),
-    MOTImageReceived(MOTImage),
-    EDISStatsUpdated(EDISStats),
+    DlObjectReceived(DlObject),
+    MotImageReceived(MotImage),
+    DabStatsUpdated(DabStats),
 }
 
-pub enum TUICommand {
+pub enum TuiCommand {
     ScIDSelected(u8),
     Shutdown,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct TuiState {
     pub addr: String,
     pub current_ensemble: Option<Ensemble>,
     pub selected_scid: Option<u8>,
     pub services: Vec<ServiceRow>,
     pub table_state: TableState,
-    pub dl_objects: Vec<(u8, Option<DLObject>)>,
+    pub dl_objects: Vec<(u8, Option<DlObject>)>,
     pub sls_images: Vec<(u8, Option<SLSImage>)>,
-    pub edi_stats: EDISStats,
+    pub edi_stats: DabStats,
     pub show_meter: bool,
     pub show_sls: bool,
     pub levels: AudioLevels,
@@ -83,7 +82,7 @@ impl TuiState {
             table_state,
             dl_objects: Vec::new(),
             sls_images: Vec::new(),
-            edi_stats: EDISStats::new(), // NOTE: should we rather use option & none here?
+            edi_stats: DabStats::new(), // NOTE: should we rather use option & none here?
             show_meter: false,
             show_sls: false,
             levels: AudioLevels::new(),
@@ -113,7 +112,7 @@ impl TuiState {
                         .label
                         .clone()
                         .unwrap_or_else(|| "(no label)".to_string()),
-                    short_label: svc.short_label.clone().unwrap_or_else(|| "".to_string()),
+                    short_label: svc.short_label.clone().unwrap_or_default(),
                     scid,
                     subchannel,
                     format: audio_format
@@ -134,7 +133,7 @@ impl TuiState {
         }
     }
 
-    pub fn update_dl_object(&mut self, dl: DLObject) {
+    pub fn update_dl_object(&mut self, dl: DlObject) {
         match self
             .dl_objects
             .iter_mut()
@@ -145,7 +144,7 @@ impl TuiState {
         }
     }
 
-    pub fn update_mot_image(&mut self, m: MOTImage) {
+    pub fn update_mot_image(&mut self, m: MotImage) {
         let s = SLSImage::new(
             m.mimetype.clone().to_uppercase(),
             m.len,
@@ -159,7 +158,7 @@ impl TuiState {
         }
     }
 
-    pub fn update_edi_stats(&mut self, stats: EDISStats) {
+    pub fn update_edi_stats(&mut self, stats: DabStats) {
         self.edi_stats = stats;
     }
 
@@ -181,9 +180,9 @@ pub struct ServiceRow {
 pub async fn run_tui(
     addr: String,
     scid: Option<u8>,
-    #[allow(unused_variables)] tx: UnboundedSender<TUIEvent>,
-    mut rx: UnboundedReceiver<TUIEvent>,
-    cmd_tx: UnboundedSender<TUICommand>,
+    #[allow(unused_variables)] tx: UnboundedSender<TuiEvent>,
+    mut rx: UnboundedReceiver<TuiEvent>,
+    cmd_tx: UnboundedSender<TuiCommand>,
     mut audio_rx: UnboundedReceiver<AudioEvent>,
 ) -> io::Result<()> {
     enable_raw_mode()?;
@@ -428,35 +427,9 @@ pub async fn run_tui(
             };
 
             let player_text = match current_service {
-                Some(svc) => format!("{}", svc.label),
+                Some(svc) => svc.label.to_string(),
                 None => "No service selected".to_string(),
             };
-
-            // let player_dl =
-
-            /*
-            let player_dl = if let Some(selected) = state.selected_scid {
-                state.dl_objects.iter().find(|(scid, _)| *scid == selected)
-            } else {
-                None
-            };
-
-            let player_dl_text = if let Some((_, Some(dl))) = player_dl {
-                dl.decode_label()
-            } else {
-                "-".into()
-            };
-
-            let player_dl_title: String = if let Some((_, Some(dl))) = player_dl {
-                if dl.get_dl_plus().len() > 0 {
-                    " DL+ ".into()
-                } else {
-                    " DL ".into()
-                }
-            } else {
-                " DL ".into()
-            };
-            */
 
             let player_dl = state
                 .selected_scid
@@ -482,7 +455,6 @@ pub async fn run_tui(
                             .collect::<Vec<_>>()
                             .join(" | ");
 
-                        // Add DL+ line with special style
                         lines.push(Line::from(vec![Span::styled(
                             tags_joined,
                             Style::default().fg(Color::DarkGray),
@@ -610,11 +582,11 @@ pub async fn run_tui(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => {
-                        let _ = cmd_tx.send(TUICommand::Shutdown);
+                        let _ = cmd_tx.send(TuiCommand::Shutdown);
                         break;
                     }
                     KeyCode::Esc => {
-                        let _ = cmd_tx.send(TUICommand::Shutdown);
+                        let _ = cmd_tx.send(TuiCommand::Shutdown);
                         break;
                     }
                     KeyCode::Up => {
@@ -641,7 +613,7 @@ pub async fn run_tui(
                         if let Some(selected) = state.table_state.selected() {
                             let scid = state.services[selected].scid;
                             state.selected_scid = Some(scid);
-                            let _ = cmd_tx.send(TUICommand::ScIDSelected(scid));
+                            let _ = cmd_tx.send(TuiCommand::ScIDSelected(scid));
                         }
                     }
                     KeyCode::Char('m') => {
@@ -660,16 +632,16 @@ pub async fn run_tui(
 
         while let Ok(msg) = rx.try_recv() {
             match msg {
-                TUIEvent::EnsembleUpdated(ensemble) => {
+                TuiEvent::EnsembleUpdated(ensemble) => {
                     state.update_services(ensemble);
                 }
-                TUIEvent::DLObjectReceived(d) => {
+                TuiEvent::DlObjectReceived(d) => {
                     state.update_dl_object(d);
                 }
-                TUIEvent::MOTImageReceived(m) => {
+                TuiEvent::MotImageReceived(m) => {
                     state.update_mot_image(m);
                 }
-                TUIEvent::EDISStatsUpdated(s) => {
+                TuiEvent::DabStatsUpdated(s) => {
                     state.update_edi_stats(s);
                 }
                 #[allow(unreachable_patterns)]
@@ -678,6 +650,7 @@ pub async fn run_tui(
         }
 
         while let Ok(msg) = audio_rx.try_recv() {
+            #[allow(clippy::single_match)]
             match msg {
                 AudioEvent::LevelsUpdated(l) => {
                     state.update_levels(l);
