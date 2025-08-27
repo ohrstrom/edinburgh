@@ -218,7 +218,7 @@ impl EDIHandler {
                             self.audio_decoder = Some(audio_decoder);
                         }
 
-                        // feed audio decoder with frames
+                        // feed audio decoder
                         if let Some(ref mut audio_decoder) = self.audio_decoder {
                             audio_decoder.feed(&r);
                         }

@@ -22,26 +22,52 @@ struct Args {
     port: Option<u16>,
 
     /// Scan pattern
-    /// format: host:port-port or host:port  
+    /// format: host:port-port or host:port,
     /// repeat for multiple targets
-    #[arg(long = "scan")]
+    #[arg(long = "scan", required = true)]
     scan_targets: Vec<ScanTarget>,
+
+    /// Scan interval, in seconds
+    #[arg(long = "scan-interval", default_value = "60")]
+    scan_interval: u64,
+
+    /// Scan timeout, in seconds
+    #[arg(long = "scan-timeout", default_value = "5")]
+    scan_timeout: u64,
+
+    /// Scan parallelism: number of concurrent scans
+    #[arg(long = "scan-parallel", default_value = "8")]
+    scan_num_parallel: usize,
+
+    /// Verbose logging
+    #[arg(long = "verbose", short = 'v')]
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+    let args = Args::parse();
+
+    let log_level = if args.verbose { "debug" } else { "info"};
+
     tracing_subscriber::fmt()
-        .with_env_filter("info")
+        .with_env_filter(log_level)
         .with_target(false)
         .without_time()
         .init();
 
-    let args = Args::parse();
     let addr = format!("{}:{}", args.host, args.port.unwrap());
 
-    log::info!("Starting service on http://{}/", addr);
+    // validate that timeout is less than interval
+    if args.scan_timeout >= args.scan_interval {
+        log::error!("scan timeout ({}) must be less than scan interval ({})", args.scan_timeout, args.scan_interval);
+        std::process::exit(1);
+    }
 
-    let svc = services::DirectoryService::new(args.scan_targets);
+    log::info!("Starting API on http://{}/", addr);
+
+    let svc = services::DirectoryService::new(args.scan_targets, args.scan_interval, args.scan_timeout, args.scan_num_parallel);
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

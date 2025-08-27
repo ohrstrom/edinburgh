@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import asyncio
 import websockets
 from edinburgh import EDI
@@ -10,7 +12,6 @@ async def ws_reader():
         while True:
             data = await ws.recv()
             if isinstance(data, bytes):
-                print(f"PY: {len(data)} bytes")
                 edi.feed(data)
 
 asyncio.run(ws_reader())

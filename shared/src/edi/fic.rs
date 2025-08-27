@@ -130,6 +130,10 @@ impl Fig0_1 {
                     bitrate,
                 });
             }
+
+            // if id >= 30 {
+            //     println!("SCID: {} - start: {} size: {:?} bitrate: {:?}", id, start, size, bitrate);
+            // }
         }
 
         Ok(Self { base, subchannels })
@@ -186,7 +190,7 @@ impl Fig0_2 {
                 // ascti 63: DAB+
                 // log::debug!("ASCTI: {}", ascty);
 
-                // Ignore CA components
+                // Ignore CA (Conditional Access) components
                 if !ca {
                     services.push(ServiceComponent {
                         sid,
@@ -209,35 +213,49 @@ impl Fig0_2 {
 #[derive(Debug, Serialize)]
 pub struct Fig0_3 {
     base: Fig0,
-    pub sid: u16,
-    pub scids: u8,
-    pub scid: u8,
+    pub scid: u16,            // 12 bits
+    pub rfa: u8,              // 3 bits
+    pub scca_flag: bool,      // 1 bit
+    pub dg_flag: bool,        // 1 bit
+    pub rfu: bool,            // 1 bit
+    pub dscty: u8,            // 6 bits
+    pub subchid: u8,          // 6 bits
+    pub packet_address: u16,  // 10 bits
+    pub scca: Option<u16>,    // present if scca_flag
 }
 
 impl Fig0_3 {
-    // FIG 0/3 - Service component in packet mode (MCI)
     pub fn from_bytes(base: Fig0, data: &[u8]) -> Result<Self, FIGError> {
-        if data.len() < 3 {
+        if data.len() < 5 {
             return Err(FIGError::InvalidSize { l: data.len() });
         }
 
-        // Extract Service ID (SID) - first two bytes
-        let sid = u16::from_be_bytes([data[0], data[1]]);
-        // Extract Service Component ID (SCIdS) - upper 4 bits of byte 2
-        let scids = (data[2] & 0xF0) >> 4;
-        // Extract Subchannel ID - lower 6 bits of byte 2
-        let scid = data[2] & 0x3F;
+        let b0 = data[0];
+        let b1 = data[1];
+        let b2 = data[2];
+        let b3 = data[3];
+        let b4 = data[4];
 
-        // log::debug!("FIG0/3: SID: 0x{:04X}, SCIdS: {}, scid: {}", sid, scids, scid);
+        let scid = ((b0 as u16) << 4) | ((b1 as u16) >> 4);
+        let rfa  = (b1 & 0x0E) >> 1;
+        let scca_flag = (b1 & 0x01) != 0;
 
-        Ok(Self {
-            base,
-            sid,
-            scids,
-            scid,
-        })
+        let dg_flag = (b2 & 0x80) != 0;
+        let rfu     = (b2 & 0x40) != 0;
+        let dscty   =  b2 & 0x3F;
+
+        let subchid = (b3 >> 2) & 0x3F;
+        let packet_address = (((b3 & 0x03) as u16) << 8) | (b4 as u16);
+
+        let scca = if scca_flag {
+            if data.len() < 7 { return Err(FIGError::InvalidSize { l: data.len() }); }
+            Some(u16::from_be_bytes([data[5], data[6]]))
+        } else { None };
+
+        Ok(Self { base, scid, rfa, scca_flag, dg_flag, rfu, dscty, subchid, packet_address, scca })
     }
 }
+
 
 #[derive(Debug, Serialize)]
 pub struct Fig0_5 {
@@ -542,6 +560,8 @@ impl Fig0_13 {
             services.push(ServiceUA { sid, scids, uas });
         }
 
+        // println!("SVCS: {:?}", services);
+
         Ok(Self { base, services })
     }
 }
@@ -611,28 +631,6 @@ impl Fig1_1 {
             short_label,
         })
     }
-
-    /*
-    fn decode_label(data: &[u8]) -> (String, String) {
-        // data contains 16 bytes label and 1 byte short label mask
-        let label_bytes = &data[..16];
-        let mask = u16::from_be_bytes([data[16], data[17]]);
-
-        let label = String::from_utf8_lossy(label_bytes).trim_end().to_string();
-
-        let mut short_label = String::new();
-
-        for (i, &byte) in label_bytes.iter().enumerate() {
-            if mask & (1 << (15 - i)) != 0 {
-                short_label.push(byte as char);
-            }
-        }
-
-        short_label = short_label.trim().to_string();
-
-        (label, short_label)
-    }
-    */
 
     fn label_str(label_bytes: &[u8]) -> String {
         String::from_utf8_lossy(label_bytes).trim_end().to_string()

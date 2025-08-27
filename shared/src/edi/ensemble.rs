@@ -100,6 +100,8 @@ impl Ensemble {
                     for entry in &fig.services {
                         let service = self.services.iter_mut().find(|s| s.sid == entry.sid);
 
+                        // println!("02 - SID: 0x{:04X}", entry.sid);
+
                         match service {
                             Some(existing_service) => {
                                 if !existing_service

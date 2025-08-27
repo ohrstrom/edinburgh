@@ -24,8 +24,8 @@ pub struct DirectoryEnsemble {
 }
 
 #[derive(Serialize)]
-pub struct Message {
-    pub message: String,
+pub struct ApiRoot {
+    pub ensembles: String,
 }
 
 #[derive(Clone, Debug)]
@@ -77,13 +77,19 @@ impl std::str::FromStr for ScanTarget {
 pub struct DirectoryService {
     pub ensembles: Arc<RwLock<Vec<DirectoryEnsemble>>>,
     pub scan_targets: Vec<ScanTarget>,
+    pub scan_interval: u64,
+    pub scan_timeout: u64,
+    pub scan_num_parallel: usize,
 }
 
 impl DirectoryService {
-    pub fn new(scan_targets: Vec<ScanTarget>) -> Arc<Self> {
+    pub fn new(scan_targets: Vec<ScanTarget>, scan_interval: u64, scan_timeout: u64, scan_num_parallel: usize) -> Arc<Self> {
         let svc = Arc::new(Self {
             ensembles: Arc::new(RwLock::new(Vec::new())),
             scan_targets,
+            scan_interval,
+            scan_timeout,
+            scan_num_parallel,
         });
 
         let svc_clone = Arc::clone(&svc);
@@ -95,9 +101,9 @@ impl DirectoryService {
         svc
     }
 
-    pub fn get_root(&self) -> Message {
-        Message {
-            message: "/".into(),
+    pub fn get_root(&self) -> ApiRoot {
+        ApiRoot {
+            ensembles: "/ensembles".into(),
         }
     }
 
@@ -106,7 +112,7 @@ impl DirectoryService {
     }
 
     async fn run_scan(self: Arc<Self>) {
-        let mut interval = time::interval(Duration::from_secs(60));
+        let mut interval = time::interval(Duration::from_secs(self.scan_interval));
         interval.tick().await; // eat the first tick
 
         let endpoints: Vec<Endpoint> = self
@@ -121,7 +127,7 @@ impl DirectoryService {
             })
             .collect();
 
-        let semaphore = Arc::new(Semaphore::new(8));
+        let semaphore = Arc::new(Semaphore::new(self.scan_num_parallel));
 
         loop {
             let mut scans = FuturesUnordered::new();
@@ -129,9 +135,10 @@ impl DirectoryService {
             for endpoint in &endpoints {
                 let permit = semaphore.clone().acquire_owned().await.unwrap();
                 let endpoint = endpoint.clone();
+                let scan_timeout = self.scan_timeout;
 
                 scans.push(tokio::spawn(async move {
-                    let result = scan(endpoint).await;
+                    let result = scan(endpoint,scan_timeout).await;
                     drop(permit); // release slot for next scan
                     result
                 }));
@@ -142,8 +149,8 @@ impl DirectoryService {
             while let Some(result) = scans.next().await {
                 match result {
                     Ok(Ok(ensemble)) => {
-                        log::info!(
-                            "Scanning endpoint complete: {} {} - 0x{:4x} - {}",
+                        log::debug!(
+                            "Scanned endpoint: {} {} - 0x{:4x} - {}",
                             ensemble.host,
                             ensemble.port,
                             ensemble.ensemble.eid.unwrap_or(0),
@@ -170,8 +177,8 @@ impl DirectoryService {
     }
 }
 
-async fn scan(endpoint: Endpoint) -> anyhow::Result<DirectoryEnsemble> {
-    let timeout_ms = 5000;
+async fn scan(endpoint: Endpoint, scan_timeout: u64) -> anyhow::Result<DirectoryEnsemble> {
+    let timeout_ms = scan_timeout * 1000;
 
     let uri = format!("{}:{}", endpoint.host, endpoint.port);
 

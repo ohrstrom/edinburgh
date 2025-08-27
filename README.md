@@ -14,14 +14,27 @@ The architecture of EDInburgh is designed to be modular and extensible, allowing
 
 ### Core Components
 
-- **[EDI Core Library](shared/)**: The foundation for all EDI-related functionality, implemented in Rust.
-- **[CLI Application](cli/)**: A command-line interface for interacting with the EDI core library, providing tools for monitoring and introspecting DAB+ infrastructure.
-- **[WASM Build](wasm/)**: A WebAssembly version of the EDI core library, enabling browser-based applications to leverage DAB+ functionality.
+- [EDI Core Library](shared/): The foundation for all EDI-related functionality, implemented in Rust.
+- [CLI Application](cli/): A command-line interface for interacting with the EDI core library, providing tools for monitoring and introspecting DAB+ infrastructure.
+- [WASM Build](wasm/): A WebAssembly version of the EDI core library, enabling browser-based applications to leverage DAB+ functionality.
+- [Web UI](web-ui/): A web-based user interface for playing DAB+ services and displaying DL and MOT information.
 
 ### Auxiliary Components
 
-- **[Frame Forwarder](frame-forwarder/)**: A service that extracts EDI Application Layer frames from the incoming stream and forwards them via WebSocket.
-- **[Ensemble Directory](ensemble-directory/)**: A service that scans EDI host and port-ranges for DAB+ ensembles, providing the result as a JSON API.
+- [Frame Forwarder](frame-forwarder/): A service that extracts EDI Application Layer frames from the incoming stream and forwards them via WebSocket.
+- [Ensemble Directory](ensemble-directory/): A service that scans EDI host and port-ranges for DAB+ ensembles, providing the result as a JSON API.
+
+## Screenshots
+
+### CLI / TUI
+
+![TUI](docs/screens/tui.png)
+
+![TUI - SLS](docs/screens/tui-2.png)
+
+### Web UI
+
+![Web UI - Main](docs/screens/web-ui.png)
 
 ## Standards
 
@@ -29,38 +42,12 @@ EDInburgh (partly) implements the following DAB+ related ETSI standards:
 
 ### General
 
-* ETSI EN 300 401 - DAB system
-* ETSI TS 102 563 - DAB+ audio
-* ETSI TS 102 693 - EDI
+- ETSI EN 300 401 - DAB system
+- ETSI TS 102 563 - DAB+ audio
+- ETSI TS 102 693 - EDI
 
 ### Applications
 
-* ETSI TS 102 980 - DL+
-* ETSI EN 301 234 - MOT
-* ETSI TS 101 499 - MOT SLS
-
-## WASM Integration
-
-```mermaid
-graph TD
-  EDI["EDI TCP Source"]
-  subgraph ffwd["Frame Forwarder"]
-    direction TB
-    FE["AF Extractor"] 
-  end
-  subgraph browser["Browser"]
-    direction TB
-    JS[JavaScript]
-    WASM["WASM"] 
-    AD["Audio Decoder"] 
-    AW["Audio Worklet"]
-    ID["Image Decoder"] 
-  end
-  EDI  -- EDI        --> FE
-  FE   -- AF         --> JS
-  WASM -- AU / X-PAD --> JS
-  JS   -- AF         --> WASM
-  JS   -- AU         --> AD
-  AD   -- PCM        --> AW
-  JS   -- X-PAD MOT  --> ID
-```
+- ETSI TS 102 980 - DL+
+- ETSI EN 301 234 - MOT
+- ETSI TS 101 499 - MOT SLS
