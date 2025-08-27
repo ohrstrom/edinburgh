@@ -92,7 +92,6 @@ pub struct EDISource {
     on_ensemble_update: Option<Box<dyn FnMut(&Ensemble) + Send>>,
     #[derivative(Debug = "ignore")]
     on_aac_segment: Option<Box<dyn FnMut(&AACPFrame) + Send>>,
-    // stats
     stats: EDISStats,
 }
 
@@ -106,12 +105,9 @@ impl EDISource {
         EDISource {
             ensemble: Ensemble::new(),
             subchannels: Vec::new(),
-            // scid: scid.unwrap_or(0),
             scid: scid.unwrap_or(0),
-            //
             on_ensemble_update: on_ensemble_update,
             on_aac_segment: on_aac_segment,
-            //
             stats,
         }
     }

@@ -28,6 +28,3 @@ console_log = { version = "1.0.0", features = ["color"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
-
-[profile.release]
-opt-level = "s"
