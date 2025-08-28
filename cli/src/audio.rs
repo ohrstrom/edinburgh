@@ -2,7 +2,7 @@ use derive_more::Debug;
 use faad2::{version, Decoder};
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamBuilder, Sink};
 use shared::dab::msc::{AacpResult, AudioFormat};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -173,7 +173,8 @@ impl AudioDecoder {
             }
             Err(_e) => {
                 // log::error!("Failed to reconfigure audio decoder: {}", e);
-                Err(Error::new(ErrorKind::Other, "Decoder error"))
+                // Err(Error::new(ErrorKind::Other, "Decoder error"))
+                Err(std::io::Error::other("Decoder error"))
             }
         }
     }

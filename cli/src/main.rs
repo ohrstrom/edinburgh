@@ -29,12 +29,16 @@ struct Args {
     #[arg(short, long)]
     scid: Option<u8>,
 
+    /// Jack device name (if no name given, use default)
+    #[arg(long, num_args(0..=1), default_missing_value = "default")]
+    jack: Option<String>,
+
     /// Enable TUI
     #[arg(long, default_value_t = false)]
     tui: bool,
 
     /// Log level (ignored in TUI mode)
-    #[arg(long, default_value = "info", value_parser = ["debug", "info", "warn", "error"])]
+    #[arg(long, default_value = "info", value_parser = ["debug", "info", "warn"])]
     log_level: String,
 }
 
@@ -50,6 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     env_logger::builder().format_timestamp(None).init();
+
+    log::debug!("{:?}", args);
 
     let scid = Arc::new(RwLock::new(args.scid));
 

@@ -11,45 +11,47 @@ The implementation could be debated ;) - on a bird's eye view, it works like thi
 
 ### Flow
 
-NOTE: This  is not yet com / correcy !!
+Not the best graph ;) - but to get a rough idea of the data flow:
 
-```mermaid_wip
-graph TD
-  direction TB
-  subgraph implementor["Library Consumer"]
-    direction TB
-    FG["Frame Generator"]
-    EH["Event Handler"]
-    subgraph AUDIODEC["Audio Decoder"]
-      AUDATA["AU"]
-    end
-  end
-  subgraph library["Shared DAB Library"]
-    direction TB
+```mermaid
+graph TB
+
+  subgraph CALLER["Caller"]
+    direction LR
     FE["Frame Extractor"]
-    FIG["FIG"]
-    subgraph MSC["MSC"]
-      direction TB
-      AU["AU"]
-      XPAD["X-PAD"]
+    subgraph LIB["Shared DAB Library"]
+      FP["Frame Parser"]
+      ENS["Ensemble"]
+      MSC["MSC"]
+      subgraph PAD["PAD"]
+        direction TB
+        DL["DL (+)"]
+        MOT["MOT"]
+      end
+      BUS["Event-Bus"]
     end
-    subgraph PAD["X-PAD"]
-      direction TB
-      DL["DL"]
-      MOT["MOT"]
-    end
-    subgraph BUS["BUS"]
-      direction TB
-      EVENT["Event"]
-    end
+
+    EH["Event Handler"]
   end
-  FG --> FE
-  FE --> MSC
-  AU --> BUS
-  XPAD --> PAD
-  DL --> BUS
-  FIG --> BUS
-  MOT --> BUS
-  EVENT --> EH
-  EH --> AUDIODEC
+
+  FE           --> FP
+  FP  -- DETI  --> ENS
+  FP  -- EST   --> MSC
+  MSC -- X-PAD --> PAD
+
+  ENS -- ENS   --> BUS
+  MSC -- AU    --> BUS
+  DL  -- DL    --> BUS
+  MOT -- SLS   --> BUS
+
+  BUS          --> EH
+
+  %% --- Styles ---
+  classDef caller fill:#22222233,stroke-width:2px;
+  classDef lib fill:#22222299,stroke-width:2px;
+  classDef pad fill:#22222299,stroke-width:1px;
+
+  class CALLER caller;
+  class LIB lib;
+  class PAD pad;
 ```

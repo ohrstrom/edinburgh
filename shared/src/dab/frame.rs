@@ -76,7 +76,8 @@ impl Frame {
                 }
             }
 
-            i += 4 + 4 + (tag_len + 7) / 8;
+            // i += 4 + 4 + (tag_len + 7) / 8;
+            i += 4 + 4 + tag_len.div_ceil(8);
         }
 
         let result = FrameDecodeResult::new(tags);
