@@ -141,13 +141,13 @@ impl AudioDecoder {
         let decoder = Decoder::new(&asc).expect("Failed to create initial decoder");
 
         let host: cpal::Host = {
-            #[cfg(feature = "jack")]
+            #[cfg(all(feature = "jack", target_os = "linux"))]
             if use_jack {
                 cpal::host_from_id(cpal::HostId::Jack).expect("JACK host not available")
             } else {
                 cpal::default_host()
             }
-            #[cfg(not(feature = "jack"))]
+            #[cfg(not(all(feature = "jack", target_os = "linux")))]
             {
                 cpal::default_host()
             }

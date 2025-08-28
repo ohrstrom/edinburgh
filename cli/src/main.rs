@@ -30,7 +30,7 @@ struct Args {
     scid: Option<u8>,
 
     /// Use Jack output. Device name is: cpal_client_out
-    #[cfg(feature = "jack")]
+    #[cfg(all(feature = "jack", target_os = "linux"))]
     #[arg(long, default_value_t = false)]
     jack: bool,
 
@@ -61,11 +61,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scid = Arc::new(RwLock::new(args.scid));
 
     let use_jack: bool = {
-        #[cfg(feature = "jack")]
+        #[cfg(all(feature = "jack", target_os = "linux"))]
         {
             args.jack
         }
-        #[cfg(not(feature = "jack"))]
+        #[cfg(not(all(feature = "jack", target_os = "linux")))]
         {
             false
         }
