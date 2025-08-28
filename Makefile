@@ -22,6 +22,10 @@ run-frame-forwarder:
 fmt:
 	cargo fmt --all
 
+.PHONY: clean
+clean:
+	cargo clean
+
 .PHONY: clippy
 clippy:
 	cargo clippy \
@@ -35,9 +39,15 @@ clippy:
 	  --no-deps \
 	  -- -D warnings
 
-.PHONY: clean
-clean:
-	cargo clean
+.PHONY: check
+check:
+	cargo check \
+	  --workspace \
+	  --exclude edinburgh-wasm \
+	  --exclude edinburgh-pyo3
+	cargo check \
+	  --package edinburgh-wasm \
+	  --target wasm32-unknown-unknown
 
 .PHONY: build
 build:

@@ -26,9 +26,49 @@ The architecture of EDInburgh is designed to be modular and extensible, allowing
 
 ## Build
 
-See [Makefile](Makefile) for build details.
+### Toolchain
+
+To build the Rust binaries, Cargo is used.
+
+[https://rustup.rs/](https://rustup.rs/)
+
+```shell
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+You also need "generic" build tools, like `gcc` etc.
+
+```shell
+# debian & co
+sudo apt install build-essentials
+
+# fedora & co
+sudo dnf group install development-tools
+```
+
+To build the CLI ALSA dev libraries are needed:
+
+```shell
+# debian & co
+sudo apt install libasound2-dev
+
+# fedora & co
+sudo dnf install alsa-lib-devel
+```
+
+Tu use `--features jack` / JACK audio output:
+
+```shell
+# debian & co
+sudo apt install libjack-dev
+
+# fedora & co
+sudo dnf install jack-audio-connection-kit-devel
+```
 
 ### Individual Components
+
+See [Makefile](Makefile) for build details.
 
 Each component can be built using the instructions from the corresponding `README.md` - or using each component's `Makefile`:
 
