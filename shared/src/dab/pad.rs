@@ -57,7 +57,6 @@ impl XPadCI {
         let len_index = (raw >> 5) as usize;
         let len = XPADCI_LEN_LOOKUP.get(len_index).copied().unwrap_or(0);
         let kind = raw & 0x1F;
-        // log::debug!("XPAD RAW: len = {}, type = {}", len, kind);
         Self::new(len, kind)
     }
     pub fn reset() -> Self {
@@ -110,7 +109,7 @@ impl MscDataGroup {
         };
 
         if data.len() < 2 {
-            return dg; // Invalid, too short
+            return dg; // invalid: too short
         }
 
         let mut idx = 0;
@@ -164,8 +163,6 @@ impl MscDataGroup {
                 idx += 2;
             }
 
-            // let address_len = dg.length_indicator as usize - if dg.transport_id_flag { 2 } else { 0 };
-
             let transport_id_len = if dg.transport_id_flag { 2 } else { 0 };
             let address_len = (dg.length_indicator as usize).saturating_sub(transport_id_len);
 
@@ -175,7 +172,7 @@ impl MscDataGroup {
             }
         }
 
-        // At this point, idx is at the start of the data field
+        // at this point, idx is at the start of the data field
         let crc_len = if crc_flag { 2 } else { 0 };
         if data.len() >= idx + crc_len {
             let data_field_len = data.len() - idx - crc_len;
@@ -209,22 +206,8 @@ impl DlDataGroup {
     pub fn feed(&mut self, payload: &[u8]) -> Option<Vec<u8>> {
         self.data.extend_from_slice(payload);
 
-        // let last = payload[0] & 0x20 != 0;  // THIS DOES NOT WORK..
-        //
-        // // log::debug!("DlDataGroup: last = {}", last);
-        //
-        // if last {
-        //     let mut complete = Vec::new();
-        //     std::mem::swap(&mut complete, &mut self.data);
-        //     Some(complete)
-        // } else {
-        //     None
-        // }
-
         let field_len = (self.data[0] & 0x0F) + 1;
         self.size_needed = 2 + field_len as usize + 2;
-
-        // log::debug!("len = {} - needed {}", self.data.len(), self.size_needed);
 
         if self.data.len() >= self.size_needed {
             let mut complete = Vec::new();
@@ -355,10 +338,7 @@ impl PadDecoder {
         let mut offset = ci_header_len;
         let mut ci_kind_continued: Option<i8> = None;
 
-        // log::debug!("NUM CIs: {}", ci_list.len());
-
         for ci in ci_list.iter() {
-            // log::debug!("CI = type {:2}, len {:2}", ci.kind, ci.len);
             self.process_ci(false, ci, &xpad[offset..offset + ci.len]);
             offset += ci.len;
 
@@ -370,13 +350,12 @@ impl PadDecoder {
             }
         }
 
-        // Set up last_xpad_ci for continuation next time:
+        // set up last_xpad_ci for continuation next time:
         if let Some(kind) = ci_kind_continued {
             self.last_xpad_ci = Some(XPadCI {
                 kind,
                 len: announced_len,
             });
-            // log::debug!("Updated last_xpad_ci: type={}, len={}", kindcont, announced_len);
         } else {
             log::debug!("No continuation set for last_xpad_ci");
         }
@@ -427,12 +406,10 @@ impl PadDecoder {
     }
 
     fn process_ci(&mut self, is_continuation: bool, ci: &XPadCI, payload: &[u8]) {
-        // log::debug!("CI: kind: {}", ci.kind);
         match ci.kind {
             1 => {
                 // DGLI - Data Group Length Indicator
                 let dg_size = ((payload[0] & 0x3F) as u16) << 8 | payload[1] as u16;
-                // log::debug!("DGLI: len: {}", dg_size);
                 self.next_dg_size = dg_size as usize;
             }
             2 | 3 => {
@@ -447,25 +424,13 @@ impl PadDecoder {
                 }
                 */
 
-                // let is_start = ci.kind == 2 && !is_continuation;
                 let _is_start = ci.kind == 2;
 
-                // if is_start {
-                //     // log::debug!("DG: init");
-                //     self.dl_dg.init();
-                // }
-
                 if let Some(data) = self.dl_dg.feed(payload) {
-                    // log::debug!(
-                    //     "DL: DG: {:?}",
-                    //     String::from_utf8_lossy(&data[..]),
-                    // );
-
                     self.dl_decoder.feed(&data);
                 }
             }
             12 | 13 => {
-                // log::debug!("CI: kind: {} - {} bytes", ci.kind, ci.len);
 
                 let is_start = ci.kind == 12 && !is_continuation;
                 if is_start {

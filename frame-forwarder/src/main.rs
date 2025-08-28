@@ -119,19 +119,8 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
         (ws_stream, entry.0.subscribe(), entry.2.clone())
     };
 
-    // Check TCP connection status before entering main loop
+    // check TCP connection status before entering main loop
     if let Some(conn_signal) = conn_signal.lock().await.take() {
-        /*
-        if let Err(conn_err) = conn_signal.await.unwrap_or_else(|_| Err("Internal channel error".into())) {
-            log::error!("TCP connection failed for {}: {}", key, conn_err);
-            let close_frame = CloseFrame {
-                code: CloseCode::Error,
-                reason: conn_err.into(),
-            };
-            let _ = ws_stream.close(Some(close_frame)).await;
-            return;
-        }
-        */
         if let Err(conn_err) = conn_signal
             .await
             .unwrap_or_else(|_| Err("Internal channel error".into()))
@@ -146,7 +135,7 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
                 return;
             }
 
-            // Explicitly flush/await the close handshake by reading from ws_stream until it closes.
+            // flush/await the close handshake by reading from ws_stream until it closes
             while let Some(msg) = ws_stream.next().await {
                 match msg {
                     Ok(_) => continue, // ignore any further messages
@@ -160,7 +149,7 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
 
     loop {
         tokio::select! {
-            // Handle disconnect or incoming client message
+            // handle disconnect or incoming client message
             ws_msg = ws_stream.next() => {
                 match ws_msg {
                     Some(Ok(WsMessage::Close(frame))) => {
@@ -192,7 +181,7 @@ async fn handle_ws_connection(stream: TcpStream, ws_clients: SharedReceivers) {
                         }
                     }
                     Err(_) => {
-                        // Sender dropped or channel closed
+                        // sender dropped or channel closed
                         break;
                     }
                 }
@@ -270,7 +259,7 @@ async fn start_edi_extractor(
         }
         Err(e) => {
             log::error!("Failed to connect (B) to {}: {}", endpoint, e);
-            // Notify TCP connection failure explicitly
+            // notify TCP connection failure
             let _ = conn_status_tx.send(Err(format!("TCP connection failed: {}", e)));
         }
     }

@@ -42,10 +42,6 @@ impl AudioFormat {
         let ps = (h & 0x08) != 0;
         let channel_mode = (h & 0x10) != 0;
 
-        // let channel_mode_x = h & 0x10;
-
-        // log::info!("channel mode: {:?} - {}", dac_mode, channel_mode);
-
         let codec = match (sbr, ps) {
             (true, true) => "HE-AAC-v2",
             (true, false) => "HE-AAC",
@@ -93,7 +89,7 @@ impl AudioFormat {
 
 impl fmt::Display for AudioFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Channels: show "Stereo" or "Mono"
+        // channels: show "Stereo" or "Mono"
         let channels_str = match self.channels {
             2 => "S",
             1 => "M",
@@ -168,7 +164,6 @@ pub struct AacpExctractor {
     audio_format: Option<AudioFormat>,
     au_frames: Vec<Vec<u8>>,
     pad_decoder: PadDecoder,
-    //
     pub extract_pad: bool,
 }
 
@@ -187,24 +182,11 @@ impl AacpExctractor {
             audio_format: None,
             au_frames: Vec::new(),
             pad_decoder: PadDecoder::new(scid),
-            //
             extract_pad: false,
         }
     }
     pub async fn feed(&mut self, data: &[u8], f_len: usize) -> Result<FeedResult, FeedError> {
         self.au_frames.clear();
-
-        if self.scid == 0 {
-            let dbg = &data[..f_len.min(data.len())];
-            let head = &dbg[..dbg.len().min(8)];
-            let tail = &dbg[dbg.len().saturating_sub(8)..];
-
-            // NOTE: until here dablin & edinburgh behave 100% THE SAME!
-            println!(
-                "SL___: scid={} len={} head={:02X?} tail={:02X?}",
-                13, f_len, head, tail
-            );
-        }
 
         if self.f_len != 0 {
             if self.f_len != f_len {
@@ -259,7 +241,6 @@ impl AacpExctractor {
         }
 
         if self.f_sync > 0 {
-            // log::debug!("SF sync OK - SCID: {} - after {} frames", self.scid, self.f_sync);
             self.f_sync = 0;
         }
 
@@ -331,19 +312,6 @@ impl AacpExctractor {
             }
         }
 
-        /**/
-        if self.scid == 0 {
-            for (i, f) in self.au_frames.iter().enumerate() {
-                println!(
-                    "AU[{}] len={} head={:02X?} tail={:02X?}",
-                    i,
-                    f.len(),
-                    &f[..8],
-                    &f[f.len().saturating_sub(8)..]
-                );
-            }
-        }
-
         let result: AacpResult =
             AacpResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
@@ -409,7 +377,7 @@ impl AacpExctractor {
         }
 
         if self.scid == DEBUG_SCID {
-            log::info!(
+            log::debug!(
                 "SF sync OK: SCID: {} samplerate={} sbr={} ps={} channels={} au_count={} dac_rate={}",
                 self.scid,
                 sf_format.samplerate,
@@ -420,24 +388,22 @@ impl AacpExctractor {
                 if sf_format.samplerate == 48 { "yes" } else { "no" }
             );
 
-            log::info!("AU start table: {:?}", &self.au_start[..=self.au_count]);
+            log::debug!("AU start table: {:?}", &self.au_start[..=self.au_count]);
 
-            log::info!(
+            log::debug!(
                 "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
                 self.sf_buff[2],
                 self.sf_buff[3],
                 self.sf_buff[4]
             );
-        }
 
-        if self.scid == 133 {
-            log::info!(
+            log::debug!(
                 "AU start table: {:?} (au_count = {}, sf_len = {})",
                 &self.au_start[..=self.au_count],
                 self.au_count,
                 self.sf_len
             );
-            log::info!("SF header bytes: [2..11]: {:02X?}", &self.sf_buff[2..11]);
+            log::debug!("SF header bytes: [2..11]: {:02X?}", &self.sf_buff[2..11]);
         }
 
         for i in 0..self.au_count {
@@ -455,7 +421,7 @@ impl AacpExctractor {
         }
 
         if (au_data[0] >> 5) != 4 {
-            // Only process if AU Stream ID indicates DAB+ (0b100)
+            // only process if AU Stream ID indicates DAB+ (0b100)
             return None;
         }
 

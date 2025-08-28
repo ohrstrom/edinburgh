@@ -574,8 +574,6 @@ impl Fig0_13 {
             services.push(ServiceUA { sid, scids, uas });
         }
 
-        // println!("SVCS: {:?}", services);
-
         Ok(Self { base, services })
     }
 }

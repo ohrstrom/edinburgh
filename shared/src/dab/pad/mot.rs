@@ -86,7 +86,6 @@ impl MotObject {
             body: Vec::new(),
             header_complete: false,
             body_complete: false,
-            //
             body_size: None,
             content_type: None,
             content_subtype: None,
@@ -108,12 +107,12 @@ impl MotObject {
 
         let data = &self.header;
 
-        // Parse header size (12 bits across bytes 3–5) (does not work)
+        // parse header size (12 bits across bytes 3–5) (does not work)
         let header_size = (((data[3] & 0x0F) as usize) << 9)
             | ((data[4] as usize) << 1)
             | ((data[5] as usize) >> 7);
 
-        // Parse header size (12 bits: bits 28–39)
+        // parse header size (12 bits: bits 28–39)
         // let header_size = (((data[3] as usize) & 0x0F) << 8)
         //     | (data[4] as usize);
 
@@ -126,13 +125,13 @@ impl MotObject {
             return;
         }
 
-        // Parse body size (28 bits across bytes 0–3)
+        // parse body size (28 bits across bytes 0–3)
         let body_size = ((data[0] as usize) << 20)
             | ((data[1] as usize) << 12)
             | ((data[2] as usize) << 4)
             | ((data[3] as usize) >> 4);
 
-        // Parse content type (6 bits) and subtype (10 bits)
+        // parse content type (6 bits) and subtype (10 bits)
         let content_type = (data[5] >> 1) & 0x3F;
         let content_subtype = (((data[5] & 0x01) as u16) << 8) | data[6] as u16;
 
@@ -309,8 +308,6 @@ impl MotDecoder {
                             obj.header.len(),
                             obj.body.len()
                         );
-
-                        // obj.parse_header();
 
                         match obj.content_type {
                             Some(2) => {

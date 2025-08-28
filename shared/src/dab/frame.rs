@@ -68,7 +68,6 @@ impl Frame {
 
             match Self::parse_tag(tag_item) {
                 Ok(tag) => {
-                    // log::debug!("tag_item: {:?}", tag_item.len());
                     tags.push(tag);
                 }
                 Err(_e) => {
@@ -127,10 +126,8 @@ pub enum TagError {
 pub enum Tag {
     Deti(DetiTag),
     Est(EstTag),
-    //
     Ptr(PtrTag),
     Dmy(DmyTag),
-    //
     Fsst(FsstTag),
     Fptt(FpttTag),
     Fsid(FsidTag),
@@ -233,13 +230,6 @@ impl EstTag {
         let value = data[8..].to_vec();
 
         // TODO: maybe add some checks?
-
-        // println!("EstTag: len: {}, header: {:?}, value: {:?}", len, header, value);
-
-        // let scid = value[0] >> 2;
-        // if scid == 13 {
-        //     println!("EstTag: SCID: {} - header: {:?} - data: {:?}", scid, header, &value[..11]);
-        // }
 
         Ok(Self { len, header, value })
     }

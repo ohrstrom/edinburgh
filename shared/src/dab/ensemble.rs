@@ -106,8 +106,6 @@ impl Ensemble {
                     for entry in &fig.services {
                         let service = self.services.iter_mut().find(|s| s.sid == entry.sid);
 
-                        // println!("02 - SID: 0x{:04X}", entry.sid);
-
                         match service {
                             Some(existing_service) => {
                                 if !existing_service
@@ -160,7 +158,7 @@ impl Ensemble {
                         if let Some(service) = self.services.iter_mut().find(|s| s.sid == entry.sid)
                         {
                             if entry.scids == 0 {
-                                // Apply to all components
+                                // apply to all components
                                 for component in &mut service.components {
                                     if component.user_apps != entry.uas {
                                         component.user_apps = entry.uas.clone();
