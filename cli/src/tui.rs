@@ -272,7 +272,7 @@ pub async fn run_tui(
             ///////////////////////////////////////////////////////////
             // keyboard input display
             ///////////////////////////////////////////////////////////
-            let input_text = "q: quit • m: toggle mute • Enter: select";
+            let input_text = "q: quit • m: meter • s: SLS • Enter: select";
             let input_paragraph = Paragraph::new(input_text)
                 .block(
                     Block::default()
@@ -617,13 +617,10 @@ pub async fn run_tui(
                         }
                     }
                     KeyCode::Char('m') => {
-                        println!("Mute toggled");
+                        state.show_meter = !state.show_meter;
                     }
                     KeyCode::Char('s') => {
                         state.show_sls = !state.show_sls;
-                    }
-                    KeyCode::Char('l') => {
-                        state.show_meter = !state.show_meter;
                     }
                     _ => {}
                 }
