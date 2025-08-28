@@ -1,3 +1,4 @@
+use cpal::traits::HostTrait;
 use derive_more::Debug;
 use faad2::{version, Decoder};
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamBuilder, Sink};
@@ -132,18 +133,35 @@ impl AudioDecoder {
 
     pub fn new(
         scid: u8,
+        #[allow(unused_variables)] use_jack: bool,
         initial_audio_format: AudioFormat,
         tx: UnboundedSender<AudioEvent>,
     ) -> Self {
         let asc = initial_audio_format.asc.clone();
         let decoder = Decoder::new(&asc).expect("Failed to create initial decoder");
 
-        for host_id in cpal::available_hosts() {
-            log::debug!("CPAL host: {:?}", host_id);
-        }
+        let host: cpal::Host = {
+            #[cfg(feature = "jack")]
+            if use_jack {
+                cpal::host_from_id(cpal::HostId::Jack).expect("JACK host not available")
+            } else {
+                cpal::default_host()
+            }
+            #[cfg(not(feature = "jack"))]
+            {
+                cpal::default_host()
+            }
+        };
 
-        let stream_handle =
-            OutputStreamBuilder::open_default_stream().expect("Error creating output stream");
+        log::debug!("available audio backends: {:?}", cpal::available_hosts());
+        log::debug!("selected audio backend: {:?}", host.id());
+
+        let device = host
+            .default_output_device()
+            .expect("Unable to get default device");
+        let stream_handle = OutputStreamBuilder::from_device(device)
+            .and_then(|x| x.open_stream())
+            .expect("Error creating output stream");
         let sink = Arc::new(Mutex::new(Sink::connect_new(stream_handle.mixer())));
 
         Self {

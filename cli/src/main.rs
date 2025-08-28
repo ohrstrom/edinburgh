@@ -29,9 +29,10 @@ struct Args {
     #[arg(short, long)]
     scid: Option<u8>,
 
-    /// Jack device name (if no name given, use default)
-    #[arg(long, num_args(0..=1), default_missing_value = "default")]
-    jack: Option<String>,
+    /// Use Jack output. Device name is: cpal_client_out
+    #[cfg(feature = "jack")]
+    #[arg(long, default_value_t = false)]
+    jack: bool,
 
     /// Enable TUI
     #[arg(long, default_value_t = false)]
@@ -58,6 +59,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("{:?}", args);
 
     let scid = Arc::new(RwLock::new(args.scid));
+
+    let use_jack: bool = {
+        #[cfg(feature = "jack")]
+        {
+            args.jack
+        }
+        #[cfg(not(feature = "jack"))]
+        {
+            false
+        }
+    };
 
     // TUI
     // TUI main -> TUI
@@ -101,8 +113,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut source = DabSource::new(args.scid, on_ensemble_updated_callback, None);
 
-    let event_handler =
-        DabEventHandler::new(Arc::clone(&scid), edi_rx, tui_tx.clone(), audio_tx.clone());
+    let event_handler = DabEventHandler::new(
+        Arc::clone(&scid),
+        use_jack,
+        edi_rx,
+        tui_tx.clone(),
+        audio_tx.clone(),
+    );
 
     tokio::spawn(async move {
         event_handler.run().await;
@@ -167,6 +184,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct DabEventHandler {
     edi_rx: UnboundedReceiver<DabEvent>,
     scid: Arc<RwLock<Option<u8>>>,
+    use_jack: bool,
     audio_decoder: Option<AudioDecoder>,
     // tui
     tui_tx: UnboundedSender<TuiEvent>,
@@ -178,6 +196,7 @@ struct DabEventHandler {
 impl DabEventHandler {
     pub fn new(
         scid: Arc<RwLock<Option<u8>>>,
+        use_jack: bool,
         edi_rx: UnboundedReceiver<DabEvent>,
         tui_tx: UnboundedSender<TuiEvent>,
         audio_tx: UnboundedSender<AudioEvent>,
@@ -185,6 +204,7 @@ impl DabEventHandler {
         Self {
             edi_rx,
             scid,
+            use_jack,
             audio_decoder: None,
             tui_tx,
             audio_tx,
@@ -210,7 +230,7 @@ impl DabEventHandler {
                     let scid = *self.scid.read().await;
                     if r.scid == scid.unwrap_or(0) {
                         if r.audio_format.is_none() {
-                            log::warn!("Audio format is None for SCID: {}", r.scid);
+                            log::warn!("No audio format for SCID: {}", r.scid);
                             continue;
                         }
 
@@ -220,6 +240,7 @@ impl DabEventHandler {
                         if self.audio_decoder.is_none() {
                             let audio_decoder = AudioDecoder::new(
                                 r.scid,
+                                self.use_jack,
                                 audio_format.clone(),
                                 self.audio_tx.clone(),
                             );
