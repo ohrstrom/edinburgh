@@ -230,7 +230,7 @@ impl DlDecoder {
             return;
         }
 
-        // NOTE: there is a bug when pad is short (6 or 8)
+        // there is a bug when pad is short (6 or 8)
 
         let cid = (data[0] >> 4) & 0x0F;
 

@@ -43,10 +43,10 @@ impl Fig0_0 {
             return Err(FigError::InvalidSize { l: data.len() });
         }
 
-        // Extract 16-bit Ensemble ID (Big-Endian)
+        // 16-bit Ensemble ID (Big-Endian)
         let eid = u16::from_be_bytes([data[0], data[1]]);
 
-        // Extract alarm flag (bit 5 of data[2])
+        // alarm flag (bit 5 of data[2])
         let al_flag = (data[2] & 0x20) != 0;
 
         // log::debug!("FIG0/0: EID: 0x{:04X}, AL: {}", eid, al_flag);
@@ -83,7 +83,7 @@ impl Fig0_1 {
             let short_long_form = data.get(offset).map(|&b| b & 0x80 != 0).unwrap_or(false);
 
             if short_long_form {
-                // Long form
+                // long form
                 if offset + 1 >= data.len() {
                     return Err(FigError::InvalidSize { l: data.len() });
                 }
@@ -107,7 +107,7 @@ impl Fig0_1 {
                     _ => {}
                 }
             } else {
-                // Short form
+                // short form
                 let table_switch = data.get(offset).map(|&b| b & 0x40 != 0).unwrap_or(false);
                 if !table_switch {
                     let table_index = (data[offset] & 0x3F) as usize;
@@ -162,11 +162,11 @@ impl Fig0_2 {
         let mut services = Vec::new();
 
         while offset + 2 <= data.len() {
-            // Extract Service ID (SID) - first two bytes
+            // service ID (SID) - first two bytes
             let sid = u16::from_be_bytes([data[offset], data[offset + 1]]);
             offset += 2;
 
-            // Check remaining bytes
+            // check remaining bytes
             if offset >= data.len() {
                 return Err(FigError::InvalidSize { l: data.len() });
             }
@@ -179,18 +179,18 @@ impl Fig0_2 {
                     return Err(FigError::InvalidSize { l: data.len() });
                 }
 
-                let tmid = (data[offset] & 0xC0) >> 6; // Transport Mechanism ID
-                let _ascty = data[offset] & 0x3F; // Audio Service Type (ignored)
-                let scid = data[offset + 1] >> 2; // Subchannel ID
-                let primary = (data[offset + 1] & 0x02) != 0; // Primary component flag
-                let ca = (data[offset + 1] & 0x01) != 0; // Conditional Access flag
+                let tmid = (data[offset] & 0xC0) >> 6; // transport Mechanism ID
+                let _ascty = data[offset] & 0x3F; // audio Service Type (ignored)
+                let scid = data[offset + 1] >> 2; // subchannel ID
+                let primary = (data[offset + 1] & 0x02) != 0; // primary component flag
+                let ca = (data[offset + 1] & 0x01) != 0; // conditional Access flag
                 offset += 2;
 
                 // astci  0: DAB
                 // ascti 63: DAB+
                 // log::debug!("ASCTI: {}", ascty);
 
-                // Ignore CA (Conditional Access) components
+                // ignore CA (Conditional Access) components
                 if !ca {
                     services.push(ServiceComponent {
                         sid,
@@ -298,7 +298,7 @@ impl Fig0_5 {
             let ls_flag = (byte & 0x80) != 0;
 
             if ls_flag {
-                // Long form — skip 3 bytes
+                // long form — skip 3 bytes
                 // log::debug!("FIG0/5: Long form detected, skipping 3 bytes");
                 offset += 3;
                 continue;
@@ -435,11 +435,11 @@ impl Fig0_10 {
 
         // log::debug!("FIG0/10: {:?} - SVC: {:?}", base, data);
 
-        // Correct MJD extraction: 17 bits from data[0], data[1], and top 2 bits of data[2]
+        // correct MJD extraction: 17 bits from data[0], data[1], and top 2 bits of data[2]
         let mjd =
             (((data[0] & 0x7F) as u32) << 10) | ((data[1] as u32) << 2) | ((data[2] as u32) >> 6);
 
-        // Inline MJD → Gregorian date conversion
+        // inline MJD > Gregorian date conversion. consider moving this to a another place..
         let mjd_f = mjd as f64;
         let y0 = ((mjd_f - 15078.2) / 365.25).floor();
         let m0 = ((mjd_f - 14956.1 - (y0 * 365.25).floor()) / 30.6001).floor();

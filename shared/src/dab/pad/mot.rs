@@ -272,7 +272,7 @@ impl MotDecoder {
 
         match seg_type {
             3 => {
-                // Start new MOT object on header
+                // start new MOT object on header
                 // log::debug!("MOT: header: {} bytes", data.len());
 
                 let mut obj = MotObject::new(self.scid, transport_id);

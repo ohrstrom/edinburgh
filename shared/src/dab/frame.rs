@@ -188,7 +188,7 @@ impl DetiTag {
         //     has_rfudf
         // );
 
-        // NOTE: just dummy values for now
+        // just dummy values for now
         let atstf = vec![];
         let mut figs = vec![];
         let rfudf = vec![];

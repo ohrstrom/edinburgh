@@ -82,7 +82,7 @@ impl TuiState {
             table_state,
             dl_objects: Vec::new(),
             sls_images: Vec::new(),
-            edi_stats: DabStats::new(), // NOTE: should we rather use option & none here?
+            edi_stats: DabStats::new(), // should we rather use option & none here?
             show_meter: false,
             show_sls: false,
             levels: AudioLevels::new(),
@@ -202,12 +202,11 @@ pub async fn run_tui(
             let layout = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([
-                    Constraint::Min(0), // main content (vertical)
-                    Constraint::Length(if state.show_meter { 17 } else { 0 }), // fixed width for meter on the right
+                    Constraint::Min(0),
+                    Constraint::Length(if state.show_meter { 17 } else { 0 }),
                 ])
                 .split(area);
 
-            // Now split layout[0] vertically as before:
             let content_layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -388,7 +387,6 @@ pub async fn run_tui(
                     Constraint::Length(8),
                     Constraint::Length(8),
                     Constraint::Length(18),
-                    // Constraint::Length(36),
                     Constraint::Fill(1),
                     Constraint::Length(18),
                     Constraint::Length(36),
@@ -444,7 +442,7 @@ pub async fn run_tui(
             let player_dl_text: Text = match player_dl {
                 Some(dl) => {
                     let mut lines = vec![
-                        Line::from(dl.decode_label()), // base line: label, normal style
+                        Line::from(dl.decode_label()),
                     ];
 
                     let dl_plus_tags = dl.get_dl_plus();
@@ -570,7 +568,7 @@ pub async fn run_tui(
             }
 
             ///////////////////////////////////////////////////////////
-            // Level meter
+            // level meter
             ///////////////////////////////////////////////////////////
             if state.show_meter {
                 let level_meter = LevelMeterWidget::new(state.levels.clone());

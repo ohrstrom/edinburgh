@@ -9,8 +9,6 @@ use thiserror::Error;
 
 const FPAD_LEN: usize = 2;
 
-const DEBUG_SCID: u8 = 0; // Debug SCID for logging
-
 #[derive(Debug, Error)]
 pub enum FormatError {
     #[error("AU start values are zero")]
@@ -61,9 +59,9 @@ impl AudioFormat {
 
         let channels = if channel_mode || ps { 2 } else { 1 };
 
-        // NOTE: it would likely be better to actually "build" the ASC ;)
+        // it would likely be better to actually "build" the ASC ;)
         let asc = match (samplerate, sbr, ps) {
-            (48, false, false) => vec![0x11, 0x8C], // NOTE: 1 channel
+            (48, false, false) => vec![0x11, 0x8C], // 1 channel
             (48, true, false) => vec![0x13, 0x14, 0x56, 0xe5, 0x98],
             (48, false, true) => vec![],
             (48, true, true) => vec![0x13, 0x0C, 0x56, 0xE5, 0x9D, 0x48, 0x80],
@@ -247,25 +245,10 @@ impl AacpExctractor {
         if self.audio_format.is_none() && self.sf_buff.len() >= 11 {
             match AudioFormat::from_bytes(&self.sf_buff, self.sf_len) {
                 Ok(af) => {
-                    // log::info!("SCID: {} {:?}", self.scid, af);
-                    // log::info!(
-                    //     "AF SCID: {:>2} - {} {} kHz {} @ {} kBit/s",
-                    //     self.scid,
-                    //     af.codec,
-                    //     af.samplerate,
-                    //     af.bitrate,
-                    //     if af.channels == 1 {
-                    //         "Mono".to_string()
-                    //     } else if af.channels == 2 {
-                    //         "Stereo".to_string()
-                    //     } else {
-                    //         format!("{} Chan", af.channels)
-                    //     },
-                    // );
                     self.audio_format = Some(af);
                 }
                 Err(err) => {
-                    // NOTE: silenced log for the moment
+                    // silenced log for the moment
                     log::warn!("Format error: {} {:?}", self.scid, err);
                 }
             }
@@ -280,7 +263,7 @@ impl AacpExctractor {
                 continue;
             }
 
-            // NOTE: check if this is correct
+            // check if this is correct
             let au_data = &self.sf_buff[self.au_start[i]..self.au_start[i + 1]];
             let au_len = self.au_start[i + 1] - self.au_start[i];
 
@@ -290,17 +273,6 @@ impl AacpExctractor {
             if au_crc_stored != au_crc_calced {
                 log::warn!("AD: AU CRC mismatch!");
                 continue;
-            }
-
-            if self.scid == DEBUG_SCID {
-                log::debug!(
-                    "AU[{}]: start={} end={} len={} bytes={:?}",
-                    i,
-                    self.au_start[i],
-                    self.au_start[i + 1],
-                    au_len,
-                    &au_data[0..8]
-                );
             }
 
             // copy AU frames to buffer. do not forget to remove last two bytes (CRC)
@@ -316,10 +288,6 @@ impl AacpExctractor {
             AacpResult::new(self.scid, self.audio_format.clone(), self.au_frames.clone());
 
         emit_event(DabEvent::AacpFramesExtracted(result.clone()));
-
-        if self.scid == DEBUG_SCID {
-            log::info!("Aacp: SCID: {}\n{:?}", self.scid, result.frames);
-        }
 
         self.f_count = 0;
 
@@ -341,13 +309,13 @@ impl AacpExctractor {
             return true;
         }
 
-        // NOTE: is this how it should be done??
+        // is this how it should be done??
         let sf_format = self.audio_format.as_ref().unwrap();
 
         // set / update values for current sub-frame
         self.au_count = sf_format.au_count;
 
-        // NOTE: check if this is correct
+        // check if this is correct
         self.au_start[0] = match (sf_format.samplerate, sf_format.sbr) {
             (48, true) => 6,
             (48, false) => 11,
@@ -374,36 +342,6 @@ impl AacpExctractor {
                 (((self.sf_buff[7] & 0x0F) as usize) << 8) | (self.sf_buff[8] as usize);
             self.au_start[5] =
                 ((self.sf_buff[9] as usize) << 4) | ((self.sf_buff[10] >> 4) as usize);
-        }
-
-        if self.scid == DEBUG_SCID {
-            log::debug!(
-                "SF sync OK: SCID: {} samplerate={} sbr={} ps={} channels={} au_count={} dac_rate={}",
-                self.scid,
-                sf_format.samplerate,
-                sf_format.sbr,
-                sf_format.ps,
-                sf_format.channels,
-                self.au_count,
-                if sf_format.samplerate == 48 { "yes" } else { "no" }
-            );
-
-            log::debug!("AU start table: {:?}", &self.au_start[..=self.au_count]);
-
-            log::debug!(
-                "Raw SF header: sf[2]=0x{:02X} sf[3]=0x{:02X} sf[4]=0x{:02X}",
-                self.sf_buff[2],
-                self.sf_buff[3],
-                self.sf_buff[4]
-            );
-
-            log::debug!(
-                "AU start table: {:?} (au_count = {}, sf_len = {})",
-                &self.au_start[..=self.au_count],
-                self.au_count,
-                self.sf_len
-            );
-            log::debug!("SF header bytes: [2..11]: {:02X?}", &self.sf_buff[2..11]);
         }
 
         for i in 0..self.au_count {
@@ -445,18 +383,6 @@ impl AacpExctractor {
         let fpad_data = &au_data[pad_start + pad_len - FPAD_LEN..pad_start + pad_len];
 
         let pad = PadResult::new(fpad_data.to_vec(), xpad_data.to_vec());
-
-        // log::debug!("PAD: {:?}", pad);
-
-        // log::debug!(
-        //     "PAD: {} - {}",
-        //     pad.fpad[0..2]
-        //         .iter()
-        //         .map(|byte| format!("{:08b}", byte))
-        //         .collect::<Vec<_>>()
-        //         .join(" "),
-        //     pad.xpad.len()
-        // );
 
         Some(pad)
     }

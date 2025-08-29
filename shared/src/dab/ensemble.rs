@@ -21,7 +21,7 @@ pub struct ServiceComponent {
     pub language: Option<tables::Language>,
     pub subchannel_id: Option<u8>,
     pub user_apps: Vec<tables::UserApplication>,
-    // NOTE: is this a good idea?
+    // is this a good idea?
     pub audio_format: Option<AudioFormat>,
 }
 
@@ -211,14 +211,6 @@ impl Ensemble {
                 && self.label.is_some()
                 && self.services.iter().all(|s| s.label.is_some());
 
-            /*
-            for s in &self.services {
-                println!("{:?}", s);
-                for sc in &s.components {
-                    println!("{:?}", sc);
-                }
-            }
-            */
         }
 
         if updated {

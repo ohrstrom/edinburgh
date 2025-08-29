@@ -16,7 +16,6 @@ struct EDI {
     _inner: Arc<Mutex<DabSource>>,
     _callbacks: Arc<Mutex<HashMap<String, Vec<PyCallback>>>>,
     tx: Sender<Vec<u8>>,
-    // keep runtime alive for the life of the object
     _rt: Arc<Runtime>,
 }
 
@@ -24,7 +23,6 @@ struct EDI {
 impl EDI {
     #[new]
     fn new(_py: Python<'_>) -> PyResult<Self> {
-        // Build a runtime with I/O and timers enabled (good general default)
         let rt = Arc::new(
             Builder::new_multi_thread()
                 .enable_all()
@@ -37,7 +35,7 @@ impl EDI {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
 
-        // spawn feed loop on OUR runtime
+        // spawn feed loop
         {
             let handle = rt.handle().clone();
             handle.spawn(async move {
@@ -48,7 +46,7 @@ impl EDI {
             });
         }
 
-        // init the bus and spawn the event handler on OUR runtime
+        // init the bus and spawn the event handler
         let edi_rx = init_event_bus();
         let event_handler = DabEventHandler::new(edi_rx, callbacks.clone());
 

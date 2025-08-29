@@ -140,7 +140,7 @@ impl DabSource {
                                 let head = &dbg[..dbg.len().min(8)];
                                 let tail = &dbg[dbg.len().saturating_sub(8)..];
 
-                                // NOTE: until here dablin & edinburgh behave IDENTICA!
+                                // until here dablin & edinburgh behave IDENTICA!
                                 println!(
                                     "SLICE: scid={} len={} head={:02X?} tail={:02X?}",
                                     scid, slice_len, head, tail

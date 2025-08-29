@@ -6,7 +6,7 @@ This project is an attempt to provide a simple and efficient toolchain to help i
 
 Currently it is focused on directly working (as the name implies ;) ) with EDI data - received via TCP/IP.
 
-The same EDI core-library ([shared](shared/)) is used both in the native Rust [CLI](cli/) app - and in the [WASM](wasm/) build.
+The same DAB core-library ([shared](shared/)) is used both in the native Rust [CLI](cli/) app - and in the [WASM](wasm/) build.
 
 ## Architecture
 
@@ -14,9 +14,9 @@ The architecture of EDInburgh is designed to be modular and extensible, allowing
 
 ### Core Components
 
-- [EDI Core Library](shared/): The foundation for all EDI-related functionality, implemented in Rust.
-- [CLI Application](cli/): A command-line interface for interacting with the EDI core library, providing tools for monitoring and introspecting DAB+ infrastructure.
-- [WASM Build](wasm/): A WebAssembly version of the EDI core library, enabling browser-based applications to leverage DAB+ functionality.
+- [Core Library](shared/): The foundation for all DAB-related functionality, implemented in Rust.
+- [CLI Application](cli/): A command-line interface for interacting with the DAB core library, providing tools for monitoring and introspecting DAB+ infrastructure.
+- [WASM Build](wasm/): A WebAssembly version of the DAB core library, enabling browser-based applications to leverage DAB+ functionality.
 - [Web UI](web-ui/): A web-based user interface for playing DAB+ services and displaying DL and MOT information.
 
 ### Auxiliary Components

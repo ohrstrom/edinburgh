@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TUI audio -> TUI
     let (audio_tx, audio_rx) = unbounded_channel::<AudioEvent>();
 
-    // NOTE: check if this is a good idea?
+    // check if this is a good idea?
     if args.tui {
         tokio::spawn({
             let addr = args.addr.clone();
@@ -273,7 +273,7 @@ impl DabEventHandler {
     }
 }
 
-// NOTE: the print once logic here seems to be very ugly. think about a better way...
+// the print once logic here seems to be very ugly. think about a better way...
 static PRINT_ENSEMBLE_ONCE: Once = Once::new();
 
 fn print_ensemble(ensemble: &Ensemble) {

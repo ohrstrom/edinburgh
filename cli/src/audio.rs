@@ -199,7 +199,7 @@ impl AudioDecoder {
 
     /*
     fn fade(vol: f32, duration_ms: u64) {
-        // NOTE: implement generic fade logic here
+        // implement generic fade logic
     }
     */
 
@@ -215,7 +215,6 @@ impl AudioDecoder {
         if aac_result.scid != self.scid {
             log::info!("Changed SCID: {} > {}", self.scid, aac_result.scid);
 
-            /**/
             self.sink.lock().unwrap().set_volume(0.0);
 
             let sink_clone = Arc::clone(&self.sink);
@@ -233,7 +232,7 @@ impl AudioDecoder {
                         sink.set_volume(i as f32 * volume_step);
                     }
                 }
-                // Ensure volume is exactly 1.0 at the end
+                // ensure volume is exactly 1.0 at the end
                 if let Ok(sink) = sink_clone.lock() {
                     sink.set_volume(1.0);
                 }

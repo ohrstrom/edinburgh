@@ -177,7 +177,7 @@ impl MscDataGroup {
         if data.len() >= idx + crc_len {
             let data_field_len = data.len() - idx - crc_len;
 
-            // NOTE: should we remove first 2 bytes of data first?
+            // should we remove first 2 bytes of data first?
             //       they contain segmentation metadata.
 
             dg.data_field = data[idx..idx + data_field_len].to_vec();
@@ -185,7 +185,7 @@ impl MscDataGroup {
             log::warn!("MscDataGroup: Not enough data for data field");
         }
 
-        dg.is_valid = true; // NOTE: this should be checked ;)
+        dg.is_valid = true; // this should be checked ;)
         dg
     }
 }
