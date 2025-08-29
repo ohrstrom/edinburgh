@@ -7,14 +7,14 @@ description = "Websocket proxy-server that extracts EDI AF-frames from TCP strea
 [dependencies]
 shared = { path = "../shared" }
 bytes = "1.10.1"
-log = "0.4.26"
 tungstenite = "0.26.2"
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
-env_logger = "0.11.7"
 clap = { version = "4.5.32", features = ["derive"] }
 tokio-tungstenite = "0.26.2"
 dashmap = "6.1.0"
 futures-util = "0.3.31"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [[bin]]
 name = "edinburgh-frame-forwarder"

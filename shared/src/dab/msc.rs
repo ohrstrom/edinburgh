@@ -96,7 +96,7 @@ impl fmt::Display for AudioFormat {
 
         write!(
             f,
-            "{:<10} {} kHz @ {} kBit/s {}",
+            "{:<10} {} kHz @ {} kbit/s {}",
             self.codec, self.samplerate, self.bitrate, channels_str
         )
     }

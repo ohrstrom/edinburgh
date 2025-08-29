@@ -431,7 +431,6 @@ impl PadDecoder {
                 }
             }
             12 | 13 => {
-
                 let is_start = ci.kind == 12 && !is_continuation;
                 if is_start {
                     // MOT start. initialize DG

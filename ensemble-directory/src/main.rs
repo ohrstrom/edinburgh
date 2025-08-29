@@ -1,10 +1,10 @@
-use std::sync::Arc;
 mod services;
 
 use axum::{extract::State, routing::get, Json, Router};
 use clap::Parser;
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
 use tower_http::cors::{Any, CorsLayer};
-use tracing as log;
 
 use services::{DirectoryService, ScanTarget};
 
@@ -38,6 +38,10 @@ struct Args {
     #[arg(long = "scan-parallel", default_value = "8")]
     scan_num_parallel: usize,
 
+    /// Scan only once and print the result. Not starting a server
+    #[arg(long = "once")]
+    scan_once: bool,
+
     /// Verbose logging
     #[arg(long = "verbose", short = 'v')]
     verbose: bool,
@@ -55,19 +59,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .without_time()
         .init();
 
+    let run_server = !args.scan_once;
+
     let addr = format!("{}:{}", args.host, args.port.unwrap());
 
     // validate that timeout is less than interval
     if args.scan_timeout >= args.scan_interval {
-        log::error!(
+        tracing::error!(
             "scan timeout ({}) must be less than scan interval ({})",
             args.scan_timeout,
             args.scan_interval
         );
         std::process::exit(1);
     }
-
-    log::info!("Starting API on http://{}/", addr);
 
     let svc = services::DirectoryService::new(
         args.scan_targets,
@@ -76,13 +80,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.scan_num_parallel,
     );
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // println!("{:?}", svc.ensembles);
 
-    let app =
-        Router::new()
+    if args.scan_once {
+        while svc.get_num_runs().await == 0 {
+            sleep(Duration::from_millis(25)).await;
+        }
+
+        let mut dir_ensembles = svc.get_ensembles().await;
+
+        // dir_ensembles.sort_by_key(|e| (e.host.clone(), e.port));
+        dir_ensembles.sort_by_key(|e| {
+            (
+                e.host.clone(),
+                e.ensemble.label.as_ref().unwrap_or(&"".into()).clone(),
+            )
+        });
+
+        for e in dir_ensembles {
+            let mux = format!(
+                "0x{:4X}  {:16}",
+                e.ensemble.eid.unwrap_or(0),
+                e.ensemble.label.unwrap_or_default()
+            );
+            let host = format!("{}:{}", e.host, e.port);
+
+            let mut services = e.ensemble.services;
+            services.sort_by_key(|svc| svc.label.as_ref().unwrap_or(&"".into()).clone());
+
+            for svc in services {
+                println!(
+                    "SVC  0x{:4X}  {:16}  {:8} | {} | {}",
+                    svc.sid,
+                    svc.label.unwrap_or_default(),
+                    svc.short_label.unwrap_or_default(),
+                    mux,
+                    host
+                );
+            }
+        }
+    }
+
+    if run_server {
+        tracing::info!("Starting server on http://{}/", addr);
+
+        let cors = CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+
+        let app = Router::new()
             .route(
                 "/",
                 get(|State(service): State<Arc<DirectoryService>>| async move {
@@ -98,8 +145,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_state(svc)
             .layer(cors);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+    }
 
     Ok(())
 }

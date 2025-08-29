@@ -1,6 +1,9 @@
 pub mod meter;
 pub mod sls;
 
+mod term_guard;
+use term_guard::TermGuard;
+
 use humansize::{format_size, DECIMAL};
 use shared::dab::pad::dl::DlObject;
 use shared::dab::pad::mot::MotImage;
@@ -11,11 +14,7 @@ use derive_more::Debug;
 
 use crate::audio::{AudioEvent, AudioLevels};
 
-use ratatui::crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use ratatui::crossterm::event::{self, Event, KeyCode};
 
 use ratatui::{
     backend::CrosstermBackend,
@@ -185,13 +184,19 @@ pub async fn run_tui(
     cmd_tx: UnboundedSender<TuiCommand>,
     mut audio_rx: UnboundedReceiver<AudioEvent>,
 ) -> io::Result<()> {
+    /*
     enable_raw_mode()?;
     let mut stdout = io::stdout();
 
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-
     let backend = CrosstermBackend::new(stdout);
+    */
+
+    let _tg = TermGuard::new().map_err(|e| io::Error::other(format!("terminal setup: {e}")))?;
+
+    let backend = CrosstermBackend::new(std::io::stdout());
     let mut terminal = Terminal::new(backend)?;
+    terminal.clear()?;
 
     let mut state = TuiState::new(addr, scid);
 
@@ -441,9 +446,7 @@ pub async fn run_tui(
 
             let player_dl_text: Text = match player_dl {
                 Some(dl) => {
-                    let mut lines = vec![
-                        Line::from(dl.decode_label()),
-                    ];
+                    let mut lines = vec![Line::from(dl.decode_label())];
 
                     let dl_plus_tags = dl.get_dl_plus();
                     if !dl_plus_tags.is_empty() {
@@ -657,6 +660,7 @@ pub async fn run_tui(
     }
 
     // restore terminal
+    /*
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -664,6 +668,7 @@ pub async fn run_tui(
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
+    */
 
     Ok(())
 }

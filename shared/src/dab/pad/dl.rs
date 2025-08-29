@@ -23,6 +23,7 @@ pub struct DlObject {
     #[debug(skip)]
     chars: Vec<u8>,
     charset: u8,
+    #[debug("{} tags", dl_plus_tags.len())]
     dl_plus_tags: Vec<DlPlusTag>,
     pub seg_count: u8,
 }
@@ -41,10 +42,15 @@ impl DlObject {
     pub fn decode_label(&self) -> String {
         decode_chars(&self.chars, self.charset)
     }
+    pub fn is_dl_plus(&self) -> bool {
+        !self.dl_plus_tags.is_empty()
+    }
     pub fn get_dl_plus(&self) -> Vec<DlPlusTagDecoded> {
         let label = self.decode_label();
         let label_chars: Vec<char> = label.chars().collect();
 
+        /*
+        // not safe: slice index starts at 21 but ends at 20
         self.dl_plus_tags
             .iter()
             .map(|tag| {
@@ -55,6 +61,40 @@ impl DlObject {
                     kind: DlPlusContentType::from(tag.kind),
                     value,
                 }
+            })
+            .collect()
+        */
+
+        let len = label_chars.len();
+        self.dl_plus_tags
+            .iter()
+            .filter_map(|tag| {
+                let kind = DlPlusContentType::from(tag.kind);
+
+                if matches!(kind, DlPlusContentType::Dummy) {
+                    log::debug!("Ignoring DL+ tag with kind: {}", kind);
+                    return None;
+                }
+
+                let start = tag.start as usize;
+
+                if start >= len {
+                    log::warn!("DL+ tag start {} >= len {}", start, len);
+                    return None;
+                }
+
+                let mut end = start.saturating_add(tag.len as usize);
+                if end > len {
+                    end = len;
+                }
+
+                if end <= start {
+                    return None;
+                }
+
+                let value: String = label_chars[start..end].iter().collect();
+
+                Some(DlPlusTagDecoded { kind, value })
             })
             .collect()
     }
@@ -100,9 +140,11 @@ pub struct DlPlusTagDecoded {
 #[repr(u8)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DlPlusContentType {
+    Dummy = 0,
     ItemTitle = 1,
-    ItemArtist = 4,
     ItemAlbum = 2,
+    ItemArtist = 4,
+    StationnameLong = 32,
     // TODO: complete options...
     Unknown(u8),
 }
@@ -110,9 +152,11 @@ pub enum DlPlusContentType {
 impl From<u8> for DlPlusContentType {
     fn from(value: u8) -> Self {
         match value {
+            0 => DlPlusContentType::Dummy,
             1 => DlPlusContentType::ItemTitle,
             2 => DlPlusContentType::ItemAlbum,
             4 => DlPlusContentType::ItemArtist,
+            32 => DlPlusContentType::StationnameLong,
             _ => DlPlusContentType::Unknown(value),
         }
     }
@@ -121,9 +165,11 @@ impl From<u8> for DlPlusContentType {
 impl fmt::Display for DlPlusContentType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            DlPlusContentType::Dummy => write!(f, "DUMMY"),
             DlPlusContentType::ItemTitle => write!(f, "ITEM_TITLE"),
             DlPlusContentType::ItemArtist => write!(f, "ITEM_ARTIST"),
             DlPlusContentType::ItemAlbum => write!(f, "ITEM_ALBUM"),
+            DlPlusContentType::StationnameLong => write!(f, "STATIONNAME_LONG"),
             DlPlusContentType::Unknown(v) => write!(f, "UNKNOWN_{}", v),
         }
     }
@@ -158,7 +204,7 @@ impl DlDecoder {
 
         match (data[0] & 0x10 != 0, data[0] & 0x0F) {
             (true, 0b0001) => {
-                log::debug!("Clear display command");
+                log::debug!("[{:2}] DL: CMD clear display", self.scid);
                 // TODO: implement reset
             }
             (true, 0b0010) => {
@@ -166,7 +212,11 @@ impl DlDecoder {
                 let _t = data[0] & 0x80;
 
                 if data.len() < 3 {
-                    log::warn!("DL+: too short: expected min 3 bytes, got {}", data.len());
+                    log::warn!(
+                        "[{:2}] DL+ too short: expected min 3 bytes, got {}",
+                        self.scid,
+                        data.len()
+                    );
                     return None;
                 }
 
@@ -176,7 +226,11 @@ impl DlDecoder {
                 return None;
             }
             (true, _) => {
-                log::debug!("Unexpected DL command: 0x{:02X}", data[0]);
+                log::debug!(
+                    "[{:2}] DL: unexpected command: 0x{:02X}",
+                    self.scid,
+                    data[0]
+                );
             }
             _ => {
                 // not a DL+ or display-clear command
@@ -207,7 +261,8 @@ impl DlDecoder {
             }
         } else {
             log::warn!(
-                "DL: segment too short: expected {} bytes, got {}",
+                "[{:2}] DL: segment too short: expected {} bytes, got {}",
+                self.scid,
                 end,
                 data.len()
             );
@@ -226,7 +281,7 @@ impl DlDecoder {
 
     pub fn parse_dl_plus(&mut self, data: &[u8]) {
         if data.is_empty() {
-            log::warn!("DL+: empty command");
+            log::warn!("[{:2}] DL+ empty command", self.scid);
             return;
         }
 
@@ -235,7 +290,7 @@ impl DlDecoder {
         let cid = (data[0] >> 4) & 0x0F;
 
         if cid != 0 {
-            log::debug!("DL+: unsupported command ID = {}", cid);
+            log::debug!("[{:2}] DL+ unexpected command ID = {}", self.scid, cid);
             return;
         }
 
@@ -246,12 +301,13 @@ impl DlDecoder {
         let _it_running = (data[0] >> 2) & 0x01;
         let num_tags = (data[0] & 0x03) + 1;
 
-        // log::debug!("DL+: CID = {}, CB = {}, tags = {} # {} bytes", cid, cb, num_tags, data.len());
+        // log::debug!("DL+ CID = {}, CB = {}, tags = {} # {} bytes", cid, cb, num_tags, data.len());
 
         // if data.len() < 0 + num_tags as usize * 3 {
         if data.len() < 1 + num_tags as usize * 3 {
             log::debug!(
-                "DL+: unexpected length, expected at least {}",
+                "[{:2}] DL+ unexpected length, expected at least {}",
+                self.scid,
                 1 + num_tags * 3
             );
             return;
@@ -280,7 +336,14 @@ impl DlDecoder {
     pub fn flush(&mut self) {
         if let Some(current) = self.current.take() {
             if !current.chars.is_empty() && self.last_toggle != Some(current.toggle) {
-                log::debug!("DL: {} - {:?}", current.decode_label(), current);
+                log::debug!(
+                    "[{:2}] DL: {} - {:?}",
+                    self.scid,
+                    current.decode_label(),
+                    current
+                );
+
+                // log::debug!("[{:2}] DL{} {}", self.scid, if !current.dl_plus_tags.is_empty() {"+"} else {" "}, current.decode_label());
 
                 // log::debug!("{:?}", current.get_dl_plus());
 

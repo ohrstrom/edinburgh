@@ -309,6 +309,13 @@ impl MotDecoder {
                             obj.body.len()
                         );
 
+                        // log::debug!(
+                        //     "[{:2}] MOT: Header = {} bytes, Body = {} bytes",
+                        //     self.scid,
+                        //     obj.header.len(),
+                        //     obj.body.len()
+                        // );
+
                         match obj.content_type {
                             Some(2) => {
                                 let mot_image = MotImage::new(

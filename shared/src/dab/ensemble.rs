@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::fmt;
 
 use super::bus::{emit_event, DabEvent};
 use super::fic::Fig;
@@ -47,6 +48,18 @@ pub struct Ensemble {
 impl Default for Ensemble {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Display for Ensemble {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "0x{:4X}  {:16}  {:3} services",
+            self.eid.unwrap_or(0),
+            self.label.as_ref().unwrap_or(&"".into()),
+            self.services.len()
+        )
     }
 }
 
@@ -210,7 +223,6 @@ impl Ensemble {
             self.complete = self.eid.is_some()
                 && self.label.is_some()
                 && self.services.iter().all(|s| s.label.is_some());
-
         }
 
         if updated {

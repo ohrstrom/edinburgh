@@ -105,7 +105,7 @@ impl AudioLevels {
         self.peak_smooth = Self::smooth(self.peak, self.peak_smooth, dt, 0.05);
         self.rms_smooth = Self::smooth(self.rms, self.rms_smooth, dt, 0.1);
 
-        // log::debug!("{:?}", self);
+        // tracing::debug!("{:?}", self);
     }
 }
 
@@ -140,6 +140,8 @@ impl AudioDecoder {
         let asc = initial_audio_format.asc.clone();
         let decoder = Decoder::new(&asc).expect("Failed to create initial decoder");
 
+        tracing::debug!("Audio format: {}", initial_audio_format);
+
         let host: cpal::Host = {
             #[cfg(all(feature = "jack", target_os = "linux"))]
             if use_jack {
@@ -153,8 +155,8 @@ impl AudioDecoder {
             }
         };
 
-        log::debug!("available audio backends: {:?}", cpal::available_hosts());
-        log::debug!("selected audio backend: {:?}", host.id());
+        tracing::debug!("Available audio backends: {:?}", cpal::available_hosts());
+        tracing::debug!("Selected audio backend: {:?}", host.id());
 
         let device = host
             .default_output_device()
@@ -177,7 +179,7 @@ impl AudioDecoder {
     }
 
     fn reconfigure(&mut self, new_audio_format: &AudioFormat) -> Result<(), Error> {
-        log::info!(
+        tracing::info!(
             "Reconfiguring audio decoder for format: {:?}",
             new_audio_format
         );
@@ -189,11 +191,7 @@ impl AudioDecoder {
                 self.sink.lock().unwrap().stop();
                 Ok(())
             }
-            Err(_e) => {
-                // log::error!("Failed to reconfigure audio decoder: {}", e);
-                // Err(Error::new(ErrorKind::Other, "Decoder error"))
-                Err(std::io::Error::other("Decoder error"))
-            }
+            Err(_e) => Err(std::io::Error::other("Decoder error")),
         }
     }
 
@@ -207,13 +205,13 @@ impl AudioDecoder {
         if let Some(new_audio_format) = &aac_result.audio_format {
             if new_audio_format != &self.audio_format && self.reconfigure(new_audio_format).is_err()
             {
-                log::warn!("Decoder reconfiguration failed, skipping audio data");
+                tracing::warn!("Decoder reconfiguration failed, skipping audio data");
                 return;
             }
         }
 
         if aac_result.scid != self.scid {
-            log::info!("Changed SCID: {} > {}", self.scid, aac_result.scid);
+            tracing::info!("Changed SCID: {} > {}", self.scid, aac_result.scid);
 
             self.sink.lock().unwrap().set_volume(0.0);
 
@@ -260,11 +258,11 @@ impl AudioDecoder {
                 self.levels.feed(r.channels, r.samples);
 
                 if let Err(e) = self.tx.send(AudioEvent::LevelsUpdated(self.levels.clone())) {
-                    log::warn!("Could not send AudioEvent update: {:?}", e);
+                    tracing::warn!("Could not send AudioEvent update: {:?}", e);
                 }
             }
             Err(e) => {
-                log::error!("DEC: {}", e);
+                tracing::error!("DEC: {}", e);
             }
         }
     }

@@ -5,18 +5,6 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-CLI_BIN := edinburgh
-FRAME_FORWARDER_BIN := edinburgh-frame-forwarder
-
-ADDR ?= 213.232.205.101:8855
-
-.PHONY: run-cli
-run-cli:
-	cargo run -p $(CLI_BIN) -- --addr $(ADDR)
-
-.PHONY: run-frame-forwarder
-run-frame-forwarder:
-	cargo run -p $(FRAME_FORWARDER_BIN) -- $(ADDR)
 
 .PHONY: fmt
 fmt:

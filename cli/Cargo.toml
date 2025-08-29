@@ -11,21 +11,21 @@ jack = ["cpal/jack"]
 [dependencies]
 shared = { path = "../shared" }
 clap = { version = "4.5.32", features = ["derive"] }
-colog = "1.3.0"
+clap-num = "1.2.0"
 derive_more = { version = "2.0.1", features = ["debug"] }
-env_logger = "0.11.7"
 faad2 = { git = "https://github.com/ohrstrom/faad2-rs.git", tag = "2.11.2" }
 futures = "0.3.31"
-log = "0.4.26"
 rodio = { version = "0.21.1", default-features = false, features = ["playback"] }
 cpal = { version = "0.16.0", default-features = false, optional = false }
 tokio = { version = "1.44.1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "time", "sync"] }
-ratatui = { version = "0.29.0", features = ["palette", "scrolling-regions"] }
+ratatui = { version = "0.29.0", features = ["crossterm", "palette", "scrolling-regions"] }
 humansize = "2.1.3"
 image = "0.25.6"
 artem = "3.0.0"
 ansi-to-tui = "7.0.0"
 rand = "0.9.1"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [[bin]]
 name = "edinburgh"

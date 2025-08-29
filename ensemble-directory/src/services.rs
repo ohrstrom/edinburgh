@@ -8,7 +8,6 @@ use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
 use tokio::time::{self, timeout, Duration};
-use tracing as log;
 
 use shared::dab::DabSource;
 use shared::dab::Ensemble;
@@ -79,6 +78,7 @@ pub struct DirectoryService {
     pub scan_interval: u64,
     pub scan_timeout: u64,
     pub scan_num_parallel: usize,
+    pub scan_num_run: Arc<RwLock<usize>>,
 }
 
 impl DirectoryService {
@@ -94,6 +94,7 @@ impl DirectoryService {
             scan_interval,
             scan_timeout,
             scan_num_parallel,
+            scan_num_run: Arc::new(RwLock::new(0)),
         });
 
         let svc_clone = Arc::clone(&svc);
@@ -113,6 +114,10 @@ impl DirectoryService {
 
     pub async fn get_ensembles(&self) -> Vec<DirectoryEnsemble> {
         self.ensembles.read().await.clone()
+    }
+
+    pub async fn get_num_runs(&self) -> usize {
+        *self.scan_num_run.read().await
     }
 
     async fn run_scan(self: Arc<Self>) {
@@ -153,8 +158,8 @@ impl DirectoryService {
             while let Some(result) = scans.next().await {
                 match result {
                     Ok(Ok(ensemble)) => {
-                        log::debug!(
-                            "Scanned endpoint: {} {} - 0x{:4x} - {}",
+                        tracing::debug!(
+                            "Scanned endpoint: {} {} - 0x{:4X} - {}",
                             ensemble.host,
                             ensemble.port,
                             ensemble.ensemble.eid.unwrap_or(0),
@@ -163,10 +168,10 @@ impl DirectoryService {
                         ensembles.push(ensemble);
                     }
                     Ok(Err(err)) => {
-                        log::error!("Failed to scan ensemble: {}", err);
+                        tracing::error!("Failed to scan ensemble: {}", err);
                     }
                     Err(join_err) => {
-                        log::error!("Join error in scan task: {}", join_err);
+                        tracing::error!("Join error in scan task: {}", join_err);
                     }
                 }
             }
@@ -175,6 +180,8 @@ impl DirectoryService {
                 let mut lock = self.ensembles.write().await;
                 *lock = ensembles;
             }
+
+            *self.scan_num_run.write().await += 1;
 
             interval.tick().await;
         }
@@ -234,7 +241,7 @@ async fn scan(endpoint: Endpoint, scan_timeout: u64) -> anyhow::Result<Directory
                     if ready.is_readable() {
                         match stream.try_read(&mut extractor.frame.data[filled..]) {
                             Ok(0) => {
-                                log::info!("Connection closed by peer");
+                                tracing::info!("Connection closed by peer");
                                 anyhow::bail!("Connection closed before ensemble complete");
                             }
                             Ok(n) => {
