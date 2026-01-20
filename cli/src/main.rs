@@ -140,14 +140,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let edi_rx = init_event_bus();
-
-    let stream = TcpStream::connect(args.addr).await?;
-
-    let mut filled = 0;
-
-    let mut extractor = EdiFrameExtractor::new();
-
     #[allow(clippy::type_complexity)]
     let on_ensemble_updated_callback: Option<Box<dyn FnMut(&Ensemble) + Send>> = Some(Box::new({
         let scid = Arc::clone(&scid);
@@ -185,6 +177,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut source = DabSource::new(args.scid, on_ensemble_updated_callback, None);
 
+    let edi_rx = init_event_bus();
+
+    // let stream = TcpStream::connect(args.addr).await?;
+
+    let stream = match TcpStream::connect(args.addr.clone()).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("Unable to connect to {}: {}", args.addr, e);
+            return Err(e.into());
+        }
+    };
+
+    let mut filled = 0;
+
+    let mut extractor = EdiFrameExtractor::new();
+
     let event_handler = DabEventHandler::new(
         Arc::clone(&scid),
         use_jack,
@@ -196,6 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         event_handler.run().await;
     });
+    
 
     loop {
         tokio::select! {
@@ -230,7 +239,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                         Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-                        Err(e) => return Err(e.into()),
+                        Err(e) => {
+                            return Err(e.into());
+                        },
                     }
                 }
             }

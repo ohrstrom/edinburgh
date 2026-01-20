@@ -26,6 +26,7 @@ ansi-to-tui = "7.0.0"
 rand = "0.9.1"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+anyhow = "1.0.99"
 
 [[bin]]
 name = "edinburgh"
