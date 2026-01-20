@@ -6,15 +6,15 @@ Docker Compose configuration for local development.
 
 Currently, the following services are available:
 
-- [ ] mux
-- [ ] encoder
+- [x] mux
+- [x] encoder
 
 See `compose.yml` for used ports etc.
 
 ## Usage
 
 ```shell
-docker compose --build up # -d
+docker compose up --build # -d
 ```
 
 
