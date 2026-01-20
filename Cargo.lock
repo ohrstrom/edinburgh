@@ -821,6 +821,7 @@ name = "edinburgh"
 version = "0.0.1"
 dependencies = [
  "ansi-to-tui",
+ "anyhow",
  "artem",
  "clap",
  "clap-num",

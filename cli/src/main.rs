@@ -204,7 +204,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         event_handler.run().await;
     });
-    
 
     loop {
         tokio::select! {
