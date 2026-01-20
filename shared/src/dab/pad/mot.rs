@@ -75,6 +75,8 @@ pub struct MotObject {
     pub content_subtype: Option<u16>,
     // extension headers
     pub content_name: Option<String>,
+    pub click_through_url: Option<String>,
+    pub alternative_location_url: Option<String>,
 }
 
 impl MotObject {
@@ -90,6 +92,8 @@ impl MotObject {
             content_type: None,
             content_subtype: None,
             content_name: None,
+            click_through_url: None,
+            alternative_location_url: None,
         }
     }
 
@@ -174,16 +178,18 @@ impl MotObject {
                 _ => {}
             }
 
-            // log::debug!(
-            //     "MOT header: param_id = {:#04x} (PLI = {}) - data_field_len = {} bytes",
-            //     param_id,
-            //     pli,
-            //     data_field_len,
-            // );
+            log::trace!(
+                "[{:>2}] MOT header: param_id = {:#04x} (PLI = {}) - data_field_len = {} bytes",
+                self.scid,
+                param_id,
+                pli,
+                data_field_len,
+            );
 
             if n + data_field_len > header_size {
                 log::warn!(
-                    "MOT header incomplete (expected {}, got {})",
+                    "[{:>2}] MOT header incomplete (expected {}, got {})",
+                    self.scid,
                     header_size,
                     data_field_len
                 );
@@ -195,40 +201,54 @@ impl MotObject {
             // ContentName (ParamID = 0x0C)
             if param_id == 0x0C && field_data.len() > 1 {
                 let _charset_id = field_data[0] >> 4; // reserved: field_data[0] & 0x0F
-                let name_bytes = &field_data[1..];
-                let name = String::from_utf8_lossy(name_bytes).to_string();
-                self.content_name = Some(name.clone());
-
-                // log::debug!(
-                //     "MOT ContentName: {:?} (charset_id = {})",
-                //     self.content_name,
-                //     charset_id
-                // );
+                let value_bytes = &field_data[1..];
+                let value = String::from_utf8_lossy(value_bytes).to_string();
+                self.content_name = Some(value.clone());
             }
 
+            // ClickThroughURL (ParamID = 0x27)
+            if param_id == 0x27 && field_data.len() > 1 {
+                let value = String::from_utf8_lossy(field_data).to_string();
+                self.click_through_url = Some(value.clone());
+
+                log::trace!("[{:>2}] MOT header: ClickThroughURL: {} ", self.scid, value);
+            }
+
+            // AlternativeLocationURL (ParamID = 0x28)
+            if param_id == 0x28 && field_data.len() > 1 {
+                let value = String::from_utf8_lossy(field_data).to_string();
+                self.alternative_location_url = Some(value.clone());
+
+                log::trace!(
+                    "[{:>2}] MOT header: AlternativeLocationURL: {} ",
+                    self.scid,
+                    value
+                );
+            }
+
+            // MOT parameter CAInfo > scrambled
             if param_id == 0x23 {
-                // MOT parameter CAInfo > scrambled
                 log::warn!("MOT CAInfo: scrambled (PLI = {}) > ignored", pli);
                 break;
             }
 
+            // MOT parameter CompressionType
             if param_id == 0x11 {
-                // MOT parameter CompressionType
-                log::warn!("MOT compressed: scrambled (PLI = {}) > ignored", pli);
+                log::warn!("MOT compressed: (PLI = {}) > ignored", pli);
                 break;
             }
 
-            // Other parameters can be handled here later...
             n += data_field_len;
         }
 
-        // log::debug!(
-        //     "MOT header: body_size={}, content_type={}, content_subtype={} - name: {:?}",
-        //     body_size,
-        //     content_type,
-        //     content_subtype,
-        //     self.content_name,
-        // );
+        log::debug!(
+            "[{:>2}] MOT header: body_size={}, content_type={}, content_subtype={} - name: {:?}",
+            self.scid,
+            body_size,
+            content_type,
+            content_subtype,
+            self.content_name,
+        );
 
         match content_type {
             2 => {}
@@ -281,6 +301,13 @@ impl MotDecoder {
 
                 if obj.header_complete {
                     obj.parse_header();
+
+                    log::trace!(
+                        "[{:>2}] MOT header complete: {} bytes - {:?}",
+                        self.scid,
+                        obj.header.len(),
+                        obj.content_name
+                    );
                 }
 
                 self.current = Some(obj);
@@ -304,7 +331,8 @@ impl MotDecoder {
 
                     if obj.is_complete() {
                         log::debug!(
-                            "MOT complete: Header = {} bytes, Body = {} bytes",
+                            "[{:>2}] MOT object complete: Header = {} bytes, Body = {} bytes",
+                            self.scid,
                             obj.header.len(),
                             obj.body.len()
                         );
@@ -323,7 +351,6 @@ impl MotDecoder {
                                     obj.content_subtype.unwrap_or(0),
                                     obj.body.clone(),
                                 );
-                                // log::debug!("MOT image: {:?}", mot_image);
                                 emit_event(DabEvent::MotImageReceived(mot_image));
                             }
                             _ => {
@@ -335,6 +362,13 @@ impl MotDecoder {
                         }
 
                         self.current = None;
+                    } else {
+                        log::trace!(
+                            "[{:>2}] MOT body segment: received {} of total {} bytes",
+                            self.scid,
+                            obj.body.len(),
+                            obj.body_size.unwrap_or(0)
+                        );
                     }
                 } else {
                     // if we start extracting in the middle of a transmission
