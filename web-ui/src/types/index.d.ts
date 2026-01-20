@@ -56,7 +56,7 @@ export interface SLS {
 
 export interface AACSegment {
   scid: number
-  audio_format: AudioFormat,
+  audio_format: AudioFormat
   frames: ArrayBuffer[]
 }
 

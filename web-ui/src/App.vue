@@ -160,6 +160,7 @@ class EDInburgh {
     })
 
     edi.addEventListener('mot_image', async (e: CustomEvent) => {
+      // console.debug('EDInburgh: mot_image', e.detail)
       await this.updateSLS(e.detail as Types.SLS)
     })
 

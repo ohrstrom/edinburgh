@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useEDIStore } from '@/stores/edi'
 
@@ -8,10 +8,35 @@ import Input from '@/components/ui/Input.vue'
 
 const { connected, ediHost, ediPort } = storeToRefs(useEDIStore())
 
+type EDIHashConfig = {
+  host?: string
+  port?: number
+}
+
 const emit = defineEmits<{
   (event: 'connect', payload: { host: string; port: number }): void
   (event: 'reset'): void
 }>()
+
+function parseEDIHash(hash: string): EDIHashConfig | null {
+  if (!hash) return null
+
+  const raw = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!raw.startsWith('edi://')) return null
+
+  try {
+    const url = new URL(raw)
+
+    const host = url.hostname || undefined
+    const port = url.port ? Number(url.port) : undefined
+
+    if (!host && !port) return null
+
+    return { host, port }
+  } catch {
+    return null
+  }
+}
 
 const connect = () => {
   const host = ediHost.value
@@ -26,6 +51,38 @@ const connect = () => {
 const reset = () => {
   emit('reset')
 }
+
+const hash = ref(window.location.hash)
+
+const onHashChange = () => {
+  hash.value = window.location.hash
+}
+
+onMounted(() => {
+  window.addEventListener('hashchange', onHashChange)
+  hash.value = window.location.hash
+})
+
+onUnmounted(() => {
+  window.removeEventListener('hashchange', onHashChange)
+})
+
+watch(
+  hash,
+  (newHash) => {
+    console.log('Hash changed:', newHash)
+
+    const { host, port } = parseEDIHash(newHash) ?? {}
+
+    if (!host || !port) return
+
+    if (ediHost.value === host && ediPort.value === port) return
+
+    ediHost.value = host
+    ediPort.value = port
+  },
+  { immediate: true },
+)
 
 watch(
   ediPort,
