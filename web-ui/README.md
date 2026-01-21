@@ -9,10 +9,8 @@ bun install
 bun dev # listens on 3001
 ```
 
-```shell
-# chrome wit separate profile (likely macOS only...)
-open -na 'Google Chrome' --args --user-data-dir="${PWD}/tmp/chrome-profile" 'http://localhost:3001'
-```
+> [!IMPORTANT]  
+> Except for localhost the UI must be served via https due to browser security restrictions.
 
 ### Frame Forwarder
 
@@ -32,6 +30,16 @@ Provide discovered ensembles to the UI by running the directory service:
 # assuming repository root:
 cd ensemble-directory
 cargo run -- --scan edi-uk.digris.net:8851-8860 --scan edi-fr.digris.net:8851-8860
+```
+
+### Configuration
+
+The endpoints for the frame forwarder (`/ws`) and ensemble directory (`/ensembles`) can be set via `VITE_FRAME_FORWARDER_ENDPOINT` and `VITE_ENSEMBLE_DIRECTORY_ENDPOINT` environment variables respectively.
+
+```shell
+# example
+VITE_FRAME_FORWARDER_ENDPOINT=wss://edi-player.digris.net/ws \
+bun dev
 ```
 
 ## WASM Integration

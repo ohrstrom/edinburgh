@@ -5,9 +5,9 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ohrstrom/edinburgh.git"
+    "url": "git+https://github.com/Opendigitalradio/edinburgh.git"
   },
-  "homepage": "https://github.com/ohrstrom/edinburgh",
+  "homepage": "https://github.com/Opendigitalradio/edinburgh",
   "scripts": {
     "dev": "vite --port 3001",
     "build": "run-p type-check \"build-only {@}\" --",
