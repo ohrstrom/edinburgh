@@ -70,8 +70,6 @@ onUnmounted(() => {
 watch(
   hash,
   (newHash) => {
-    console.log('Hash changed:', newHash)
-
     const { host, port } = parseEDIHash(newHash) ?? {}
 
     if (!host || !port) return
