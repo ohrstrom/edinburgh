@@ -5,6 +5,7 @@ mod frame;
 pub mod msc;
 pub mod pad;
 mod tables;
+mod utils;
 
 use derive_more::Debug;
 pub use ensemble::{Ensemble, Subchannel};

@@ -1,3 +1,4 @@
+use crate::dab::utils::decode_chars;
 use crate::utils;
 use serde::Serialize;
 use thiserror::Error;
@@ -593,9 +594,11 @@ impl Fig1_0 {
         }
 
         let eid = u16::from_be_bytes([data[0], data[1]]);
-        let label = Self::convert_label_to_utf8(&data[2..18]);
+        let label = decode_chars(&data[2..18], base.charset)
+            .trim_end()
+            .to_string();
         let short_label =
-            Self::derive_short_label(&label, u16::from_be_bytes([data[16], data[17]]));
+            Self::derive_short_label(&label, u16::from_be_bytes([data[18], data[19]]));
 
         Ok(Self {
             base,
@@ -605,12 +608,16 @@ impl Fig1_0 {
         })
     }
 
-    fn convert_label_to_utf8(data: &[u8]) -> String {
-        String::from_utf8_lossy(data).trim_end().to_string()
-    }
+    fn derive_short_label(label: &str, mask: u16) -> String {
+        let mut short = String::new();
 
-    fn derive_short_label(label: &str, _mask: u16) -> String {
-        label.to_string()
+        for (i, ch) in label.chars().enumerate() {
+            if mask & (0x8000 >> i) != 0 {
+                short.push(ch);
+            }
+        }
+
+        short
     }
 }
 
