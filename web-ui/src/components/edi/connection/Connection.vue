@@ -102,8 +102,8 @@ watch(
 <template>
   <div class="connection">
     <div class="settings">
-      <Input type="text" v-model="ediHost" />
-      <Input type="number" v-model="ediPort" />
+      <Input type="text" v-model="ediHost" :disabled="connected" />
+      <Input type="number" v-model="ediPort" :disabled="connected" />
     </div>
     <div class="actions">
       <Button @click="connect" :disabled="connected" :variant="connected ? 'default' : 'primary'"

@@ -185,7 +185,7 @@ defineProps<{ level: Types.Level }>()
         padding: 8px 0 16px;
         > .item {
           display: grid;
-          grid-template-columns: 100px 1fr;
+          grid-template-columns: 120px 1fr;
           font-family: var(--t-family-mono);
           font-size: var(--t-fs-s);
           //line-height: 0.75rem;
