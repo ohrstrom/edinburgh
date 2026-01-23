@@ -29,7 +29,7 @@ Provide discovered ensembles to the UI by running the directory service:
 ```shell
 # assuming repository root:
 cd ensemble-directory
-cargo run -- --scan edi-uk.digris.net:8851-8860 --scan edi-fr.digris.net:8851-8860
+cargo run -- --scan edi-proxy-1.digris.net:8101-8104 --scan edi-proxy-1.digris.net:8111-8114
 ```
 
 ### Configuration

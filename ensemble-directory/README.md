@@ -11,8 +11,8 @@ cargo run -- --help
 
 ```shell
 cargo run -- \
-  --scan edi-ch.digris.net:8851-8853 \
-  --scan edi-fr.digris.net:8855-8858 \
+  --scan edi-proxy-1.digris.net:8101-8104 \
+  --scan edi-proxy-1.digris.net:8111-8114 \
   --scan-timeout 10 \
   --scan-interval 300 \
   --scan-parallel 16 \
