@@ -587,8 +587,9 @@ pub async fn run_tui(
                         break;
                     }
                     KeyCode::Esc => {
-                        let _ = cmd_tx.send(TuiCommand::Shutdown);
-                        break;
+                        if state.show_sls {
+                            state.show_sls = false;
+                        }
                     }
                     KeyCode::Up => {
                         if let Some(selected) = state.table_state.selected() {
