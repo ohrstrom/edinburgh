@@ -442,7 +442,7 @@ impl PadDecoder {
                     self.mot_decoder.feed(&dg);
                 }
             }
-            4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 => {
+            4..=11 => {
                 // User Defined - ETSI EN 300 401 V2.1.1 (2017-01)
                 log::debug!(
                     "CI: SCID: {} kind: {} - {} bytes - data: {:?}",

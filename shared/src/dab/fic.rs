@@ -636,12 +636,11 @@ impl Fig1_1 {
         }
 
         let sid = u16::from_be_bytes([data[0], data[1]]);
-        let label_bytes = &data[2..18];
-        let label = Self::label_str(label_bytes);
+        let label = decode_chars(&data[2..18], base.charset)
+            .trim_end()
+            .to_string();
         let short_label =
-            Self::short_label_str(label_bytes, u16::from_be_bytes([data[18], data[19]]));
-
-        // let (label, short_label) = Self::decode_label(&data[2..19]);
+            Self::derive_short_label(&label, u16::from_be_bytes([data[18], data[19]]));
 
         Ok(Self {
             base,
@@ -651,20 +650,16 @@ impl Fig1_1 {
         })
     }
 
-    fn label_str(label_bytes: &[u8]) -> String {
-        String::from_utf8_lossy(label_bytes).trim_end().to_string()
-    }
+    fn derive_short_label(label: &str, mask: u16) -> String {
+        let mut short = String::new();
 
-    fn short_label_str(label_bytes: &[u8], mask: u16) -> String {
-        let mut short_label = String::new();
-
-        for (i, &byte) in label_bytes.iter().enumerate() {
-            if mask & (1 << (15 - i)) != 0 {
-                short_label.push(byte as char);
+        for (i, ch) in label.chars().enumerate() {
+            if mask & (0x8000 >> i) != 0 {
+                short.push(ch);
             }
         }
 
-        short_label.trim().to_string()
+        short
     }
 }
 
