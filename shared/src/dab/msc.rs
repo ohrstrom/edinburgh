@@ -248,8 +248,7 @@ impl AacpExctractor {
                     self.audio_format = Some(af);
                 }
                 Err(err) => {
-                    // silenced log for the moment
-                    log::warn!("Format error: {} {:?}", self.scid, err);
+                    log::warn!("Format error - SCID: {} - {:?}", self.scid, err);
                 }
             }
         }
