@@ -75,6 +75,7 @@ export const useEDIStore = defineStore('edi', () => {
   })
 
   const ediHost = useStorage('edi/host', 'edi-proxy-1.digris.net', localStorage, {
+    listenToStorageChanges: false,
     serializer: {
       read: (v) => v,
       write: (v) => v,
@@ -82,6 +83,7 @@ export const useEDIStore = defineStore('edi', () => {
   })
 
   const ediPort = useStorage('edi/port', 8112, localStorage, {
+    listenToStorageChanges: false,
     serializer: {
       read: (v: string) => Number(v),
       write: (v: number) => v.toString(),

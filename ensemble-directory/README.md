@@ -28,7 +28,7 @@ curl  http://127.0.0.1:9001/ensembles
 ```json
 [
   {
-    "host": "edi-ch.digris.net",
+    "host": "edi-proxy-1.digris.net",
     "port": 8853,
     "eid": 17411,
     "al_flag": false,

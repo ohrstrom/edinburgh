@@ -7,7 +7,7 @@ from edinburgh import EDI
 edi = EDI()
 
 async def ws_reader():
-    uri = "ws://127.0.0.1:9000/ws/edi-ch.digris.net/8855"
+    uri = "ws://127.0.0.1:9000/ws/edi-proxy-1.digris.net/8101"
     async with websockets.connect(uri) as ws:
         while True:
             data = await ws.recv()
