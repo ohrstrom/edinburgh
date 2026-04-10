@@ -12,10 +12,18 @@ pub struct MotImage {
     pub md5: [u8; 16],
     pub len: usize,
     pub data: Vec<u8>,
+    pub click_through_url: Option<String>,
+    pub alternative_location_url: Option<String>,
 }
 
 impl MotImage {
-    pub fn new(scid: u8, kind: u16, data: Vec<u8>) -> Self {
+    pub fn new(
+        scid: u8,
+        kind: u16,
+        data: Vec<u8>,
+        click_through_url: Option<String>,
+        alternative_location_url: Option<String>,
+    ) -> Self {
         let mimetype = match kind {
             1 => "image/jpeg",
             3 => "image/png",
@@ -34,6 +42,8 @@ impl MotImage {
             md5: hash,
             len: data.len(),
             data,
+            click_through_url,
+            alternative_location_url,
         }
     }
 
@@ -350,6 +360,8 @@ impl MotDecoder {
                                     self.scid,
                                     obj.content_subtype.unwrap_or(0),
                                     obj.body.clone(),
+                                    obj.click_through_url.clone(),
+                                    obj.alternative_location_url.clone(),
                                 );
                                 emit_event(DabEvent::MotImageReceived(mot_image));
                             }

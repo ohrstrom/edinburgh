@@ -52,6 +52,9 @@ export interface SLS {
   url?: string
   width?: number
   height?: number
+  len?: number
+  click_through_url?: string
+  alternative_location_url?: string
 }
 
 export interface AACSegment {
