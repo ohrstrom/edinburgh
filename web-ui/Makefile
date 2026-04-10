@@ -8,6 +8,10 @@ MAKEFLAGS += --no-builtin-rules
 PORT := 3001
 
 
+.PHONY: setup
+setup:
+	bun install
+
 .PHONY: fmt
 fmt:
 	bun run format

@@ -8,6 +8,8 @@ import { useEDIStore } from '@/stores/edi'
 
 import HexValue from '@/components/ui/HexValue.vue'
 import LevelMeter from '@/components/meter/LevelMeter.vue'
+import DlPlusDisplay from './DlPlusDisplay.vue'
+import IconLink from '@/components/icons/IconLink.vue'
 
 import Subchannel from './Subchannel.vue'
 
@@ -23,20 +25,6 @@ const af = computed(() => {
 const hasDlPlus = computed(() => {
   return (service.value?.dl?.dl_plus ?? []).length
 })
-
-const formatDlPlusKind = (kind: string | Record<string, unknown>): string => {
-  if (typeof kind === 'string') {
-    return kind.replace(/_/g, '.')
-  }
-  if (typeof kind === 'object' && kind !== null && !Array.isArray(kind)) {
-    const key = Object.keys(kind)[0]
-    if (key) {
-      const value = kind[key]
-      return `${key.toUpperCase()}.${value}`
-    }
-  }
-  return 'UNKNOWN'
-}
 
 defineProps<{ level: Types.Level }>()
 </script>
@@ -77,10 +65,13 @@ defineProps<{ level: Types.Level }>()
           <span v-if="service?.dl?.label" class="label">{{ service?.dl?.label }}</span>
         </div>
         <div v-if="hasDlPlus" class="dl-plus">
-          <div v-for="l in service?.dl?.dl_plus" :key="l.kind" class="item">
-            <span class="kind" v-text="formatDlPlusKind(l.kind)" />
-            <span class="value" v-text="l.value" />
-          </div>
+          <DlPlusDisplay
+            v-for="l in service?.dl?.dl_plus"
+            :key="l.kind"
+            :kind="l.kind"
+            :value="l.value"
+            class="item"
+          />
         </div>
       </div>
       <div class="info-section meter">
@@ -89,7 +80,18 @@ defineProps<{ level: Types.Level }>()
     </div>
     <div class="sls">
       <div class="container">
-        <figure v-if="service.sls?.url">
+        <figure v-if="service.sls?.alternative_location_url" class="alternative-location-url">
+          <img
+            :src="service.sls.alternative_location_url"
+            :alt="service.sls.alternative_location_url"
+          />
+          <!--
+          <figcaption>
+            <a :href="service.sls.alternative_location_url" target="_blank" class="url">{{ service.sls.alternative_location_url }}</a>
+          </figcaption>
+          -->
+        </figure>
+        <figure v-else-if="service.sls">
           <img :src="service.sls?.url" :alt="service.sls?.md5 ?? 'SLS'" />
           <figcaption>
             <span class="mimetype">{{ service.sls.mimetype }}</span>
@@ -97,6 +99,15 @@ defineProps<{ level: Types.Level }>()
             <span class="size">{{ ((service.sls?.len ?? 0) / 1000).toFixed(2) }} kB</span>
           </figcaption>
         </figure>
+        <div v-if="service.sls?.click_through_url" class="click-through-url">
+          <a
+            :href="service.sls.click_through_url"
+            :title="service.sls.click_through_url"
+            target="_blank"
+          >
+            <IconLink :size="16" />
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -185,7 +196,7 @@ defineProps<{ level: Types.Level }>()
         padding: 8px 0 16px;
         > .item {
           display: grid;
-          grid-template-columns: 100px 1fr;
+          grid-template-columns: 90px 1fr;
           font-family: var(--t-family-mono);
           font-size: var(--t-fs-s);
           //line-height: 0.75rem;
@@ -217,6 +228,9 @@ defineProps<{ level: Types.Level }>()
       justify-content: center;
       position: relative;
       > figure {
+        display: flex;
+        align-items: center;
+        justify-content: center;
         margin: 0;
         padding: 0;
         width: 320px;
@@ -245,11 +259,48 @@ defineProps<{ level: Types.Level }>()
           > .mimetype {
             text-transform: uppercase;
           }
-        }
 
-        &:hover {
+          > .url {
+            padding: 2px 4px;
+            font-size: var(--t-fs-xs);
+            display: inline-block;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+      }
+
+      &:hover {
+        > figure {
           > figcaption {
             opacity: 1;
+          }
+        }
+      }
+
+      > .click-through-url {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        > a {
+          width: 24px;
+          height: 24px;
+          background: hsl(var(--c-fg) / 75%);
+          border-radius: 2px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: hsl(var(--c-bg));
+
+          &:hover {
+            color: hsl(var(--c-cta-fg));
+            background: hsl(var(--c-cta));
           }
         }
       }

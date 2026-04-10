@@ -6,6 +6,11 @@ MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
 
+.PHONY: setup
+setup:
+	cargo install wasm-pack
+	rustup target add wasm32-unknown-unknown
+
 .PHONY: fmt
 fmt:
 	cargo fmt --all

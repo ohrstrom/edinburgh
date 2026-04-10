@@ -12,7 +12,11 @@ const BROWSER_SUPPORT = {
     firefox: '>=100',
     opera: '>=80',
   },
-  mobile: {},
+  mobile: {
+    chrome: '>=100',
+    firefox: '>=100',
+    'android browser': '>=14',
+  },
 }
 
 const BROWSER_CAPABILITIES = [
